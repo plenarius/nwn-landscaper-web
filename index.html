@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Height Map Generator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: #222222;
+            padding: 12px 20px;
+            border-bottom: 1px solid #333333;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        header h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #cccccc;
+        }
+
+        header span {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .app {
+            display: grid;
+            grid-template-columns: 260px 1fr 1fr;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Controls Panel */
+        .controls {
+            background: #222222;
+            border-right: 1px solid #333333;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .control-group label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888888;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-group label .value {
+            color: #cccccc;
+            font-weight: 600;
+            font-family: 'Consolas', monospace;
+        }
+
+        select {
+            width: 100%;
+            background: #333333;
+            border: 1px solid #444444;
+            border-radius: 4px;
+            color: #e0e0e0;
+            padding: 6px 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            outline: none;
+        }
+
+        select:focus { border-color: #888888; }
+
+        .seed-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .seed-row input[type="number"] {
+            flex: 1;
+            background: #333333;
+            border: 1px solid #444444;
+            border-radius: 4px;
+            color: #e0e0e0;
+            padding: 6px 8px;
+            font-size: 0.85rem;
+            font-family: 'Consolas', monospace;
+            outline: none;
+        }
+
+        .seed-row input[type="number"]:focus {
+            border-color: #cccccc;
+        }
+
+        .btn {
+            background: #cccccc;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.15s;
+        }
+
+        .btn:hover { background: #b0b0b0; }
+        .btn:active { background: #999999; }
+
+        .btn-secondary {
+            background: #333333;
+            border: 1px solid #444444;
+        }
+
+        .btn-secondary:hover { background: #444444; }
+
+        .btn-full { width: 100%; padding: 10px; }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #333333;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #cccccc;
+            cursor: pointer;
+            border: 2px solid #1a1a1a;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #cccccc;
+            cursor: pointer;
+            border: 2px solid #1a1a1a;
+        }
+
+        .separator {
+            border: none;
+            border-top: 1px solid #333333;
+            margin: 4px 0;
+        }
+
+        .buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .brush-color-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .brush-color-row input[type="range"] { flex: 1; }
+
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            border: 1px solid #444444;
+            background: #808080;
+            flex-shrink: 0;
+        }
+
+        #paintToggle.active {
+            background: #e0e0e0;
+            color: #111;
+        }
+
+        .panel-body { position: relative; }
+
+        #canvas2d.paint-mode { cursor: crosshair; touch-action: none; }
+
+        /* Visualization Panels */
+        .panel {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .panel-header {
+            background: #222222;
+            padding: 8px 14px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #888888;
+            border-bottom: 1px solid #333333;
+        }
+
+        .panel-body {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #111;
+            overflow: hidden;
+        }
+
+        #canvas2d {
+            max-width: 100%;
+            max-height: 100%;
+            image-rendering: pixelated;
+        }
+
+        #viewport3d {
+            width: 100%;
+            height: 100%;
+        }
+
+        #viewport3d canvas {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .app {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr 1fr;
+                overflow-y: auto;
+            }
+
+            .controls {
+                border-right: none;
+                border-bottom: 1px solid #333333;
+                max-height: 300px;
+            }
+
+            .panel-body {
+                min-height: 300px;
+            }
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+            "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm"
+        }
+    }
+    </script>
+</head>
+<body>
+    <header>
+        <h1>Height Map Generator</h1>
+        <span>Procedural Terrain</span>
+    </header>
+
+    <div class="app">
+        <aside class="controls">
+            <div class="control-group">
+                <label>Preset</label>
+                <select id="preset">
+                    <option value="custom">Custom</option>
+                    <option value="rolling-hills">Rolling Hills</option>
+                    <option value="sharp-peaks">Sharp Peaks</option>
+                    <option value="archipelago">Archipelago</option>
+                    <option value="plateaus">Plateaus</option>
+                    <option value="gentle-dunes">Gentle Dunes</option>
+                    <option value="alpine">Alpine</option>
+                </select>
+            </div>
+
+            <hr class="separator">
+
+            <div class="control-group">
+                <label>Seed</label>
+                <div class="seed-row">
+                    <input type="number" id="seed" value="70046" min="0" max="99999">
+                    <button class="btn btn-secondary" id="randomize" title="Random seed">Dice</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Map Size <span class="value" id="mapSize-val">512</span></label>
+                <input type="range" id="mapSize" min="64" max="512" value="512" step="64">
+            </div>
+
+            <hr class="separator">
+
+            <div class="control-group">
+                <label>Octaves <span class="value" id="octaves-val">8</span></label>
+                <input type="range" id="octaves" min="1" max="8" value="8" step="1">
+            </div>
+
+            <div class="control-group">
+                <label>Persistence <span class="value" id="persistence-val">0.40</span></label>
+                <input type="range" id="persistence" min="0.1" max="1.0" value="0.4" step="0.05">
+            </div>
+
+            <div class="control-group">
+                <label>Lacunarity <span class="value" id="lacunarity-val">2.4</span></label>
+                <input type="range" id="lacunarity" min="1.0" max="4.0" value="2.4" step="0.1">
+            </div>
+
+            <div class="control-group">
+                <label>Scale <span class="value" id="scale-val">330</span></label>
+                <input type="range" id="scale" min="10" max="500" value="330" step="10">
+            </div>
+
+            <div class="control-group">
+                <label>Pan X <span class="value" id="panX-val">0</span></label>
+                <input type="range" id="panX" min="-1000" max="1000" value="0" step="1">
+            </div>
+
+            <div class="control-group">
+                <label>Pan Y <span class="value" id="panY-val">0</span></label>
+                <input type="range" id="panY" min="-1000" max="1000" value="0" step="1">
+            </div>
+
+            <hr class="separator">
+
+            <div class="control-group">
+                <label>Black Level <span class="value" id="blackLevel-val">0.00</span></label>
+                <input type="range" id="blackLevel" min="0.0" max="0.9" value="0.0" step="0.01">
+            </div>
+
+            <div class="control-group">
+                <label>White Level <span class="value" id="whiteLevel-val">1.00</span></label>
+                <input type="range" id="whiteLevel" min="0.1" max="1.0" value="1.0" step="0.01">
+            </div>
+
+            <hr class="separator">
+
+            <div class="control-group">
+                <label>Height Multiplier <span class="value" id="heightMultiplier-val">47</span></label>
+                <input type="range" id="heightMultiplier" min="1" max="100" value="47" step="1">
+            </div>
+
+            <div class="control-group">
+                <label>Water Level <span class="value" id="waterLevel-val">0.00</span></label>
+                <input type="range" id="waterLevel" min="0.0" max="0.8" value="0.0" step="0.05">
+            </div>
+
+            <div class="control-group">
+                <label>Color Theme</label>
+                <select id="colorPreset">
+                    <option value="default">Default</option>
+                    <option value="snowy-peaks">Snowy Peaks</option>
+                    <option value="desert">Desert</option>
+                    <option value="volcanic">Volcanic</option>
+                    <option value="arctic">Arctic</option>
+                    <option value="tropical">Tropical</option>
+                    <option value="greyscale">Greyscale</option>
+                    <option value="mars">Mars</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Color Mode</label>
+                <select id="colorMode">
+                    <option value="height">Height</option>
+                    <option value="slope">Slope (Face Angle)</option>
+                    <option value="blend">Blend (Height + Slope)</option>
+                </select>
+            </div>
+
+            <hr class="separator">
+
+            <div class="control-group">
+                <label>Terrain Filter</label>
+                <select id="filterType">
+                    <option value="none">None</option>
+                    <option value="smooth">Smooth</option>
+                    <option value="sharpen">Sharpen</option>
+                    <option value="erode">Erode</option>
+                    <option value="terrace">Terrace</option>
+                    <option value="ridged">Ridged</option>
+                    <option value="invert">Invert</option>
+                    <option value="clamp">Clamp Extremes</option>
+                    <option value="normalize">Normalize</option>
+                    <option value="noise">Add Noise</option>
+                    <option value="hydraulic">Hydraulic Erosion</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Filter Strength <span class="value" id="filterStrength-val">0.50</span></label>
+                <input type="range" id="filterStrength" min="0.05" max="1.0" value="0.5" step="0.05">
+            </div>
+
+            <div id="noiseSettings" style="display:none;">
+                <div class="control-group">
+                    <label>Noise Seed <span class="value" id="noiseSeed-val">999</span></label>
+                    <input type="range" id="noiseSeed" min="0" max="99999" value="999" step="1">
+                </div>
+                <div class="control-group">
+                    <label>Noise Octaves <span class="value" id="noiseOctaves-val">4</span></label>
+                    <input type="range" id="noiseOctaves" min="1" max="8" value="4" step="1">
+                </div>
+                <div class="control-group">
+                    <label>Noise Scale <span class="value" id="noiseScale-val">80</span></label>
+                    <input type="range" id="noiseScale" min="5" max="300" value="80" step="5">
+                </div>
+                <div class="control-group">
+                    <label>Noise Persistence <span class="value" id="noisePersistence-val">0.50</span></label>
+                    <input type="range" id="noisePersistence" min="0.1" max="1.0" value="0.5" step="0.05">
+                </div>
+                <div class="control-group">
+                    <label>Noise Lacunarity <span class="value" id="noiseLacunarity-val">2.0</span></label>
+                    <input type="range" id="noiseLacunarity" min="1.0" max="4.0" value="2.0" step="0.1">
+                </div>
+            </div>
+
+            <div id="erodeSettings" style="display:none;">
+                <div class="control-group">
+                    <label>Iterations <span class="value" id="erodeIterations-val">10</span></label>
+                    <input type="range" id="erodeIterations" min="1" max="50" value="10" step="1">
+                </div>
+                <div class="control-group">
+                    <label>Talus Angle <span class="value" id="erodeTalus-val">0.02</span></label>
+                    <input type="range" id="erodeTalus" min="0.001" max="0.1" value="0.02" step="0.001">
+                </div>
+                <div class="control-group">
+                    <label>Sediment Transfer <span class="value" id="erodeTransfer-val">0.30</span></label>
+                    <input type="range" id="erodeTransfer" min="0.05" max="0.8" value="0.3" step="0.05">
+                </div>
+                <div class="control-group">
+                    <label>Erosion Radius <span class="value" id="erodeRadius-val">1</span></label>
+                    <input type="range" id="erodeRadius" min="1" max="5" value="1" step="1">
+                </div>
+            </div>
+
+            <div id="hydraulicSettings" style="display:none;">
+                <div class="control-group">
+                    <label>Droplets <span class="value" id="hydDroplets-val">10000</span></label>
+                    <input type="range" id="hydDroplets" min="1000" max="50000" value="10000" step="1000">
+                </div>
+                <div class="control-group">
+                    <label>Drop Life <span class="value" id="hydLife-val">80</span></label>
+                    <input type="range" id="hydLife" min="10" max="200" value="80" step="5">
+                </div>
+                <div class="control-group">
+                    <label>Inertia <span class="value" id="hydInertia-val">0.10</span></label>
+                    <input type="range" id="hydInertia" min="0.0" max="1.0" value="0.1" step="0.05">
+                </div>
+                <div class="control-group">
+                    <label>Sediment Capacity <span class="value" id="hydCapacity-val">8</span></label>
+                    <input type="range" id="hydCapacity" min="1" max="20" value="8" step="1">
+                </div>
+                <div class="control-group">
+                    <label>Erosion Rate <span class="value" id="hydErosion-val">0.10</span></label>
+                    <input type="range" id="hydErosion" min="0.01" max="0.5" value="0.1" step="0.01">
+                </div>
+                <div class="control-group">
+                    <label>Deposit Rate <span class="value" id="hydDeposit-val">0.10</span></label>
+                    <input type="range" id="hydDeposit" min="0.01" max="0.5" value="0.1" step="0.01">
+                </div>
+                <div class="control-group">
+                    <label>Evaporation <span class="value" id="hydEvaporation-val">0.02</span></label>
+                    <input type="range" id="hydEvaporation" min="0.01" max="0.1" value="0.02" step="0.01">
+                </div>
+                <div class="control-group">
+                    <label>Erosion Radius <span class="value" id="hydRadius-val">2</span></label>
+                    <input type="range" id="hydRadius" min="1" max="5" value="2" step="1">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <button class="btn btn-full" id="applyFilter">Apply Filter</button>
+            </div>
+
+            <hr class="separator">
+
+            <div class="control-group">
+                <label>Brush</label>
+                <div style="display:flex;gap:6px;">
+                    <button class="btn btn-secondary" style="flex:1;padding:8px 4px;font-size:0.75rem;" id="paintToggle">2D Paint</button>
+                    <button class="btn btn-secondary" style="flex:1;padding:8px 4px;font-size:0.75rem;" id="paint3DToggle">3D Paint</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Brush Type</label>
+                <select id="brushType">
+                    <option value="paint">Paint</option>
+                    <option value="smooth">Smooth</option>
+                    <option value="level">Level</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Brush Color <span class="value" id="brushColor-val">128</span></label>
+                <div class="brush-color-row">
+                    <input type="range" id="brushColor" min="0" max="255" value="128" step="1">
+                    <div class="color-swatch" id="colorSwatch"></div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Brush Size <span class="value" id="brushSize-val">10</span></label>
+                <input type="range" id="brushSize" min="1" max="150" value="10" step="1">
+            </div>
+
+            <div class="control-group">
+                <label>Brush Opacity <span class="value" id="brushOpacity-val">0.50</span></label>
+                <input type="range" id="brushOpacity" min="0.05" max="1.0" value="0.5" step="0.05">
+            </div>
+
+            <div class="control-group">
+                <label>Brush Pressure <span class="value" id="brushPressure-val">0.50</span></label>
+                <input type="range" id="brushPressure" min="0.05" max="1.0" value="0.5" step="0.05">
+            </div>
+
+            <div class="control-group">
+                <label>Brush Feather <span class="value" id="brushFeather-val">0.50</span></label>
+                <input type="range" id="brushFeather" min="0.0" max="1.0" value="0.5" step="0.05">
+            </div>
+
+            <div class="buttons">
+                <button class="btn btn-full" id="regenerate">Regenerate</button>
+                <button class="btn btn-secondary btn-full" id="clearPaint">Clear Paint</button>
+                <button class="btn btn-secondary btn-full" id="exportPng">Export PNG</button>
+                <button class="btn btn-secondary btn-full" id="loadPng">Load Height Map</button>
+                <input type="file" id="loadFile" accept="image/*" style="display:none;">
+            </div>
+        </aside>
+
+        <div class="panel">
+            <div class="panel-header">2D Height Map</div>
+            <div class="panel-body">
+                <canvas id="canvas2d"></canvas>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">3D Terrain</div>
+            <div class="panel-body" id="viewport3d"></div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
