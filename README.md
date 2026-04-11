@@ -2,7 +2,11 @@
 
 A browser-based procedural terrain generator with real-time 2D and 3D visualization. Generate, sculpt, filter, and export height maps — no build tools, no server, no dependencies to install.
 
+**Live Demo:** [https://heightmap-generator.netlify.app/](https://heightmap-generator.netlify.app/)
+
 ![Height Map Generator](terrain.png)
+
+> Vibe coded with [Claude](https://claude.ai) by Anthropic
 
 ## Features
 
