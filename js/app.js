@@ -52,17 +52,38 @@ $('btnWalk').onclick = () => {
 
 // --- Sculpting ---------------------------------------------------------------
 
+// ?debug: show what the pointer is doing (to diagnose input on other machines).
+const debug = new URLSearchParams(location.search).has('debug');
+const dbg = { last: '-', downs: 0, strokes: 0, stamps: 0, note: '' };
+function showDebug() {
+    if (!debug) return;
+    $('statusMsg').textContent = `[debug] last: ${dbg.last} · downs ${dbg.downs} · strokes ${dbg.strokes} · stamps ${dbg.stamps} ${dbg.note}`;
+}
+if (debug) {
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'lostpointercapture']) {
+        view.renderer.domElement.addEventListener(type, e => {
+            dbg.last = `${type} button=${e.button} buttons=${e.buttons} type=${e.pointerType ?? '-'}${e.ctrlKey ? ' ctrl' : ''}${e.altKey ? ' alt' : ''}`;
+            if (type === 'pointerdown') dbg.downs++;
+            showDebug();
+        }, true);
+    }
+}
+
 const canvas = view.renderer.domElement;
 let stroke = null; // { flattenTo, last }
 let mouse = null;  // last client position over the canvas
 
 canvas.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || !area) return;
+    if (e.button !== 0 || !area) { dbg.note = `(ignored: button ${e.button})`; showDebug(); return; }
+    mouse = { x: e.clientX, y: e.clientY };
     const p = view.pick(e.clientX, e.clientY);
-    if (!p) return;
+    if (!p) { dbg.note = '(down missed the terrain)'; showDebug(); return; }
     area.beginStroke();
     stroke = { flattenTo: area.heightAt(p.x, p.y), last: performance.now() };
-    canvas.setPointerCapture(e.pointerId);
+    dbg.strokes++;
+    dbg.note = '';
+    showDebug();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { dbg.note = `(capture failed: ${err.message})`; showDebug(); }
 });
 canvas.addEventListener('pointermove', e => { mouse = { x: e.clientX, y: e.clientY }; });
 canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(null); $('statusPos').textContent = ''; });
@@ -86,6 +107,8 @@ view.onFrame = () => {
         const dt = (now - stroke.last) / 1000;
         stroke.last = now;
         view.markDirty(stamp(area, tool, p.x, p.y, radius, +strengthIn.value, dt, stroke.flattenTo));
+        dbg.stamps++;
+        if (dbg.stamps % 10 === 0) showDebug();
     }
 };
 
