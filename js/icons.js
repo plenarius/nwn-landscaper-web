@@ -10,6 +10,7 @@ export const ICONS = {
     paint: svg('<path d="M30 6 L42 18 L24 36 L12 24 Z" fill="currentColor" fill-opacity="0.25"/><path d="M12 24 C6 30 8 38 4 42 C10 42 18 42 22 36"/><path d="M30 6 L42 18"/>'),
     sky: svg('<circle cx="18" cy="16" r="7"/><path d="M18 3 V5 M5 16 H7 M8.8 6.8 L10.2 8.2 M27.2 6.8 L25.8 8.2"/><path d="M14 38 H38 A7 7 0 0 0 36 24.4 A9 9 0 0 0 19 26 A6 6 0 0 0 14 38 Z" fill="currentColor" fill-opacity="0.25"/>'),
     water: svg('<path d="M24 6 C30 15 35 21 35 28 A11 11 0 0 1 13 28 C13 21 18 15 24 6 Z" fill="currentColor" fill-opacity="0.25"/><path d="M4 42 C9 38 13 38 18 42 C23 46 27 46 32 42 C37 38 41 38 46 42"/>'),
+    entrance: svg('<path d="M4 42 L10 20 L24 8 L38 20 L44 42 Z" fill="currentColor" fill-opacity="0.25"/><path d="M16 42 V30 A8 8 0 0 1 32 30 V42" fill="currentColor" fill-opacity="0.9"/>'),
     newArea: svg('<rect x="8" y="8" width="32" height="32" rx="3"/><path d="M8 19 H40 M8 30 H40 M19 8 V40 M30 8 V40" stroke-width="1.5" stroke-opacity="0.6"/><circle cx="38" cy="38" r="9" fill="currentColor"/><path d="M38 33 V43 M33 38 H43" stroke="#1d2228" stroke-width="3"/>'),
     undo: svg('<path d="M14 16 H30 A10 10 0 0 1 30 36 H18"/><path d="M20 10 L14 16 L20 22"/>'),
     redo: svg('<path d="M34 16 H18 A10 10 0 0 0 18 36 H30"/><path d="M28 10 L34 16 L28 22"/>'),

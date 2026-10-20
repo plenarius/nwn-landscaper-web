@@ -1,7 +1,10 @@
 // Baked shadows, as landscaper bakes them into each tile's shadow map
 // (landscaper src/shade.rs): cast shadows along the game's fixed sun
 // direction, towards (4000, 4500, 7000), and ambient occlusion from the
-// horizon in eight directions. Keep the two in step.
+// horizon in eight directions, darker inside cave entrances. Keep the two
+// in step.
+
+import { darkness } from './entrance.js';
 
 const SUN = (() => {
     const l = Math.hypot(4000, 4500, 7000);
@@ -50,11 +53,14 @@ export const SHADE_STEP = 1.25;
 export function shadeArea(area, strength) {
     const m = Math.round(area.size / SHADE_STEP) + 1;
     const out = new Uint8Array(m * m).fill(255);
+    // No shadow maps at 0 (landscaper writes none), so no dark entrances either.
     if (strength <= 0) return { m, data: out };
     const height = (x, y) => area.heightAt(x, y);
     for (let j = 0; j < m; j++) {
         for (let i = 0; i < m; i++) {
-            out[j * m + i] = Math.round(255 * shade(i * SHADE_STEP, j * SHADE_STEP, strength, height));
+            const x = i * SHADE_STEP, y = j * SHADE_STEP;
+            const s = shade(x, y, strength, height);
+            out[j * m + i] = Math.round(255 * s * darkness(area.entrances, x, y));
         }
     }
     return { m, data: out };

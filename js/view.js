@@ -10,6 +10,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE } from './area.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, SHADE_STEP } from './shade.js';
+import { at as entranceAt, HOOD_UNDER, HOOD_TOP, HOOD_OUT, HOOD_SIDE } from './entrance.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
@@ -174,7 +175,7 @@ export class View {
     /** Shows a new area and frames the camera on it. */
     setArea(area) {
         this.area = area;
-        for (const o of [this.mesh, this.grid, this.markers, this.water, this.skirt]) {
+        for (const o of [this.mesh, this.grid, this.markers, this.water, this.skirt, this.entranceGroup]) {
             if (o) { this.scene.remove(o); o.traverse?.(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); }
         }
         this.markers = null;
@@ -202,6 +203,7 @@ export class View {
         this.markDirty({ i0: 0, i1: n - 1, j0: 0, j1: n - 1 });
         this.flush();
         this.updateWater();
+        this.updateEntrances();
         this.frame();
         this.syncPalette();
     }
@@ -317,6 +319,36 @@ export class View {
         this.mesh.geometry.computeBoundingBox();
         this.updateGrid();
         this.updateSkirt();
+    }
+
+    /** Entrances as the game will show them: the rock hood over each
+     *  mouth, the dark back, and the door (orange) to link. */
+    updateEntrances() {
+        if (this.entranceGroup) {
+            this.scene.remove(this.entranceGroup);
+            this.entranceGroup.traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); });
+        }
+        this.entranceGroup = new THREE.Group();
+        const size = this.area.size;
+        for (const e of this.area.entrances) {
+            const g = new THREE.Group();
+            const [mx, my] = entranceAt(e, 0, 0);
+            g.position.set(mx, e.floor, size - my);
+            g.rotation.y = e.dir;
+            // In the group: x = u (into the slope), -z = v (across), y up.
+            const u0 = -HOOD_OUT, u1 = e.depth + 1, vw = e.width / 2 + HOOD_SIDE;
+            const hood = new THREE.Mesh(new THREE.BoxGeometry(u1 - u0, HOOD_TOP - HOOD_UNDER, 2 * vw), new THREE.MeshLambertMaterial({ color: 0x77716a }));
+            hood.position.set((u0 + u1) / 2, (HOOD_UNDER + HOOD_TOP) / 2, 0);
+            const back = new THREE.Mesh(new THREE.PlaneGeometry(e.width, HOOD_UNDER + 0.1), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+            back.position.set(e.depth - 0.05, (HOOD_UNDER - 0.1) / 2, 0);
+            back.rotation.y = -Math.PI / 2;
+            const door = new THREE.Mesh(new THREE.PlaneGeometry(e.width * 0.8, 2.2), new THREE.MeshBasicMaterial({ color: 0xff9a1f, transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
+            door.position.set(e.depth - 0.15, 1.1, 0);
+            door.rotation.y = -Math.PI / 2;
+            g.add(hood, back, door);
+            this.entranceGroup.add(g);
+        }
+        this.scene.add(this.entranceGroup);
     }
 
     /** What the game draws beyond the edge (landscaper's edge models): each

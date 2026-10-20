@@ -6,6 +6,7 @@ import { TOOLS, stamp } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { PRESETS, copyPreset } from './atmosphere.js';
+import { carve, fitInTile, nearest as nearestEntrance } from './entrance.js';
 
 const $ = id => document.getElementById(id);
 
@@ -252,11 +253,55 @@ function waterChanged() {
     view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
 }
 
+// Entrances: a click on a slope carves one facing into it (where it
+// rises); on flat ground, facing away from the camera. Shift removes the
+// one clicked (its carving stays: Undo takes it back).
+function entranceDown(e, p) {
+    if (e.shiftKey) {
+        const hit = nearestEntrance(area.entrances, p.x, p.y);
+        if (!hit) return;
+        area.beginStroke();
+        area.entrances = area.entrances.filter(x => x !== hit);
+        view.updateEntrances();
+        view.updateShade();
+        saveSoon();
+        return;
+    }
+    const gx = area.heightAt(p.x + 1, p.y) - area.heightAt(p.x - 1, p.y);
+    const gy = area.heightAt(p.x, p.y + 1) - area.heightAt(p.x, p.y - 1);
+    let dir;
+    if (Math.hypot(gx, gy) > 0.1) {
+        dir = Math.atan2(gy, gx);
+    } else {
+        const c = view.camera.position;
+        dir = Math.atan2((area.size - c.z) - p.y, c.x - p.x) + Math.PI;
+    }
+    const ent = { x: p.x, y: p.y, dir, width: Math.min(8, Math.max(2.5, +sizeIn.value)), depth: 4, floor: 0 };
+    // Inside one tile, for the game's pathfinding; the floor where it lands.
+    const moved = fitInTile(ent, TILE, area.size);
+    ent.floor = area.heightAt(ent.x, ent.y);
+    area.beginStroke();
+    area.entrances.push(ent);
+    const rock = library.byId.has('rockCliff') ? area.materialIndex('rockCliff') : undefined;
+    view.markDirty(carve(area, ent, rock));
+    view.syncPalette();
+    if (area.water.length) waterChanged();
+    view.updateEntrances();
+    view.updateShade();
+    $('statusMsg').textContent = `Entrance ${area.entrances.length}: its door will be tagged ${area.name}_ent${area.entrances.length}`
+        + (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '');
+    saveSoon();
+}
+
 canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0 || !area) { dbg.note = `(ignored: button ${e.button})`; showDebug(); return; }
     mouse = { x: e.clientX, y: e.clientY };
     const p = view.pick(e.clientX, e.clientY);
     if (!p) { dbg.note = '(down missed the terrain)'; showDebug(); return; }
+    if (tool === 'entrance') {
+        entranceDown(e, p);
+        return;
+    }
     if (tool === 'water') {
         const w = waterDown(e, p);
         if (w) {
@@ -338,6 +383,7 @@ function saveSoon() {
 
 function refreshAll() {
     view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
+    view.updateEntrances();
     view.updateShade();
     view.updateWater();
     view.syncPalette();
@@ -383,7 +429,8 @@ $('btnExport').onclick = async () => {
         const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`
             + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
             + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
-            + `&shadow=${area.shadow}`;
+            + `&shadow=${area.shadow}`
+            + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`;
         const res = await fetch(`/api/export?${query}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream' },
@@ -428,6 +475,7 @@ function updated(u) {
     if (u.outside.length) {
         html += `<p class="warn">● ${u.outside.length} now outside the area: ${u.outside.slice(0, 5).map(o => `${esc(o.tag || '(no tag)')} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`).join('; ')}${u.outside.length > 5 ? '…' : ''}</p>`;
     }
+    if (u.doors_added) html += `<p>${u.doors_added} new entrance door(s) added: link their transitions in the toolset.</p>`;
     html += u.atmosphere ? '<p>Light and fog: set from the editor.</p>' : '<p>Light and fog: unchanged in the editor, so the module keeps its own.</p>';
     html += `<p class="note">Close the module in the toolset before exporting, or saving there will overwrite this update.</p>`;
     return html;
