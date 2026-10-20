@@ -76,7 +76,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
     overflow-y: auto;
 }
 
-#toolButtons { display: flex; flex-direction: column; gap: 5px; }
+#toolButtons { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 
 .tool {
     display: flex;
@@ -242,9 +242,14 @@ input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #00
 .side-panel .slider { display: flex; flex-direction: column; gap: 2px; margin: 8px 0 2px; font-size: 14px; }
 .side-panel .slider output { color: var(--muted); }
 
-#placePanel input[type=search] { width: 100%; padding: 8px 10px; margin: 4px 0 6px; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 8px; }
+.side-panel input[type=search] { width: 100%; padding: 8px 10px; margin: 4px 0 6px; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .chips button { padding: 4px 10px; font-size: 13px; background: var(--panel-2); border: 1px solid #000; border-radius: 14px; }
 .chips button:hover { background: #3a4452; }
 .side-panel .note { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
 .swatch img.thumb { background: #1d2228; }
+
+/* Tools two to a row: square, big icon over a short name. */
+#toolButtons .tool { width: auto; padding: 5px 2px 3px; font-size: 12px; border-radius: 10px; }
+#toolButtons .tool .icon { width: 32px; height: 32px; }
+#toolButtons .tool .key { font-size: 10px; }

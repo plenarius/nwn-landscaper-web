@@ -12,6 +12,7 @@ export const ICONS = {
     water: svg('<path d="M24 6 C30 15 35 21 35 28 A11 11 0 0 1 13 28 C13 21 18 15 24 6 Z" fill="currentColor" fill-opacity="0.25"/><path d="M4 42 C9 38 13 38 18 42 C23 46 27 46 32 42 C37 38 41 38 46 42"/>'),
     entrance: svg('<path d="M4 42 L10 20 L24 8 L38 20 L44 42 Z" fill="currentColor" fill-opacity="0.25"/><path d="M16 42 V30 A8 8 0 0 1 32 30 V42" fill="currentColor" fill-opacity="0.9"/>'),
     place: svg('<path d="M6 40 C8 30 14 26 20 28 C24 22 34 22 36 30 C42 30 44 36 42 40 Z" fill="currentColor" fill-opacity="0.25"/><path d="M34 6 V18 M28 12 H40"/>'),
+    scatter: svg('<circle cx="12" cy="30" r="5" fill="currentColor" fill-opacity="0.3"/><circle cx="26" cy="22" r="4" fill="currentColor" fill-opacity="0.3"/><circle cx="36" cy="34" r="6" fill="currentColor" fill-opacity="0.3"/><circle cx="22" cy="38" r="3" fill="currentColor" fill-opacity="0.3"/><path d="M38 6 L42 10 M40 6 V14 M36 10 H44" stroke-width="2"/>'),
     newArea: svg('<rect x="8" y="8" width="32" height="32" rx="3"/><path d="M8 19 H40 M8 30 H40 M19 8 V40 M30 8 V40" stroke-width="1.5" stroke-opacity="0.6"/><circle cx="38" cy="38" r="9" fill="currentColor"/><path d="M38 33 V43 M33 38 H43" stroke="#1d2228" stroke-width="3"/>'),
     undo: svg('<path d="M14 16 H30 A10 10 0 0 1 30 36 H18"/><path d="M20 10 L14 16 L20 22"/>'),
     redo: svg('<path d="M34 16 H18 A10 10 0 0 0 18 36 H30"/><path d="M28 10 L34 16 L28 22"/>'),

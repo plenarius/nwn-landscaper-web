@@ -50,7 +50,9 @@ function updatePanels() {
     $('skyPanel').hidden = !skyOpen;
     $('palette').hidden = skyOpen || tool !== 'paint';
     $('placePanel').hidden = skyOpen || tool !== 'place';
-    if (tool !== 'place' && view.selected) selectObject(null);
+    $('scatterPanel').hidden = skyOpen || tool !== 'scatter';
+    if (tool === 'scatter' && !skyOpen) showScatterables();
+    if (tool !== 'place' && view.selected && typeof selectObject === 'function') selectObject(null);
     if (tool === 'place' && !skyOpen) showPlaceables();
     $('btnSky').classList.toggle('active', skyOpen);
 }
@@ -128,13 +130,9 @@ for (const q of QUICK) {
     $('placeChips').appendChild(b);
 }
 
-let placeShown = null;
-async function showPlaceables() {
+/** Search results as big swatches in `box`, each calling `pick(model)`. */
+async function modelResults(box, query, pick) {
     await models.load();
-    const query = $('placeSearch').value.trim() || 'rock';
-    if (query === placeShown) return;
-    placeShown = query;
-    const box = $('placeResults');
     box.textContent = '';
     for (const p of models.search(query)) {
         const b = document.createElement('button');
@@ -142,10 +140,18 @@ async function showPlaceables() {
         b.dataset.model = p.model;
         b.title = `${p.name} (${p.model})`;
         b.innerHTML = `<img class="thumb" alt=""><span>${p.name.replace(/</g, '&lt;')}</span>`;
-        b.onclick = () => selectPlaceable(p.model);
+        b.onclick = () => pick(p.model);
         box.appendChild(b);
         models.thumbnail(p.model).then(url => { if (url) b.querySelector('img').src = url; });
     }
+}
+
+let placeShown = null;
+async function showPlaceables() {
+    const query = $('placeSearch').value.trim() || 'rock';
+    if (query === placeShown) return;
+    placeShown = query;
+    await modelResults($('placeResults'), query, selectPlaceable);
     selectPlaceable(placeModel);
 }
 function selectPlaceable(model) {
@@ -206,7 +212,7 @@ async function placeDown(e, p) {
     if (!placeModel) { $('statusMsg').textContent = 'Pick a placeable in the panel first.'; return null; }
     let flat;
     try { flat = await models.flat(placeModel); } catch { $('statusMsg').textContent = `${placeModel} can't be read.`; return null; }
-    const o = { model: placeModel, x: p.x, y: p.y, z: 0, bearing: $('placeRandom').checked ? Math.random() * Math.PI * 2 : 0, scale: +$('placeScale').value };
+    const o = { model: placeModel, x: p.x, y: p.y, z: 0, bearing: $('placeRandom').checked ? Math.random() * Math.PI * 2 : 0, scale: +$('placeScale').value, solid: $('placeSolid').checked };
     o.z = groundUnder(o, flat);
     area.beginStroke();
     area.objects.push(o);
@@ -243,6 +249,72 @@ async function changeSelected(change) {
     view.updateObjects();
     saveSoon();
     return true;
+}
+
+// --- Scatter --------------------------------------------------------------------------
+
+const scatterMix = new Set();
+for (const q of QUICK) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = q;
+    b.onclick = () => { $('scatterSearch').value = q; showScatterables(); };
+    $('scatterChips').appendChild(b);
+}
+let scatterShown = null;
+async function showScatterables() {
+    const query = $('scatterSearch').value.trim() || 'rock';
+    if (query === scatterShown) return;
+    scatterShown = query;
+    await modelResults($('scatterResults'), query, model => {
+        if (scatterMix.has(model)) scatterMix.delete(model); else scatterMix.add(model);
+        markMix();
+    });
+    markMix();
+}
+function markMix() {
+    for (const b of $('scatterResults').children) b.classList.toggle('active', scatterMix.has(b.dataset.model));
+}
+$('scatterSearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(showScatterables, 250); };
+const showScatterSliders = () => {
+    $('scatterDensityOut').textContent = `${$('scatterDensity').value} per 100 m²`;
+    $('scatterMinOut').textContent = `${Math.round($('scatterMin').value * 100)}%`;
+    $('scatterMaxOut').textContent = `${Math.round($('scatterMax').value * 100)}%`;
+};
+for (const id of ['scatterDensity', 'scatterMin', 'scatterMax']) $(id).oninput = showScatterSliders;
+showScatterSliders();
+
+/** A few tries a frame at a random point in the brush; a try is kept when
+ *  no object is nearer than the density's spacing and the ground suits.
+ *  (Synchronous, with the mix's models loaded when the stroke began: each
+ *  object is in before the next try checks the spacing.) */
+function scatterStamp(p, radius) {
+    const s = stroke.scatter;
+    if (s.erase) {
+        const gone = new Set(area.objects.filter(o => Math.hypot(o.x - p.x, o.y - p.y) <= radius));
+        if (gone.size) {
+            area.objects = area.objects.filter(o => !gone.has(o));
+            view.removeObjects(gone);
+        }
+        return;
+    }
+    const mix = s.flats;
+    if (!mix?.length) return;
+    const spacing = Math.sqrt(100 / +$('scatterDensity').value);
+    const lo = Math.min(+$('scatterMin').value, +$('scatterMax').value), hi = Math.max(+$('scatterMin').value, +$('scatterMax').value);
+    for (let k = 0; k < 4; k++) {
+        const a = Math.random() * Math.PI * 2, d = radius * Math.sqrt(Math.random());
+        const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+        if (x < 0.5 || y < 0.5 || x > area.size - 0.5 || y > area.size - 0.5) continue;
+        if (area.objects.some(o => Math.hypot(o.x - x, o.y - y) < spacing)) continue;
+        const i = Math.min(area.n - 1, Math.round(x / SPACING)), j = Math.min(area.n - 1, Math.round(y / SPACING));
+        if ($('scatterSteep').checked && (!area.walkable(i, j) || area.depth(i, j) > 0)) continue;
+        const [model, flat] = mix[Math.floor(Math.random() * mix.length)];
+        const o = { model, x, y, z: 0, bearing: Math.random() * Math.PI * 2, scale: lo + Math.random() * (hi - lo), solid: $('scatterSolid').checked };
+        o.z = groundUnder(o, flat);
+        area.objects.push(o);
+        view.addObject(o);
+    }
 }
 
 // --- Sky & fog -------------------------------------------------------------------
@@ -442,6 +514,16 @@ canvas.addEventListener('pointerdown', e => {
         entranceDown(e, p);
         return;
     }
+    if (tool === 'scatter') {
+        if (!e.shiftKey && !scatterMix.size) { $('statusMsg').textContent = 'Add models to the mix in the panel first.'; return; }
+        area.beginStroke();
+        const scatter = { erase: e.shiftKey, flats: null };
+        stroke = { scatter, last: 0 };
+        Promise.all([...scatterMix].map(m => models.flat(m).then(f => [m, f], () => null)))
+            .then(list => { scatter.flats = list.filter(Boolean); });
+        try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
+        return;
+    }
     if (tool === 'place') {
         const pointerId = e.pointerId;
         // Placing waits for the model: a quick click may be released first,
@@ -485,7 +567,7 @@ const endStroke = () => {
     placePointer = null;
     if (!stroke) return;
     // The ground moved: its shadows too.
-    if (!stroke.water && !stroke.place && tool !== 'paint') view.updateShade();
+    if (!stroke.water && !stroke.place && !stroke.scatter && tool !== 'paint') view.updateShade();
     // Sculpting may have flooded or drained hollows.
     if (!stroke.water && area.water.length && tool !== 'paint') waterChanged();
     if (stroke.water) $('statusMsg').textContent = '';
@@ -507,6 +589,11 @@ view.onFrame = () => {
         const walk = area.walkable(ci, cj), deep = area.depth(ci, cj);
         const what = deep > SHALLOW ? `water ${deep.toFixed(1)} m deep: too deep to walk` : deep > 0 ? `shallow water ${deep.toFixed(1)} m: wading` : walk ? 'walkable' : 'too steep to walk';
         $('statusPos').textContent = `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
+    }
+    if (stroke?.scatter && p) {
+        scatterStamp(p, radius);
+        dbg.stamps++;
+        return;
     }
     if (stroke && p && !stroke.water && !stroke.place) {
         const now = performance.now();

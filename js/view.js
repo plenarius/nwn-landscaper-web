@@ -390,6 +390,27 @@ export class View {
         }
     }
 
+    /** Adds one object's model to the view (painting many at once). */
+    async addObject(o) {
+        const group = this.objectGroup;
+        if (!group || !this.models) return;
+        let model;
+        try { model = await this.models.group(o.model); } catch { return; }
+        if (group !== this.objectGroup || !this.area.objects.includes(o)) return;
+        const inst = model.clone();
+        inst.position.set(o.x, o.z, this.area.size - o.y);
+        inst.rotation.y = o.bearing;
+        inst.scale.setScalar(o.scale);
+        inst.userData.object = o;
+        group.add(inst);
+    }
+
+    /** Takes objects (a Set) out of the view. */
+    removeObjects(gone) {
+        if (!this.objectGroup) return;
+        for (const c of [...this.objectGroup.children]) if (gone.has(c.userData.object)) this.objectGroup.remove(c);
+    }
+
     /** The placed object under the pointer, or null. */
     pickObject(clientX, clientY) {
         if (!this.objectGroup) return null;
