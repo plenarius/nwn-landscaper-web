@@ -6,6 +6,7 @@
 import { generateHeightMap } from './noise.js';
 
 export const TILE = 10;
+export const DEFAULT_TEXTURE = 'grassMedium';
 export const SPACING = 0.625;
 export const SAMPLES_PER_TILE = TILE / SPACING;
 // landscaper's slope limit: a sample is walkable if no neighbour rises more
@@ -14,14 +15,29 @@ const WALKABLE_NZ = 0.64;
 export const MAX_RISE = SPACING * Math.sqrt(1 - WALKABLE_NZ * WALKABLE_NZ) / WALKABLE_NZ;
 
 export class Area {
-    constructor(name, tiles, heights) {
+    constructor(name, tiles, heights, materials, palette) {
         this.name = name;
         this.tiles = tiles;
         this.n = tiles * SAMPLES_PER_TILE + 1;
         this.size = tiles * TILE;
         this.heights = heights ?? new Float32Array(this.n * this.n);
+        // The painted texture of each sample: an index into `palette`
+        // (texture ids from the library catalog).
+        this.materials = materials ?? new Uint8Array(this.n * this.n);
+        this.palette = palette ?? [DEFAULT_TEXTURE];
         this.undoStack = [];
         this.redoStack = [];
+    }
+
+    /** Palette index of a texture id, adding it if new. */
+    materialIndex(id) {
+        let k = this.palette.indexOf(id);
+        if (k < 0) {
+            if (this.palette.length >= 255) throw new Error('at most 255 textures in one area');
+            this.palette.push(id);
+            k = this.palette.length - 1;
+        }
+        return k;
     }
 
     static create(name, tiles, start) {
@@ -69,39 +85,55 @@ export class Area {
         return true;
     }
 
-    // Undo: a snapshot of the heights before each stroke.
+    // Undo: a snapshot of heights and paint before each stroke.
+    snapshot() { return { h: this.heights.slice(), m: this.materials.slice(), p: this.palette.slice() }; }
+    restore(s) { this.heights.set(s.h); this.materials.set(s.m); this.palette = s.p.slice(); }
+
     beginStroke() {
-        this.undoStack.push(this.heights.slice());
+        this.undoStack.push(this.snapshot());
         if (this.undoStack.length > 40) this.undoStack.shift();
         this.redoStack = [];
     }
 
     undo() {
         if (!this.undoStack.length) return false;
-        this.redoStack.push(this.heights.slice());
-        this.heights.set(this.undoStack.pop());
+        this.redoStack.push(this.snapshot());
+        this.restore(this.undoStack.pop());
         return true;
     }
 
     redo() {
         if (!this.redoStack.length) return false;
-        this.undoStack.push(this.heights.slice());
-        this.heights.set(this.redoStack.pop());
+        this.undoStack.push(this.snapshot());
+        this.restore(this.redoStack.pop());
         return true;
     }
 
     // Saved in the browser between sessions.
     toJSON() {
-        const bytes = new Uint8Array(this.heights.buffer.slice(0));
-        let bin = '';
-        for (let k = 0; k < bytes.length; k += 0x8000) bin += String.fromCharCode(...bytes.subarray(k, k + 0x8000));
-        return { name: this.name, tiles: this.tiles, heights: btoa(bin) };
+        return {
+            name: this.name, tiles: this.tiles,
+            heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
+            materials: toBase64(this.materials), palette: this.palette,
+        };
     }
 
     static fromJSON(o) {
-        const bin = atob(o.heights);
-        const bytes = new Uint8Array(bin.length);
-        for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
-        return new Area(o.name, o.tiles, new Float32Array(bytes.buffer));
+        const heights = new Float32Array(fromBase64(o.heights).buffer);
+        const materials = o.materials ? fromBase64(o.materials) : undefined;
+        return new Area(o.name, o.tiles, heights, materials, o.palette);
     }
+}
+
+function toBase64(bytes) {
+    let bin = '';
+    for (let k = 0; k < bytes.length; k += 0x8000) bin += String.fromCharCode(...bytes.subarray(k, k + 0x8000));
+    return btoa(bin);
+}
+
+function fromBase64(text) {
+    const bin = atob(text);
+    const bytes = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+    return bytes;
 }

@@ -9,6 +9,7 @@ export const TOOLS = {
     lower: { label: 'Lower', key: '2', hint: 'Dig down' },
     smooth: { label: 'Smooth', key: '3', hint: 'Soften bumps and edges' },
     flatten: { label: 'Flatten', key: '4', hint: 'Level to the height where you first click' },
+    paint: { label: 'Paint', key: '5', hint: 'Paint the ground with a texture' },
 };
 
 // Metres a second at full strength, for raise/lower.
@@ -23,14 +24,24 @@ function falloff(d, r) {
  * Applies `tool` at area point (x, y). `flattenTo` is the height captured
  * at the start of a flatten stroke. Returns the changed sample rectangle.
  */
-export function stamp(area, tool, x, y, radius, strength, dt, flattenTo) {
+export function stamp(area, tool, x, y, radius, strength, dt, flattenTo, paintIndex) {
     const n = area.n, h = area.heights;
     const i0 = Math.max(0, Math.floor((x - radius) / SPACING)), i1 = Math.min(n - 1, Math.ceil((x + radius) / SPACING));
     const j0 = Math.max(0, Math.floor((y - radius) / SPACING)), j1 = Math.min(n - 1, Math.ceil((y + radius) / SPACING));
     if (i0 > i1 || j0 > j1) return null;
     const amount = strength * Math.min(dt, 0.1);
 
-    if (tool === 'smooth') {
+    if (tool === 'paint') {
+        // Hard-edged inside the brush (the view blends neighbouring textures);
+        // a lower strength paints a smaller core of the brush.
+        const core = radius * (0.35 + 0.65 * strength);
+        const m = area.materials;
+        for (let j = j0; j <= j1; j++) {
+            for (let i = i0; i <= i1; i++) {
+                if (Math.hypot(i * SPACING - x, j * SPACING - y) <= core) m[j * n + i] = paintIndex;
+            }
+        }
+    } else if (tool === 'smooth') {
         // Blend toward the local average (computed from the current heights).
         const w = i1 - i0 + 1;
         const avg = new Float32Array(w * (j1 - j0 + 1));

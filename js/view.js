@@ -1,5 +1,6 @@
-// The 3D view of one area: the terrain coloured by walkability, the 10 m
-// NWN tile grid draped on it, the brush cursor, and export warnings.
+// The 3D view of one area: the terrain with its painted textures (or
+// coloured by height until they load), tinted where NWN won't walk, the
+// 10 m NWN tile grid draped on it, the brush cursor, and export warnings.
 //
 // Frames: NWN x = three x; NWN y (north) = size - three z, so north is -Z,
 // away from the default camera; height is three y.
@@ -12,6 +13,33 @@ const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
 const ROCK = new THREE.Color(0x8a8378);
 const BLOCKED = new THREE.Color(0xc0503c);
+// Multiplies the painted texture on ground too steep to walk.
+const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
+// Metres one texture repeat covers on the ground.
+const TEXTURE_METRES = 4;
+
+// Splat shading: each sample has a texture (an index into the area palette,
+// stored in uMat); a point blends its four surrounding samples' textures
+// bilinearly, so painted edges soften over one 0.625 m sample.
+const SPLAT_VERTEX = `
+    vArea = vec2(transformed.x, uSize - transformed.z);`;
+const SPLAT_FRAGMENT = `
+    if (uTextured) {
+        vec2 f = clamp(vArea / ${SPACING.toFixed(4)}, vec2(0.0), vec2(uN - 1.0));
+        vec2 base = min(floor(f), vec2(uN - 2.0));
+        vec2 t = f - base;
+        ivec2 b = ivec2(base);
+        vec2 uv = vArea / ${TEXTURE_METRES.toFixed(1)};
+        float m00 = floor(texelFetch(uMat, b, 0).r * 255.0 + 0.5);
+        float m10 = floor(texelFetch(uMat, b + ivec2(1, 0), 0).r * 255.0 + 0.5);
+        float m01 = floor(texelFetch(uMat, b + ivec2(0, 1), 0).r * 255.0 + 0.5);
+        float m11 = floor(texelFetch(uMat, b + ivec2(1, 1), 0).r * 255.0 + 0.5);
+        vec4 splat = texture(uTex, vec3(uv, m00)) * (1.0 - t.x) * (1.0 - t.y)
+                   + texture(uTex, vec3(uv, m10)) * t.x * (1.0 - t.y)
+                   + texture(uTex, vec3(uv, m01)) * (1.0 - t.x) * t.y
+                   + texture(uTex, vec3(uv, m11)) * t.x * t.y;
+        diffuseColor.rgb *= splat.rgb;
+    }`;
 
 export class View {
     constructor(container) {
@@ -41,6 +69,16 @@ export class View {
         this.scene.add(this.cursor);
 
         this.showWalkability = true;
+        this.library = null;
+        this.textured = false;
+        this.uniforms = {
+            uTex: { value: new THREE.DataArrayTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, 1) },
+            uMat: { value: null },
+            uN: { value: 2 },
+            uSize: { value: 1 },
+            uTextured: { value: false },
+        };
+        this.uniforms.uTex.value.needsUpdate = true;
         this.raycaster = new THREE.Raycaster();
         this.dirty = null;
         new ResizeObserver(() => this.resize()).observe(container);
@@ -74,13 +112,63 @@ export class View {
         geo.rotateX(-Math.PI / 2);
         geo.translate(size / 2, 0, size / 2);
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * n * 3), 3));
-        this.mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+        this.uniforms.uMat.value?.dispose();
+        const mat = new THREE.DataTexture(area.materials, n, n, THREE.RedFormat, THREE.UnsignedByteType);
+        mat.minFilter = mat.magFilter = THREE.NearestFilter;
+        mat.unpackAlignment = 1;
+        mat.needsUpdate = true;
+        this.uniforms.uMat.value = mat;
+        this.uniforms.uN.value = n;
+        this.uniforms.uSize.value = size;
+        this.mesh = new THREE.Mesh(geo, this.splatMaterial());
         this.scene.add(this.mesh);
         this.grid = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }));
         this.scene.add(this.grid);
+        this.paletteKey = null;
         this.markDirty({ i0: 0, i1: n - 1, j0: 0, j1: n - 1 });
         this.flush();
         this.frame();
+        this.syncPalette();
+    }
+
+    splatMaterial() {
+        const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+        material.onBeforeCompile = shader => {
+            Object.assign(shader.uniforms, this.uniforms);
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <common>', '#include <common>\nuniform float uSize;\nvarying vec2 vArea;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>' + SPLAT_VERTEX);
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nvarying vec2 vArea;')
+                .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT);
+        };
+        material.customProgramCacheKey = () => 'landscaper-splat';
+        return material;
+    }
+
+    /** Uses the texture library to show painted textures. */
+    setLibrary(library) {
+        this.library = library;
+        this.paletteKey = null;
+        this.syncPalette();
+    }
+
+    /** Rebuilds the texture array when the area's palette changed. */
+    async syncPalette() {
+        if (!this.library || !this.area) return;
+        const key = this.area.palette.join(',');
+        if (key === this.paletteKey) return;
+        this.paletteKey = key;
+        const tex = await this.library.buildArray(this.area.palette.slice());
+        if (key !== this.paletteKey) { tex.dispose(); return; }
+        const old = this.uniforms.uTex.value;
+        this.uniforms.uTex.value = tex;
+        old.dispose();
+        if (!this.textured) {
+            this.textured = true;
+            this.uniforms.uTextured.value = true;
+            this.markDirty({ i0: 0, i1: this.area.n - 1, j0: 0, j1: this.area.n - 1 });
+        }
     }
 
     frame() {
@@ -119,7 +207,11 @@ export class View {
             for (let i = i0; i <= i1; i++) {
                 const v = this.vertex(i, j), z = area.heights[j * n + i];
                 pos.setY(v, z);
-                if (area.walkable(i, j)) {
+                if (this.textured) {
+                    // White leaves the painted texture as it is.
+                    if (area.walkable(i, j) || !this.showWalkability) c.setRGB(1, 1, 1);
+                    else c.copy(BLOCKED_TINT);
+                } else if (area.walkable(i, j)) {
                     c.copy(GRASS_LOW).lerp(GRASS_HIGH, (z - lo) / span);
                 } else {
                     c.copy(this.showWalkability ? BLOCKED : ROCK);
@@ -129,6 +221,7 @@ export class View {
         }
         pos.needsUpdate = true;
         col.needsUpdate = true;
+        this.uniforms.uMat.value.needsUpdate = true;
         this.mesh.geometry.computeVertexNormals();
         this.mesh.geometry.computeBoundingSphere();
         this.mesh.geometry.computeBoundingBox();

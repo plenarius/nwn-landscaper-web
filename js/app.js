@@ -1,9 +1,10 @@
 // Layonara Landscaper: sculpt an NWN area, export it with `landscaper serve`.
 
-import { Area, TILE } from './area.js';
+import { Area, TILE, DEFAULT_TEXTURE } from './area.js';
 import { View } from './view.js';
 import { TOOLS, stamp } from './tools.js';
 import { ICONS } from './icons.js';
+import { TextureLibrary } from './textures.js';
 
 const $ = id => document.getElementById(id);
 
@@ -36,6 +37,7 @@ for (const [id, t] of Object.entries(TOOLS)) {
 function selectTool(id) {
     tool = id;
     for (const b of document.querySelectorAll('#toolButtons .tool')) b.classList.toggle('active', b.dataset.tool === id);
+    $('palette').hidden = id !== 'paint';
 }
 selectTool('raise');
 
@@ -49,6 +51,53 @@ $('btnWalk').onclick = () => {
     $('btnWalk').classList.toggle('on', on);
     view.setShowWalkability(on);
 };
+
+// --- Textures ------------------------------------------------------------------
+
+const library = new TextureLibrary();
+let paintTexture = DEFAULT_TEXTURE;
+
+const CATEGORY_ORDER = ['Grass', 'Flowers & leaves', 'Earth', 'Rock', 'Sand', 'Snow', 'Special'];
+
+function buildPalette() {
+    const body = $('paletteBody');
+    body.textContent = '';
+    if (!library.catalog.length) {
+        body.innerHTML = '<p>No texture library. Run the page from <code>landscaper serve</code> after building the library (landscaper scripts/build_texture_library.py).</p>';
+        return;
+    }
+    const categories = [...new Set(library.catalog.map(t => t.category))]
+        .sort((a, b) => (CATEGORY_ORDER.indexOf(a) + 1 || 99) - (CATEGORY_ORDER.indexOf(b) + 1 || 99));
+    for (const category of categories) {
+        const h = document.createElement('h4');
+        h.textContent = category;
+        const grid = document.createElement('div');
+        grid.className = 'swatches';
+        for (const t of library.catalog.filter(t => t.category === category)) {
+            const b = document.createElement('button');
+            b.className = 'swatch';
+            b.dataset.texture = t.id;
+            b.title = `${t.name} (${t.source})`;
+            b.innerHTML = `<img loading="lazy" alt="" src="${library.swatchUrl(t.id)}"><span>${t.name}</span>`;
+            b.onclick = () => selectTexture(t.id);
+            grid.appendChild(b);
+        }
+        body.append(h, grid);
+    }
+    selectTexture(paintTexture);
+}
+
+function selectTexture(id) {
+    paintTexture = id;
+    for (const b of document.querySelectorAll('#paletteBody .swatch')) b.classList.toggle('active', b.dataset.texture === id);
+    // Start loading it now so the first dab shows at once.
+    library.layerPixels(id).catch(() => {});
+}
+
+library.load().then(ok => {
+    buildPalette();
+    if (ok) view.setLibrary(library);
+});
 
 // --- Sculpting ---------------------------------------------------------------
 
@@ -80,6 +129,10 @@ canvas.addEventListener('pointerdown', e => {
     if (!p) { dbg.note = '(down missed the terrain)'; showDebug(); return; }
     area.beginStroke();
     stroke = { flattenTo: area.heightAt(p.x, p.y), last: performance.now() };
+    if (tool === 'paint') {
+        stroke.paintIndex = area.materialIndex(paintTexture);
+        view.syncPalette();
+    }
     dbg.strokes++;
     dbg.note = '';
     showDebug();
@@ -106,7 +159,7 @@ view.onFrame = () => {
         const now = performance.now();
         const dt = (now - stroke.last) / 1000;
         stroke.last = now;
-        view.markDirty(stamp(area, tool, p.x, p.y, radius, +strengthIn.value, dt, stroke.flattenTo));
+        view.markDirty(stamp(area, tool, p.x, p.y, radius, +strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex));
         dbg.stamps++;
         if (dbg.stamps % 10 === 0) showDebug();
     }
@@ -131,6 +184,7 @@ function saveSoon() {
 
 function refreshAll() {
     view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
+    view.syncPalette();
     saveSoon();
 }
 $('btnUndo').onclick = () => { if (area?.undo()) refreshAll(); };
@@ -166,16 +220,21 @@ $('btnExport').onclick = async () => {
     btn.disabled = true;
     $('statusMsg').textContent = `Exporting ${area.name}…`;
     try {
-        const res = await fetch(`/api/export?name=${encodeURIComponent(area.name)}&tiles=${area.tiles}`, {
+        // Heights (f32 per sample), then each sample's palette index (u8).
+        const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength);
+        body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
+        body.set(area.materials, area.heights.byteLength);
+        const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`;
+        const res = await fetch(`/api/export?${query}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream' },
-            body: area.heights.buffer.slice(0),
+            body,
         });
         if (res.status === 404 || res.status === 501) throw new Error('This page is not being served by landscaper. Run: landscaper serve');
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error || res.statusText);
-        showReport(body);
-        view.setMarkers(body.warnings || []);
+        const report = await res.json();
+        if (!res.ok) throw new Error(report.error || res.statusText);
+        showReport(report);
+        view.setMarkers(report.warnings || []);
         $('statusMsg').textContent = '';
     } catch (err) {
         $('statusMsg').textContent = '';

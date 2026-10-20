@@ -37,7 +37,12 @@
         <button class="tool toggle on" id="btnWalk" title="Show where NWN won't let creatures walk (W)"><span class="icon" data-icon="walk"></span><span>Walkable</span></button>
     </nav>
 
-    <main id="viewport"></main>
+    <main id="viewport">
+        <section id="palette" hidden>
+            <h3>Textures</h3>
+            <div id="paletteBody"></div>
+        </section>
+    </main>
 
     <aside id="report" hidden>
         <button id="reportClose" title="Close">×</button>
@@ -45,7 +50,7 @@
     </aside>
 
     <footer id="status">
-        <span id="statusPos">Left-drag to sculpt · right-drag to turn · middle-drag to move · wheel to zoom</span>
+        <span id="statusPos">Left-drag to sculpt or paint · right-drag to turn · middle-drag to move · wheel to zoom</span>
         <span id="statusMsg"></span>
     </footer>
 
