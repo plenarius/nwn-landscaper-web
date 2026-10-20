@@ -1,0 +1,61 @@
+// Baked shadows, as landscaper bakes them into each tile's shadow map
+// (landscaper src/shade.rs): cast shadows along the game's fixed sun
+// direction, towards (4000, 4500, 7000), and ambient occlusion from the
+// horizon in eight directions. Keep the two in step.
+
+const SUN = (() => {
+    const l = Math.hypot(4000, 4500, 7000);
+    return [4000 / l, 4500 / l, 7000 / l];
+})();
+
+function castShadow(x, y, z, height) {
+    const horizontal = Math.hypot(SUN[0], SUN[1]);
+    const dx = SUN[0] / horizontal, dy = SUN[1] / horizontal, rise = SUN[2] / horizontal;
+    let dark = 0;
+    for (let t = 0.3; t < 80; t += t < 4 ? 0.25 : 0.5) {
+        const above = height(x + dx * t, y + dy * t) - (z + 0.05 + rise * t);
+        if (above > 0) {
+            dark = Math.max(dark, Math.min(above / (0.25 + 0.04 * t), 1));
+            if (dark >= 1) break;
+        }
+    }
+    return dark;
+}
+
+const STEPS = [0.5, 1, 1.75, 2.75, 4, 6, 9, 13];
+
+function occlusion(x, y, z, height) {
+    let sum = 0;
+    for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4, dx = Math.cos(a), dy = Math.sin(a);
+        let slope = 0;
+        for (const t of STEPS) slope = Math.max(slope, (height(x + dx * t, y + dy * t) - z) / t);
+        sum += slope / Math.sqrt(1 + slope * slope);
+    }
+    return sum / 8;
+}
+
+/** The shadow-map value at (x, y): 1 unshaded; `strength` 0..1. */
+export function shade(x, y, strength, height) {
+    const z = height(x, y);
+    const lit = 1 - 0.6 * castShadow(x, y, z, height);
+    const open = 1 - 0.8 * occlusion(x, y, z, height);
+    return Math.min(1, Math.max(0.15, 1 - strength * (1 - lit * open)));
+}
+
+// Metres between the preview's samples.
+export const SHADE_STEP = 1.25;
+
+/** The area's shadows on a grid SHADE_STEP apart (rows from the south). */
+export function shadeArea(area, strength) {
+    const m = Math.round(area.size / SHADE_STEP) + 1;
+    const out = new Uint8Array(m * m).fill(255);
+    if (strength <= 0) return { m, data: out };
+    const height = (x, y) => area.heightAt(x, y);
+    for (let j = 0; j < m; j++) {
+        for (let i = 0; i < m; i++) {
+            out[j * m + i] = Math.round(255 * shade(i * SHADE_STEP, j * SHADE_STEP, strength, height));
+        }
+    }
+    return { m, data: out };
+}

@@ -34,6 +34,8 @@ export class Area {
         // each sample's water level from them (NaN: dry), as landscaper
         // floods them.
         this.water = [];
+        // Baked shadows' strength, 0 (none) to 1.
+        this.shadow = 0.6;
         this.waterLevel = new Float32Array(this.n * this.n).fill(NaN);
         this.undoStack = [];
         this.redoStack = [];
@@ -170,7 +172,7 @@ export class Area {
             name: this.name, tiles: this.tiles,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
-            atmosphere: this.atmosphere, water: this.water,
+            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow,
         };
     }
 
@@ -179,6 +181,7 @@ export class Area {
         const materials = o.materials ? fromBase64(o.materials) : undefined;
         const area = new Area(o.name, o.tiles, heights, materials, o.palette);
         if (o.atmosphere) area.atmosphere = o.atmosphere;
+        if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.water) { area.water = o.water; area.floodWater(); }
         return area;
     }

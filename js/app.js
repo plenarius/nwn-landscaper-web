@@ -143,6 +143,8 @@ function showSky() {
     $('skyFogAmount').value = s.fogAmount;
     $('skyFogOut').textContent = s.fogAmount === 0 ? 'light' : s.fogAmount < 10 ? `${s.fogAmount} · some` : s.fogAmount < 20 ? `${s.fogAmount} · heavy` : `${s.fogAmount} · thick`;
     $('skyShadows').checked = s.shadows;
+    $('shadowStrength').value = area.shadow;
+    $('shadowOut').textContent = area.shadow > 0 ? `${Math.round(area.shadow * 100)}%` : 'off';
     $('skyClip').value = a.fogClip;
     $('skyClipOut').textContent = `${a.fogClip} m`;
     view.setAtmosphere($('skyPreview').checked ? a : null, skyNight);
@@ -165,6 +167,15 @@ $('skyFog').oninput = e => editSky((a, s) => { s.fog = e.target.value; });
 $('skyFogAmount').oninput = e => editSky((a, s) => { s.fogAmount = +e.target.value; });
 $('skyShadows').onchange = e => editSky((a, s) => { s.shadows = e.target.checked; });
 $('skyClip').oninput = e => editSky(a => { a.fogClip = +e.target.value; });
+// Not part of the .are's settings: baked into the tiles.
+let shadeTimer = null;
+$('shadowStrength').oninput = e => {
+    area.shadow = +e.target.value;
+    showSky();
+    clearTimeout(shadeTimer);
+    shadeTimer = setTimeout(() => view.updateShade(), 150);
+    saveSoon();
+};
 for (const r of document.querySelectorAll('[name=skyTime]')) {
     r.onchange = () => editSky(a => {
         a.time = r.value;
@@ -272,6 +283,8 @@ canvas.addEventListener('pointermove', e => {
 canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(null); $('statusPos').textContent = ''; });
 const endStroke = () => {
     if (!stroke) return;
+    // The ground moved: its shadows too.
+    if (!stroke.water && tool !== 'paint') view.updateShade();
     // Sculpting may have flooded or drained hollows.
     if (!stroke.water && area.water.length && tool !== 'paint') waterChanged();
     if (stroke.water) $('statusMsg').textContent = '';
@@ -325,6 +338,7 @@ function saveSoon() {
 
 function refreshAll() {
     view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
+    view.updateShade();
     view.updateWater();
     view.syncPalette();
     saveSoon();
@@ -368,7 +382,8 @@ $('btnExport').onclick = async () => {
         body.set(area.materials, area.heights.byteLength);
         const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`
             + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
-            + `&water=${encodeURIComponent(JSON.stringify(area.water))}`;
+            + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
+            + `&shadow=${area.shadow}`;
         const res = await fetch(`/api/export?${query}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream' },

@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE } from './area.js';
 import { fogRange } from './atmosphere.js';
+import { shadeArea, SHADE_STEP } from './shade.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
@@ -27,6 +28,16 @@ const WALKABLE_NZ = 0.64;
 // edges soften over one 0.625 m sample. Ground too steep to walk takes its
 // texture from the side (along x + y, and up) and from the nearest sample.
 // v is negated: the texture array's rows run top first, NWN's bottom first.
+// Baked shadows over the lit ground, as the game's shadow-map shader
+// multiplies them (fog comes after, in three.js as in the game).
+// Only over the area: the edge scenery has no shadow map.
+const SHADE_FRAGMENT = `
+    {
+        float extent = (uShadeCells - 1.0) * ${SHADE_STEP.toFixed(4)};
+        if (all(greaterThanEqual(vArea, vec2(0.0))) && all(lessThanEqual(vArea, vec2(extent))))
+            diffuseColor.rgb *= texture2D(uShade, (vArea / ${SHADE_STEP.toFixed(4)} + 0.5) / uShadeCells).r;
+    }`;
+
 const SPLAT_VERTEX = `
     vArea = vec2(transformed.x, uSize - transformed.z);
     vUp = transformed.y;
@@ -99,6 +110,9 @@ export class View {
             uN: { value: 2 },
             uSize: { value: 1 },
             uTextured: { value: false },
+            // Baked shadows (shade.js): a grid SHADE_STEP apart over the area.
+            uShade: { value: null },
+            uShadeCells: { value: 1 },
         };
         this.uniforms.uTex.value.needsUpdate = true;
         this.raycaster = new THREE.Raycaster();
@@ -178,6 +192,7 @@ export class View {
         this.uniforms.uMat.value = mat;
         this.uniforms.uN.value = n;
         this.uniforms.uSize.value = size;
+        this.updateShade();
         this.mesh = new THREE.Mesh(geo, this.splatMaterial());
         this.scene.add(this.mesh);
         this.buildSkirt();
@@ -199,11 +214,24 @@ export class View {
                 .replace('#include <common>', '#include <common>\nuniform float uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>' + SPLAT_VERTEX);
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
-                .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT);
+                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform float uShadeCells;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
+                .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT + SHADE_FRAGMENT);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
         return material;
+    }
+
+    /** Bakes the shadows again (after the ground or their strength changed). */
+    updateShade() {
+        const { m, data } = shadeArea(this.area, this.area.shadow);
+        const old = this.uniforms.uShade.value;
+        const tex = new THREE.DataTexture(data, m, m, THREE.RedFormat, THREE.UnsignedByteType);
+        tex.minFilter = tex.magFilter = THREE.LinearFilter;
+        tex.unpackAlignment = 1;
+        tex.needsUpdate = true;
+        this.uniforms.uShade.value = tex;
+        this.uniforms.uShadeCells.value = m;
+        old?.dispose();
     }
 
     /** Uses the texture library to show painted textures. */
