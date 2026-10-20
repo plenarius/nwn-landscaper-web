@@ -255,8 +255,22 @@ function showReport(r) {
         ${failed ? `<p class="bad">● ${failed} route(s) stop short: red markers.</p>` : ''}
         ${winding ? `<p class="warn">● ${winding} tile(s) too winding for NWN: orange markers. Straighten or widen the passages there.</p>` : ''}
         <p>Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%</p>
+        ${updated(r.updated)}
         <p>Ready to play: <b>${r.name}</b> is in your NWN modules list.<br><code>${r.installed_module || r.module}</code></p>`;
     $('report').hidden = false;
+}
+
+// What happened to a module that was already installed (and maybe built on).
+function updated(u) {
+    if (!u) return '';
+    const esc = t => String(t).replace(/</g, '&lt;');
+    let html = `<p>Updated your module: new ground, everything you placed kept (${u.objects} object${u.objects === 1 ? '' : 's'}`;
+    html += u.ground_known ? `, ${u.moved} moved up or down with the ground).</p>` : `; the last ground wasn't found, so none were raised or lowered).</p>`;
+    if (u.outside.length) {
+        html += `<p class="warn">● ${u.outside.length} now outside the area: ${u.outside.slice(0, 5).map(o => `${esc(o.tag || '(no tag)')} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`).join('; ')}${u.outside.length > 5 ? '…' : ''}</p>`;
+    }
+    html += `<p class="note">Close the module in the toolset before exporting, or saving there will overwrite this update.</p>`;
+    return html;
 }
 
 function showError(msg) {
