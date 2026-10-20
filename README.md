@@ -1,4 +1,4 @@
-# Layonara Landscaper (web editor)
+# NWN Landscaper (web editor)
 
 Sculpt a Neverwinter Nights area in the browser and export it as an area with its own generated
 tileset (hak + module), checked against NWN's pathfinding by

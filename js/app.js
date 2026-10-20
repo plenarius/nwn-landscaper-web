@@ -1,4 +1,4 @@
-// Layonara Landscaper: sculpt an NWN area, export it with `landscaper serve`.
+// NWN Landscaper: sculpt an NWN area, export it with `landscaper serve`.
 
 import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW } from './area.js';
 import { View } from './view.js';
