@@ -14,6 +14,8 @@ export const SAMPLES_PER_TILE = TILE / SPACING;
 // than this over one spacing (normal z >= 0.64, about 50 degrees).
 const WALKABLE_NZ = 0.64;
 export const MAX_RISE = SPACING * Math.sqrt(1 - WALKABLE_NZ * WALKABLE_NZ) / WALKABLE_NZ;
+// Water deeper than this can't be walked (landscaper's SHALLOW).
+export const SHALLOW = 0.5;
 
 export class Area {
     constructor(name, tiles, heights, materials, palette) {
@@ -28,6 +30,11 @@ export class Area {
         this.palette = palette ?? [DEFAULT_TEXTURE];
         // Light and fog (see atmosphere.js).
         this.atmosphere = defaultAtmosphere();
+        // Bodies of water, each filled from sample (i, j) to `level`; and
+        // each sample's water level from them (NaN: dry), as landscaper
+        // floods them.
+        this.water = [];
+        this.waterLevel = new Float32Array(this.n * this.n).fill(NaN);
         this.undoStack = [];
         this.redoStack = [];
     }
@@ -78,9 +85,54 @@ export class Area {
         return a + (b - a) * ty;
     }
 
+    /** Each body's samples: joined to its own (4-connected) through samples
+     *  lower than its level. */
+    flood(body) {
+        const n = this.n, h = this.heights, wet = new Uint8Array(n * n);
+        if (body.i < 0 || body.j < 0 || body.i >= n || body.j >= n) return wet;
+        const stack = [body.j * n + body.i];
+        while (stack.length) {
+            const k = stack.pop();
+            if (wet[k] || h[k] >= body.level) continue;
+            wet[k] = 1;
+            const x = k % n, y = (k / n) | 0;
+            if (x > 0) stack.push(k - 1);
+            if (x + 1 < n) stack.push(k + 1);
+            if (y > 0) stack.push(k - n);
+            if (y + 1 < n) stack.push(k + n);
+        }
+        return wet;
+    }
+
+    /** Recomputes waterLevel from the bodies (after the ground or water changed). */
+    floodWater() {
+        const level = this.waterLevel.fill(NaN);
+        for (const b of this.water) {
+            const wet = this.flood(b);
+            for (let k = 0; k < wet.length; k++) {
+                if (wet[k] && !(level[k] >= b.level)) level[k] = b.level;
+            }
+        }
+    }
+
+    /** The body of water over sample (i, j), if any (the highest). */
+    bodyAt(i, j) {
+        const k = j * this.n + i;
+        let best = null;
+        for (const b of this.water) if (this.flood(b)[k] && (!best || b.level > best.level)) best = b;
+        return best;
+    }
+
+    /** Water depth over sample (i, j) (0 when dry). */
+    depth(i, j) {
+        const k = j * this.n + i, l = this.waterLevel[k];
+        return Number.isNaN(l) ? 0 : l - this.heights[k];
+    }
+
     /** Whether ground at sample (i, j) is walkable by landscaper's rule. */
     walkable(i, j) {
         const n = this.n, h = this.heights, z = h[j * n + i];
+        if (this.depth(i, j) > SHALLOW) return false;
         if (i > 0 && Math.abs(h[j * n + i - 1] - z) > MAX_RISE) return false;
         if (i < n - 1 && Math.abs(h[j * n + i + 1] - z) > MAX_RISE) return false;
         if (j > 0 && Math.abs(h[(j - 1) * n + i] - z) > MAX_RISE) return false;
@@ -89,8 +141,8 @@ export class Area {
     }
 
     // Undo: a snapshot of heights and paint before each stroke.
-    snapshot() { return { h: this.heights.slice(), m: this.materials.slice(), p: this.palette.slice() }; }
-    restore(s) { this.heights.set(s.h); this.materials.set(s.m); this.palette = s.p.slice(); }
+    snapshot() { return { h: this.heights.slice(), m: this.materials.slice(), p: this.palette.slice(), w: this.water.map(b => ({ ...b })) }; }
+    restore(s) { this.heights.set(s.h); this.materials.set(s.m); this.palette = s.p.slice(); this.water = s.w.map(b => ({ ...b })); this.floodWater(); }
 
     beginStroke() {
         this.undoStack.push(this.snapshot());
@@ -118,7 +170,7 @@ export class Area {
             name: this.name, tiles: this.tiles,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
-            atmosphere: this.atmosphere,
+            atmosphere: this.atmosphere, water: this.water,
         };
     }
 
@@ -127,6 +179,7 @@ export class Area {
         const materials = o.materials ? fromBase64(o.materials) : undefined;
         const area = new Area(o.name, o.tiles, heights, materials, o.palette);
         if (o.atmosphere) area.atmosphere = o.atmosphere;
+        if (o.water) { area.water = o.water; area.floodWater(); }
         return area;
     }
 }

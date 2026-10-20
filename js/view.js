@@ -160,10 +160,11 @@ export class View {
     /** Shows a new area and frames the camera on it. */
     setArea(area) {
         this.area = area;
-        for (const o of [this.mesh, this.grid, this.markers]) {
+        for (const o of [this.mesh, this.grid, this.markers, this.water]) {
             if (o) { this.scene.remove(o); o.traverse?.(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); }
         }
         this.markers = null;
+        this.water = null;
         const n = area.n, size = area.size;
         const geo = new THREE.PlaneGeometry(size, size, n - 1, n - 1);
         geo.rotateX(-Math.PI / 2);
@@ -184,6 +185,7 @@ export class View {
         this.paletteKey = null;
         this.markDirty({ i0: 0, i1: n - 1, j0: 0, j1: n - 1 });
         this.flush();
+        this.updateWater();
         this.frame();
         this.syncPalette();
     }
@@ -264,9 +266,11 @@ export class View {
             for (let i = i0; i <= i1; i++) {
                 const v = this.vertex(i, j), z = area.heights[j * n + i];
                 pos.setY(v, z);
+                // Under water the water shows it; no red tint.
+                const wet = !Number.isNaN(area.waterLevel[j * n + i]);
                 if (this.textured) {
                     // White leaves the painted texture as it is.
-                    if (area.walkable(i, j) || !this.showWalkability) c.setRGB(1, 1, 1);
+                    if (wet || area.walkable(i, j) || !this.showWalkability) c.setRGB(1, 1, 1);
                     else c.copy(BLOCKED_TINT);
                 } else if (area.walkable(i, j)) {
                     c.copy(GRASS_LOW).lerp(GRASS_HIGH, (z - lo) / span);
@@ -283,6 +287,35 @@ export class View {
         this.mesh.geometry.computeBoundingSphere();
         this.mesh.geometry.computeBoundingBox();
         this.updateGrid();
+    }
+
+    /** The water's surface: a flat quad at the level over each cell with a
+     *  corner under water, as landscaper builds it (the ground hides it
+     *  beyond the shore). */
+    updateWater() {
+        const area = this.area, n = area.n, size = area.size, L = area.waterLevel;
+        if (this.water) { this.scene.remove(this.water); this.water.geometry.dispose(); }
+        this.water = null;
+        const pos = [];
+        for (let j = 0; j < n - 1; j++) {
+            for (let i = 0; i < n - 1; i++) {
+                // The wet corners' highest level.
+                let level = -Infinity;
+                for (const k of [j * n + i, j * n + i + 1, (j + 1) * n + i, (j + 1) * n + i + 1]) if (!Number.isNaN(L[k])) level = Math.max(level, L[k]);
+                if (level === -Infinity) continue;
+                const x0 = i * SPACING, x1 = x0 + SPACING, z0 = size - j * SPACING, z1 = size - (j + 1) * SPACING;
+                pos.push(x0, level, z0, x1, level, z0, x1, level, z1, x0, level, z0, x1, level, z1, x0, level, z1);
+            }
+        }
+        if (!pos.length) return;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.computeVertexNormals();
+        this.water = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
+            color: 0x2c6a86, specular: 0x557788, shininess: 60, transparent: true, opacity: 0.62, depthWrite: false, side: THREE.DoubleSide,
+        }));
+        this.water.renderOrder = 1;
+        this.scene.add(this.water);
     }
 
     setShowWalkability(on) {

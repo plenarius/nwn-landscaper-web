@@ -10,6 +10,7 @@ export const TOOLS = {
     smooth: { label: 'Smooth', key: '3', hint: 'Soften bumps and edges' },
     flatten: { label: 'Flatten', key: '4', hint: 'Level to the height where you first click' },
     paint: { label: 'Paint', key: '5', hint: 'Paint the ground with a texture' },
+    water: { label: 'Water', key: '6', hint: 'Click in a hollow and drag up to fill it; drag on water to change its level; Shift-click water to drain it' },
 };
 
 // Metres a second at full strength, for raise/lower.

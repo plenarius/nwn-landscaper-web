@@ -76,7 +76,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
     overflow-y: auto;
 }
 
-#toolButtons { display: flex; flex-direction: column; gap: 6px; }
+#toolButtons { display: flex; flex-direction: column; gap: 5px; }
 
 .tool {
     display: flex;
@@ -84,13 +84,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
     align-items: center;
     gap: 4px;
     width: 110px;
-    padding: 8px 4px 6px;
+    padding: 5px 4px 4px;
     background: var(--panel-2);
     border: 2px solid transparent;
     border-radius: 12px;
     font-size: 14px;
+    line-height: 1.2;
 }
-.tool .icon { width: 44px; height: 44px; }
+.tool .icon { width: 36px; height: 36px; }
 .tool:hover { background: #3a4452; }
 .tool.active { border-color: var(--accent); background: #3d3a30; color: #fff; }
 .tool .key { font-size: 11px; color: var(--muted); }

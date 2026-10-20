@@ -1,6 +1,6 @@
 // Layonara Landscaper: sculpt an NWN area, export it with `landscaper serve`.
 
-import { Area, TILE, DEFAULT_TEXTURE } from './area.js';
+import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW } from './area.js';
 import { View } from './view.js';
 import { TOOLS, stamp } from './tools.js';
 import { ICONS } from './icons.js';
@@ -196,15 +196,64 @@ if (debug) {
     }
 }
 
+// ?debug: the editor's state for test scripts.
+if (debug) window.landscaper = { area: () => area, view };
+
 const canvas = view.renderer.domElement;
 let stroke = null; // { flattenTo, last }
 let mouse = null;  // last client position over the canvas
+
+// Water: a press starts a body (or takes the one clicked) and dragging up
+// or down sets its level; Shift drains the one clicked.
+const LEVEL_PER_PIXEL = 0.03;
+function waterDown(e, p) {
+    const i = Math.min(Math.max(Math.round(p.x / SPACING), 0), area.n - 1);
+    const j = Math.min(Math.max(Math.round(p.y / SPACING), 0), area.n - 1);
+    const body = area.bodyAt(i, j);
+    if (e.shiftKey) {
+        if (!body) return null;
+        area.beginStroke();
+        area.water = area.water.filter(b => b !== body);
+        waterChanged();
+        saveSoon();
+        return null;
+    }
+    area.beginStroke();
+    let b = body;
+    if (!b) {
+        b = { i, j, level: area.heights[j * area.n + i] + 0.3 };
+        area.water.push(b);
+        waterChanged();
+    }
+    return { body: b, startY: e.clientY, startLevel: b.level, ground: area.heights[b.j * area.n + b.i] };
+}
+
+function waterDrag(e) {
+    const w = stroke.water;
+    w.body.level = Math.max(w.ground + 0.05, w.startLevel + (w.startY - e.clientY) * LEVEL_PER_PIXEL);
+    waterChanged();
+    $('statusMsg').textContent = `Water level ${w.body.level.toFixed(2)} m (${(w.body.level - w.ground).toFixed(1)} m deep where you clicked)`;
+}
+
+function waterChanged() {
+    area.floodWater();
+    view.updateWater();
+    view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
+}
 
 canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0 || !area) { dbg.note = `(ignored: button ${e.button})`; showDebug(); return; }
     mouse = { x: e.clientX, y: e.clientY };
     const p = view.pick(e.clientX, e.clientY);
     if (!p) { dbg.note = '(down missed the terrain)'; showDebug(); return; }
+    if (tool === 'water') {
+        const w = waterDown(e, p);
+        if (w) {
+            stroke = { water: w };
+            try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
+        }
+        return;
+    }
     area.beginStroke();
     stroke = { flattenTo: area.heightAt(p.x, p.y), last: performance.now() };
     if (tool === 'paint') {
@@ -216,9 +265,19 @@ canvas.addEventListener('pointerdown', e => {
     showDebug();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { dbg.note = `(capture failed: ${err.message})`; showDebug(); }
 });
-canvas.addEventListener('pointermove', e => { mouse = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('pointermove', e => {
+    mouse = { x: e.clientX, y: e.clientY };
+    if (stroke?.water) waterDrag(e);
+});
 canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(null); $('statusPos').textContent = ''; });
-const endStroke = () => { if (stroke) { stroke = null; saveSoon(); } };
+const endStroke = () => {
+    if (!stroke) return;
+    // Sculpting may have flooded or drained hollows.
+    if (!stroke.water && area.water.length && tool !== 'paint') waterChanged();
+    if (stroke.water) $('statusMsg').textContent = '';
+    stroke = null;
+    saveSoon();
+};
 canvas.addEventListener('pointerup', endStroke);
 canvas.addEventListener('pointercancel', endStroke);
 
@@ -230,10 +289,12 @@ view.onFrame = () => {
     if (p) {
         const tx = Math.floor(p.x / TILE), ty = Math.floor(p.y / TILE);
         const i = Math.round(p.x / 0.625), j = Math.round(p.y / 0.625);
-        const walk = area.walkable(Math.min(i, area.n - 1), Math.min(j, area.n - 1));
-        $('statusPos').textContent = `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${walk ? 'walkable' : 'too steep to walk'}`;
+        const ci = Math.min(i, area.n - 1), cj = Math.min(j, area.n - 1);
+        const walk = area.walkable(ci, cj), deep = area.depth(ci, cj);
+        const what = deep > SHALLOW ? `water ${deep.toFixed(1)} m deep: too deep to walk` : deep > 0 ? `shallow water ${deep.toFixed(1)} m: wading` : walk ? 'walkable' : 'too steep to walk';
+        $('statusPos').textContent = `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
     }
-    if (stroke && p) {
+    if (stroke && p && !stroke.water) {
         const now = performance.now();
         const dt = (now - stroke.last) / 1000;
         stroke.last = now;
@@ -264,6 +325,7 @@ function saveSoon() {
 
 function refreshAll() {
     view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
+    view.updateWater();
     view.syncPalette();
     saveSoon();
 }
@@ -305,7 +367,8 @@ $('btnExport').onclick = async () => {
         body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
         body.set(area.materials, area.heights.byteLength);
         const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`
-            + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`;
+            + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
+            + `&water=${encodeURIComponent(JSON.stringify(area.water))}`;
         const res = await fetch(`/api/export?${query}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream' },
