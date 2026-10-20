@@ -457,13 +457,15 @@ $('btnExport').onclick = async () => {
 
 function showReport(r) {
     const failed = r.warnings.filter(w => w.kind === 'failed_route').length;
-    const winding = r.warnings.length - failed;
+    const closed = r.warnings.filter(w => w.kind === 'closed_passage').length;
+    const winding = r.warnings.length - failed - closed;
     const allGood = r.routes.ok === r.routes.total && !r.warnings.length;
     $('reportBody').innerHTML = `
         <h3>Exported ${r.name}</h3>
         <div class="big ${allGood ? 'good' : 'warn'}">${r.routes.ok} of ${r.routes.total} routes work</div>
         <p>NWN's pathfinding, simulated on random routes across the area.</p>
         ${failed ? `<p class="bad">● ${failed} route(s) stop short: red markers.</p>` : ''}
+        ${closed ? `<p class="bad">● ${closed} passage(s) closed: NWN's tile pathfinding has no way through there, so the export made them unwalkable (red markers). Move or widen the gap, away from tile corners and edges.</p>` : ''}
         ${winding ? `<p class="warn">● ${winding} tile(s) too winding for NWN: orange markers. Straighten or widen the passages there.</p>` : ''}
         <p>Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%</p>
         ${updated(r.updated)}
