@@ -196,7 +196,7 @@ export class View {
         this.uniforms.uMat.value = mat;
         this.uniforms.uN.value = n;
         this.uniforms.uSize.value = size;
-        this.uniforms.uVoid.value = area.kind === 'underground' ? area.roof - 0.3 : 1e9;
+        this.uniforms.uVoid.value = area.enclosed() ? area.roof - 0.3 : 1e9;
         this.updateShade();
         this.mesh = new THREE.Mesh(geo, this.splatMaterial());
         this.scene.add(this.mesh);
@@ -489,7 +489,7 @@ export class View {
         geo.setIndex(index);
         this.skirt = new THREE.Mesh(geo, this.mesh.material);
         // A cave has no edge scenery.
-        this.skirt.visible = this.area.kind !== 'underground';
+        this.skirt.visible = !this.area.enclosed();
         this.skirt.material.side = THREE.DoubleSide;
         this.scene.add(this.skirt);
     }
@@ -594,6 +594,17 @@ export class View {
         const hit = this.raycaster.intersectObject(this.mesh)[0];
         if (!hit) return null;
         return { x: hit.point.x, y: this.area.size - hit.point.z, z: hit.point.y };
+    }
+
+    /** The room being dragged out: its outline on the floor (or none). */
+    setRoomOutline(r, z) {
+        if (this.roomLine) { this.scene.remove(this.roomLine); this.roomLine.geometry.dispose(); this.roomLine = null; }
+        if (!r) return;
+        const s = this.area.size, y = z + 0.1;
+        const pts = [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1], [r.x0, r.y0]].map(([x, yy]) => new THREE.Vector3(x, y, s - yy));
+        this.roomLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xd8a24a, depthTest: false }));
+        this.roomLine.renderOrder = 2;
+        this.scene.add(this.roomLine);
     }
 
     /** Brush ring at area point p (or hide it). */

@@ -60,7 +60,7 @@ export function shadeArea(area, strength) {
     for (let j = 0; j < m; j++) {
         for (let i = 0; i < m; i++) {
             const x = i * SHADE_STEP, y = j * SHADE_STEP;
-            const s = shade(x, y, strength, height, area.kind !== 'underground');
+            const s = shade(x, y, strength, height, !area.enclosed());
             out[j * m + i] = Math.round(255 * s * darkness(area.entrances, x, y));
         }
     }

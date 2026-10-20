@@ -15,6 +15,7 @@ export const TOOLS = {
     place: { label: 'Place', key: '8', hint: 'Place rocks, trees and other placeables, baked into the terrain' },
     scatter: { label: 'Scatter', key: '9', hint: 'Paint rocks, trees and bushes; Shift-drag to erase' },
     dig: { label: 'Dig', key: '0', hint: 'Dig cave passages and chambers out of the rock, down to the floor (or the level where you start). At least 3 m radius: narrower passages defeat NWN\'s pathfinding' },
+    room: { label: 'Room', key: 'r', hint: 'Drag a rectangle to cut out a room (snapped to 1.25 m, at least 5 m a side); overlapping rooms join' },
 };
 
 // The narrowest Dig brush (radius): passages under about 6 m wide crossing
@@ -116,4 +117,35 @@ function dig(area, x, y, radius, floor, paintIndex) {
         }
     }
     return { i0, i1, j0, j1 };
+}
+
+// Rooms snap to this grid and are at least this wide: narrower ones were
+// hard on NWN's tile pathfinding, as cave passages were.
+export const ROOM_GRID = 1.25;
+export const ROOM_MIN = 5;
+
+/** The room a drag from a to b makes: snapped, at least ROOM_MIN a side. */
+export function roomRect(a, b, size) {
+    const snap = v => Math.round(v / ROOM_GRID) * ROOM_GRID;
+    let x0 = snap(Math.min(a.x, b.x)), x1 = snap(Math.max(a.x, b.x));
+    let y0 = snap(Math.min(a.y, b.y)), y1 = snap(Math.max(a.y, b.y));
+    if (x1 - x0 < ROOM_MIN) x1 = x0 + ROOM_MIN;
+    if (y1 - y0 < ROOM_MIN) y1 = y0 + ROOM_MIN;
+    const c = v => Math.min(size, Math.max(0, v));
+    return { x0: c(x0), x1: c(x1), y0: c(y0), y1: c(y1) };
+}
+
+/** Cuts room `r` out down to `floor`, its floor painted `paintIndex`. */
+export function cutRoom(area, r, floor, paintIndex) {
+    const n = area.n, h = area.heights;
+    const i0 = Math.ceil(r.x0 / SPACING), i1 = Math.floor(r.x1 / SPACING);
+    const j0 = Math.ceil(r.y0 / SPACING), j1 = Math.floor(r.y1 / SPACING);
+    for (let j = Math.max(0, j0); j <= Math.min(n - 1, j1); j++) {
+        for (let i = Math.max(0, i0); i <= Math.min(n - 1, i1); i++) {
+            const k = j * n + i;
+            h[k] = floor;
+            if (paintIndex !== undefined) area.materials[k] = paintIndex;
+        }
+    }
+    return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(n - 1, j1 + 1) };
 }

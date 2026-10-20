@@ -16,6 +16,7 @@ export const PRESETS = [
     { id: 'mist', name: 'Thick mist', time: 'cycle', fogClip: 60, sun: sky('#707070', '#b0b0b0', '#c8c8c8', 25, false), moon: sky('#101010', '#404040', '#303030', 25, false) },
     { id: 'cave', name: 'Cave', time: 'day', fogClip: 60, sun: sky('#2d2d2d', '#878a62', '#000000', 5, false), moon: sky('#2d2d2d', '#878a62', '#000000', 5, false) },
     { id: 'torchlit', name: 'Torchlit cave', time: 'day', fogClip: 45, sun: sky('#3a2a1a', '#d08040', '#100804', 6, false), moon: sky('#3a2a1a', '#d08040', '#100804', 6, false) },
+    { id: 'indoors', name: 'Indoors', time: 'day', fogClip: 45, sun: sky('#5a5048', '#c0a080', '#000000', 0, false), moon: sky('#5a5048', '#c0a080', '#000000', 0, false) },
     { id: 'night', name: 'Dark night', time: 'night', fogClip: 150, sun: sky('#504f60', '#d6d6d6', '#bbbbbb', 7), moon: sky('#0a0a18', '#3c4878', '#05070f', 12) },
 ];
 

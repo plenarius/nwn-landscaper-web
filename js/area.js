@@ -46,7 +46,8 @@ export class Area {
         // solid, baked }; baked: false is a real placeable (object mode).
         this.objects = [];
         this.nextObjectId = 1;
-        // 'surface', or 'underground' (a cave dug out of rock up to `roof`).
+        // 'surface', 'underground' (a cave dug out of rock up to `roof`) or
+        // 'interior' (rooms cut out of a solid mass, the same way).
         this.kind = 'surface';
         this.roof = null;
         // The NWN module it is exported into (another area's, to link them).
@@ -71,7 +72,15 @@ export class Area {
         const area = new Area(name, tiles);
         const n = area.n;
         const base = 5;
-        if (start === 'cave') {
+        if (start === 'interior') {
+            // A solid mass with walls of stone; rooms are cut out of it.
+            area.kind = 'interior';
+            area.roof = base + CAVE_ROCK;
+            area.heights.fill(area.roof);
+            area.palette = ['wallFieldstone'];
+            area.atmosphere = copyPreset(PRESETS.find(p => p.id === 'indoors'));
+            area.shadow = 0.6;
+        } else if (start === 'cave') {
             // Solid rock to dig out: its floor at the base, its roof above.
             area.kind = 'underground';
             area.roof = base + CAVE_ROCK;
@@ -157,7 +166,12 @@ export class Area {
     /** Whether ground at sample (i, j) is walkable by landscaper's rule. */
     /** Whether sample (i, j) is a cave's void (rock at its roof). */
     void(i, j) {
-        return this.kind === 'underground' && this.heights[j * this.n + i] >= this.roof - VOID_BELOW;
+        return this.enclosed() && this.heights[j * this.n + i] >= this.roof - VOID_BELOW;
+    }
+
+    /** A cave or an interior: dug out of a mass, its tops void, no sky. */
+    enclosed() {
+        return this.kind === 'underground' || this.kind === 'interior';
     }
 
     walkable(i, j) {

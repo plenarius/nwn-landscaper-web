@@ -2,7 +2,7 @@
 
 import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW, CAVE_ROCK } from './area.js';
 import { View } from './view.js';
-import { TOOLS, stamp } from './tools.js';
+import { TOOLS, stamp, roomRect, cutRoom } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { PRESETS, copyPreset } from './atmosphere.js';
@@ -76,7 +76,7 @@ $('btnWalk').onclick = () => {
 const library = new TextureLibrary();
 let paintTexture = DEFAULT_TEXTURE;
 
-const CATEGORY_ORDER = ['Grass', 'Flowers & leaves', 'Earth', 'Rock', 'Sand', 'Snow', 'Special'];
+const CATEGORY_ORDER = ['Grass', 'Flowers & leaves', 'Earth', 'Rock', 'Sand', 'Snow', 'Floors', 'Walls', 'Special'];
 
 function buildPalette() {
     const body = $('paletteBody');
@@ -601,7 +601,7 @@ function entranceDown(e, p) {
     const gx = area.heightAt(p.x + 1, p.y) - area.heightAt(p.x - 1, p.y);
     const gy = area.heightAt(p.x, p.y + 1) - area.heightAt(p.x, p.y - 1);
     let dir;
-    const wall = area.kind === 'underground' ? nearestWall(p) : null;
+    const wall = area.enclosed() ? nearestWall(p) : null;
     if (wall !== null) {
         dir = wall;
     } else if (Math.hypot(gx, gy) > 0.1) {
@@ -679,11 +679,19 @@ canvas.addEventListener('pointerdown', e => {
         stroke.paintIndex = area.materialIndex(paintTexture);
         view.syncPalette();
     }
+    if (tool === 'room') {
+        // From here to where the button comes up; cut out then.
+        const start = area.heightAt(p.x, p.y);
+        stroke.room = { from: p, to: p, floor: area.enclosed() && start >= area.roof - 0.5 ? area.roof - CAVE_ROCK : start };
+        const floorTexture = library.byId.get(paintTexture)?.category === 'Floors' ? paintTexture : 'woodOld';
+        stroke.paintIndex = library.byId.has(floorTexture) ? area.materialIndex(floorTexture) : undefined;
+        view.setRoomOutline(roomRect(p, p, area.size), stroke.room.floor);
+    }
     if (tool === 'dig') {
         // Down to the floor, or to the level of dug ground where it starts;
         // the floor painted with the picked texture (dirt unless painted).
         const start = area.heightAt(p.x, p.y);
-        stroke.flattenTo = area.kind === 'underground' && start >= area.roof - 0.5 ? area.roof - CAVE_ROCK : start;
+        stroke.flattenTo = area.enclosed() && start >= area.roof - 0.5 ? area.roof - CAVE_ROCK : start;
         stroke.paintIndex = area.materialIndex(paintTexture === DEFAULT_TEXTURE ? 'dirt' : paintTexture);
         view.syncPalette();
     }
@@ -696,12 +704,28 @@ canvas.addEventListener('pointermove', e => {
     mouse = { x: e.clientX, y: e.clientY };
     if (stroke?.water) waterDrag(e);
     if (stroke?.place) placeDrag(e);
+    if (stroke?.room) {
+        const p = view.pick(e.clientX, e.clientY);
+        if (p) {
+            stroke.room.to = p;
+            const r = roomRect(stroke.room.from, p, area.size);
+            view.setRoomOutline(r, stroke.room.floor);
+            $('statusMsg').textContent = `Room ${(r.x1 - r.x0).toFixed(2)} × ${(r.y1 - r.y0).toFixed(2)} m`;
+        }
+    }
 });
 canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(null); $('statusPos').textContent = ''; });
 let placePointer = null;
 const endStroke = () => {
     placePointer = null;
     if (!stroke) return;
+    if (stroke.room) {
+        const r = roomRect(stroke.room.from, stroke.room.to, area.size);
+        view.markDirty(cutRoom(area, r, stroke.room.floor, stroke.paintIndex));
+        view.setRoomOutline(null);
+        view.syncPalette();
+        $('statusMsg').textContent = '';
+    }
     // The ground moved: its shadows too.
     if (!stroke.water && !stroke.place && !stroke.scatter && tool !== 'paint') view.updateShade();
     // Sculpting may have flooded or drained hollows.
@@ -731,7 +755,7 @@ view.onFrame = () => {
         dbg.stamps++;
         return;
     }
-    if (stroke && p && !stroke.water && !stroke.place) {
+    if (stroke && p && !stroke.water && !stroke.place && !stroke.room) {
         const now = performance.now();
         const dt = (now - stroke.last) / 1000;
         stroke.last = now;
@@ -818,7 +842,7 @@ function areaRequest() {
         + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
         + `&shadow=${area.shadow}`
         + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`
-        + (area.kind === 'underground' ? `&kind=underground&roof=${area.roof}` : '')
+        + (area.enclosed() ? `&kind=${area.kind}&roof=${area.roof}` : '')
         + `&module=${encodeURIComponent(area.module || area.name)}`;
     return { query, body };
 }
