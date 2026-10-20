@@ -634,7 +634,8 @@ function makeLabel(text, color) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
     ctx.fillText(text, 12, 44);
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false }));
-    sprite.scale.set(canvas.width / 30, canvas.height / 30, 1);
+    // A fixed size on screen, however near the camera is.
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, sizeAttenuation: false }));
+    sprite.scale.set(0.024 * canvas.width / canvas.height, 0.024, 1);
     return sprite;
 }

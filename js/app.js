@@ -686,32 +686,40 @@ $('newDialog').addEventListener('close', () => {
 
 // --- Export ---------------------------------------------------------------------
 
+/** The area as landscaper serve takes it: heights (f32 a sample), each
+ *  sample's palette index (u8), then JSON too long for the query (the
+ *  objects); the rest in the query. */
+function areaRequest() {
+    const extra = new TextEncoder().encode(JSON.stringify({ objects: area.objects }));
+    const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength + extra.byteLength);
+    body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
+    body.set(area.materials, area.heights.byteLength);
+    body.set(extra, area.heights.byteLength + area.materials.byteLength);
+    const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`
+        + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
+        + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
+        + `&shadow=${area.shadow}`
+        + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`;
+    return { query, body };
+}
+
+/** Sends the area to `what` (export or check); its report, or throws. */
+async function sendArea(what) {
+    const { query, body } = areaRequest();
+    const res = await fetch(`/api/${what}?${query}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body });
+    if (res.status === 404 || res.status === 501) throw new Error('This page is not being served by landscaper. Run: landscaper serve');
+    const report = await res.json();
+    if (!res.ok) throw new Error(report.error || res.statusText);
+    return report;
+}
+
 $('btnExport').onclick = async () => {
     if (!area) return;
     const btn = $('btnExport');
     btn.disabled = true;
     $('statusMsg').textContent = `Exporting ${area.name}…`;
     try {
-        // Heights (f32 per sample), then each sample's palette index (u8).
-        // ... and JSON too long for the query: the objects.
-        const extra = new TextEncoder().encode(JSON.stringify({ objects: area.objects }));
-        const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength + extra.byteLength);
-        body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
-        body.set(area.materials, area.heights.byteLength);
-        body.set(extra, area.heights.byteLength + area.materials.byteLength);
-        const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`
-            + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
-            + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
-            + `&shadow=${area.shadow}`
-            + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`;
-        const res = await fetch(`/api/export?${query}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/octet-stream' },
-            body,
-        });
-        if (res.status === 404 || res.status === 501) throw new Error('This page is not being served by landscaper. Run: landscaper serve');
-        const report = await res.json();
-        if (!res.ok) throw new Error(report.error || res.statusText);
+        const report = await sendArea('export');
         showReport(report);
         view.setMarkers(report.warnings || []);
         $('statusMsg').textContent = '';
@@ -723,21 +731,40 @@ $('btnExport').onclick = async () => {
     }
 };
 
-function showReport(r) {
+// Check paths: the export's planning and route simulation, nothing built.
+$('btnCheck').onclick = async () => {
+    if (!area) return;
+    const btn = $('btnCheck');
+    btn.disabled = true;
+    $('statusMsg').textContent = 'Checking how NWN will path this area…';
+    try {
+        const report = await sendArea('check');
+        showReport(report, true);
+        view.setMarkers(report.warnings || []);
+        $('statusMsg').textContent = '';
+    } catch (err) {
+        $('statusMsg').textContent = '';
+        showError(err.message);
+    } finally {
+        btn.disabled = false;
+    }
+};
+
+function showReport(r, checkOnly = false) {
     const failed = r.warnings.filter(w => w.kind === 'failed_route').length;
     const closed = r.warnings.filter(w => w.kind === 'closed_passage').length;
     const winding = r.warnings.length - failed - closed;
     const allGood = r.routes.ok === r.routes.total && !r.warnings.length;
     $('reportBody').innerHTML = `
-        <h3>Exported ${r.name}</h3>
+        <h3>${checkOnly ? 'Path check' : `Exported ${r.name}`}</h3>
         <div class="big ${allGood ? 'good' : 'warn'}">${r.routes.ok} of ${r.routes.total} routes work</div>
         <p>NWN's pathfinding, simulated on random routes across the area.</p>
         ${failed ? `<p class="bad">● ${failed} route(s) stop short: red markers.</p>` : ''}
         ${closed ? `<p class="bad">● ${closed} passage(s) closed: NWN's tile pathfinding has no way through there, so the export made them unwalkable (red markers). Move or widen the gap, away from tile corners and edges.</p>` : ''}
         ${winding ? `<p class="warn">● ${winding} tile(s) too winding for NWN: orange markers. Straighten or widen the passages there.</p>` : ''}
         <p>Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%</p>
-        ${updated(r.updated)}
-        <p>Ready to play: <b>${r.name}</b> is in your NWN modules list.<br><code>${r.installed_module || r.module}</code></p>`;
+        ${checkOnly ? '<p class="note">Nothing was exported: this only checks.</p>' : `${updated(r.updated)}
+        <p>Ready to play: <b>${r.name}</b> is in your NWN modules list.<br><code>${r.installed_module || r.module}</code></p>`}`;
     $('report').hidden = false;
 }
 

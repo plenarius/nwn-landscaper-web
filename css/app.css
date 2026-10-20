@@ -253,3 +253,7 @@ input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #00
 #toolButtons .tool { width: auto; padding: 5px 2px 3px; font-size: 12px; border-radius: 10px; }
 #toolButtons .tool .icon { width: 32px; height: 32px; }
 #toolButtons .tool .key { font-size: 10px; }
+
+/* Dragging across the view must not select the panels' text. */
+#tools, .side-panel, #topbar, #status { user-select: none; -webkit-user-select: none; }
+.side-panel input { user-select: text; -webkit-user-select: text; }
