@@ -8,14 +8,15 @@
 
 import { SPACING } from './area.js';
 
-// The rim's height over the floor, the hood's (landscaper's HOOD_*), and
-// the outer slope of the rock the walls stand in where the ground is lower:
-// steep, so it is one compact obstacle. (A walkable slope round a blocked
-// crest made a ring NWN's in-tile search loses itself in.)
-export const RIM = 3.6;
-export const HOOD_UNDER = 2.7, HOOD_TOP = 3.9, HOOD_OUT = 0.6, HOOD_SIDE = 0.8;
-const WALL = 1.5;
+// The rise a cave needs over its floor: lower ground round it is raised to
+// this as a rocky outcrop, its outer slope steep so it is one compact
+// obstacle. (A walkable slope round a blocked crest made a ring NWN's
+// in-tile search loses itself in.)
+export const ROOF = 4.5;
+const WALL = 1.2;
 const MOUND_SLOPE = 2.5;
+// The cut faces beside and behind the floor, painted with the cave's rock.
+const FACE = 0.7;
 // Rise per metre of the ramp up (or down) to the mouth: walkable.
 const RAMP = 0.5;
 // Open ground before the mouth kept in the notch's tile (fitInTile).
@@ -31,6 +32,24 @@ export function local(e, x, y) {
     return [dx * c + dy * s, -dx * s + dy * c];
 }
 
+/** The outcrop's height over the floor at (u, v): a rounded rectangle
+ *  hugging the walls' rectangle `r` (kept compact: a bigger one spilled
+ *  into the next tile and made its ground winding for the game's
+ *  pathfinding), ROOF high and a little domed, its ragged edge falling
+ *  steeply. */
+function outcrop(e, r, u, v) {
+    const uc = (r.u0 + r.u1) / 2, a = (r.u1 - r.u0) / 2 * 1.1, b = r.v * 1.1;
+    const du = Math.abs(u - uc) / a, dv = Math.abs(v) / b;
+    const q = Math.pow(du ** 4 + dv ** 4, 0.25);
+    const angle = Math.atan2(dv, du), s = e.x * 0.37 + e.y * 0.61;
+    const ragged = 0.3 * Math.sin(3 * angle + s) + 0.2 * Math.sin(7 * angle + 2 * s);
+    // Inside the walls' rectangle it is at least ROOF (the cave's walls).
+    const inWalls = u >= r.u0 && u <= r.u1 && Math.abs(v) <= r.v;
+    if (q <= 1 || inWalls) return ROOF + 0.6 * Math.max(0, 1 - q * q);
+    const d = (q - 1) * Math.min(a, b) - ragged;
+    return d <= 0 ? ROOF : ROOF - MOUND_SLOPE * d;
+}
+
 /**
  * Carves entrance `e` into the area's heights (and paints its walls with
  * `rock`, a palette index); returns the changed sample rectangle.
@@ -40,7 +59,7 @@ export function carve(area, e, rock) {
     const half = e.width / 2;
     // The walls' outline: from just inside the mouth to behind the back.
     const r = { u0: -0.5, u1: e.depth + WALL, v: half + WALL };
-    const reach = Math.hypot(e.depth + WALL, half + WALL) + RIM / MOUND_SLOPE + 1;
+    const reach = Math.hypot(e.depth + WALL, half + WALL) + ROOF / MOUND_SLOPE + 1;
     const i0 = Math.max(0, Math.floor((e.x - reach) / SPACING)), i1 = Math.min(n - 1, Math.ceil((e.x + reach) / SPACING));
     const j0 = Math.max(0, Math.floor((e.y - reach) / SPACING)), j1 = Math.min(n - 1, Math.ceil((e.y + reach) / SPACING));
     for (let j = j0; j <= j1; j++) {
@@ -56,20 +75,17 @@ export function carve(area, e, rock) {
                 const d = -1.5 - u, side = Math.max(0, Math.abs(v) - half);
                 const slack = RAMP * d + 2 * side;
                 h[k] = Math.min(Math.max(h[k], e.floor - slack), e.floor + slack);
-            } else if (u >= r.u0 && u <= r.u1 && Math.abs(v) <= r.v && !(Math.abs(v) <= half && u < r.u0)) {
-                h[k] = Math.max(h[k], e.floor + RIM);
-                if (rock !== undefined) area.materials[k] = rock;
             } else if (!(Math.abs(v) <= half && u < r.u0)) {
-                // The mound round the walls, sloping down to the ground.
-                const du = u < r.u0 ? r.u0 - u : u > r.u1 ? u - r.u1 : 0;
-                const dv = Math.max(0, Math.abs(v) - r.v);
-                const d = Math.hypot(du, dv);
-                const raised = e.floor + RIM - MOUND_SLOPE * d;
-                if (raised > h[k] + 0.05) {
-                    h[k] = raised;
-                    // The rock block's sides are rock too.
+                // The rock the cave is in, where the ground is lower: an oval
+                // round the walls, slightly domed, its edge ragged and
+                // steep (one compact obstacle for the game's pathfinding).
+                const target = e.floor + outcrop(e, r, u, v);
+                if (target > h[k] + 0.05) {
+                    h[k] = target;
                     if (rock !== undefined) area.materials[k] = rock;
                 }
+                // The cut faces beside and behind the floor: rock whatever the hill is painted.
+                if (rock !== undefined && Math.abs(v) <= half + FACE && u >= r.u0 && u <= e.depth + FACE) area.materials[k] = rock;
             }
         }
     }
@@ -128,4 +144,79 @@ export function nearest(entrances, x, y, within = 4) {
         if (d < bd) { best = e; bd = d; }
     }
     return best;
+}
+
+// --- The cave mouth's shape (landscaper src/entrance.rs: keep in step) ---
+
+const LIP = -0.6, SIDE = 0.3, THICK = 0.7, READ_OUT = 1.2;
+
+const seed = e => e.x * 0.37 + e.y * 0.61;
+
+/** u of the lip's edge at v: ragged. */
+export function lip(e, v) {
+    const s = seed(e);
+    return LIP + 0.22 * Math.sin(2.3 * v + s) + 0.13 * Math.sin(5.1 * v + 2 * s);
+}
+
+/** The arch's underside over the floor at (u, v). */
+export function under(e, u, v) {
+    const t = Math.min(1, Math.max(-1, v / (e.width / 2)));
+    const arch = 1 + 1.9 * Math.sqrt(Math.max(0, 1 - t * t));
+    const rough = 0.12 * Math.sin(3.7 * v + 1.3 * u + seed(e));
+    const droop = 0.25 * Math.min(1, Math.max(0, (0.4 - u) / 1));
+    return arch + rough - droop;
+}
+
+/** The roof's top over the floor at (u, v): the hill round the opening blended across it. */
+export function top(e, u, v, height) {
+    const vr = e.width / 2 + SIDE, u0 = LIP, u1 = e.depth;
+    const s = Math.min(1, Math.max(0, (u - u0) / (u1 - u0)));
+    const t = Math.min(1, Math.max(0, (v + vr) / (2 * vr)));
+    const ground = (u, v) => { const [x, y] = at(e, u, v); return height(x, y) - e.floor; };
+    const along = s => u0 + s * (u1 - u0), across = t => -vr + t * 2 * vr;
+    const front = t => under(e, u0, across(t)) + THICK;
+    const back = t => ground(e.depth + READ_OUT, across(t));
+    const left = s => ground(along(s), -(vr + READ_OUT));
+    const right = s => ground(along(s), vr + READ_OUT);
+    const p00 = (front(0) + left(0)) / 2, p01 = (front(1) + right(0)) / 2;
+    const p10 = (back(0) + left(1)) / 2, p11 = (back(1) + right(1)) / 2;
+    const coons = (1 - s) * front(t) + s * back(t) + (1 - t) * left(s) + t * right(s)
+        - ((1 - s) * (1 - t) * p00 + (1 - s) * t * p01 + s * (1 - t) * p10 + s * t * p11);
+    return Math.max(coons, under(e, u, v) + THICK);
+}
+
+/** The scenery's triangles in area metres: { top, rock, back }, each a flat
+ *  array of x, y, z (three a triangle), as landscaper builds them. */
+export function scenery(e, height) {
+    const nu = Math.ceil((e.depth - LIP) / 0.5), nv = Math.ceil((e.width + 2 * SIDE) / 0.5);
+    const vr = e.width / 2 + SIDE, hw = e.width / 2;
+    const world = (u, v, z) => { const [x, y] = at(e, u, v); return [x, y, e.floor + z]; };
+    const uvAt = (i, j) => { const v = -vr + j * 2 * vr / nv, l = lip(e, v); return [l + i * (e.depth - l) / nu, v]; };
+    const out = { top: [], rock: [], back: [] };
+    const quad = (list, q) => list.push(...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]);
+    for (let i = 0; i < nu; i++) {
+        for (let j = 0; j < nv; j++) {
+            const c = [uvAt(i, j), uvAt(i + 1, j), uvAt(i + 1, j + 1), uvAt(i, j + 1)];
+            quad(out.top, c.map(([u, v]) => world(u, v, top(e, u, v, height))));
+            quad(out.rock, c.map(([u, v]) => world(u, v, under(e, u, v))));
+        }
+    }
+    for (let j = 0; j < nv; j++) {
+        const [u0, v0] = uvAt(0, j), [u1, v1] = uvAt(0, j + 1);
+        quad(out.rock, [world(u0, v0, under(e, u0, v0)), world(u1, v1, under(e, u1, v1)), world(u1, v1, top(e, u1, v1, height)), world(u0, v0, top(e, u0, v0, height))]);
+    }
+    const ub = e.depth - 0.05;
+    for (let j = 0; j < nv; j++) {
+        const v0 = -hw + j * e.width / nv, v1 = -hw + (j + 1) * e.width / nv;
+        quad(out.back, [world(ub, v0, -0.1), world(ub, v1, -0.1), world(ub, v1, under(e, ub, v1)), world(ub, v0, under(e, ub, v0))]);
+    }
+    return out;
+}
+
+/** The rock that suits a slope painted `category` (texture library
+ *  categories), if the library has it: its own rock on rock, mossy rock
+ *  by grass and flowers, canyon rock by earth and sand, winter rock in snow. */
+export function rockFor(category, groundId, has) {
+    const pick = { Rock: groundId, Grass: 'swampRock', 'Flowers & leaves': 'swampRock', Earth: 'canyonRock', Sand: 'canyonRock', Snow: 'winterRock' }[category];
+    return [pick, 'rockCliff', 'rock'].find(id => id && has(id)) ?? null;
 }

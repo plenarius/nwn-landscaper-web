@@ -10,7 +10,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE } from './area.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, SHADE_STEP } from './shade.js';
-import { at as entranceAt, HOOD_UNDER, HOOD_TOP, HOOD_OUT, HOOD_SIDE } from './entrance.js';
+import { at as entranceAt, scenery as entranceScenery } from './entrance.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
@@ -322,55 +322,72 @@ export class View {
         this.updateSkirt();
     }
 
-    /** Entrances as the game will show them: the rock hood over each
-     *  mouth, the dark back, and the door (orange) to link. */
+    /** Entrances as the game will show them: the roof in the hill's paint,
+     *  its rock, the dark back, and the door (orange) to link. */
     updateEntrances() {
         if (this.entranceGroup) {
             this.scene.remove(this.entranceGroup);
-            this.entranceGroup.traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); });
+            this.entranceGroup.traverse(c => { c.geometry?.dispose(); if (c.material && !c.material.userData.shared) c.material.dispose(); });
         }
         this.entranceGroup = new THREE.Group();
-        const size = this.area.size;
-        for (const e of this.area.entrances) {
-            const g = new THREE.Group();
-            const [mx, my] = entranceAt(e, 0, 0);
-            g.position.set(mx, e.floor, size - my);
-            g.rotation.y = e.dir;
-            // In the group: x = u (into the slope), -z = v (across), y up.
-            const u0 = -HOOD_OUT, u1 = e.depth + 1, vw = e.width / 2 + HOOD_SIDE;
-            const box = new THREE.BoxGeometry(u1 - u0, HOOD_TOP - HOOD_UNDER, 2 * vw);
-            // Its texture repeating every 4 m, like the ground's.
-            const uv = box.attributes.uv, repeat = Math.max(u1 - u0, 2 * vw) / 4;
-            for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * repeat, uv.getY(k) * repeat);
-            const hood = new THREE.Mesh(box, this.hoodMaterial());
-            hood.position.set((u0 + u1) / 2, (HOOD_UNDER + HOOD_TOP) / 2, 0);
-            const back = new THREE.Mesh(new THREE.PlaneGeometry(e.width, HOOD_UNDER + 0.1), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-            back.position.set(e.depth - 0.05, (HOOD_UNDER - 0.1) / 2, 0);
-            back.rotation.y = -Math.PI / 2;
+        const area = this.area, size = area.size, height = (x, y) => area.heightAt(x, y);
+        // Texture coordinates as landscaper writes them: from above, and
+        // tilted with height for the rock.
+        const flat = (x, y) => [x / 4, y / 4];
+        const tilted = (x, y, z) => [(x + 0.6 * z) / 4, (y - 0.4 * z) / 4];
+        const mesh = (tris, uvOf, material) => {
+            const pos = [], uv = [];
+            for (let k = 0; k < tris.length; k += 3) {
+                const [x, y, z] = [tris[k], tris[k + 1], tris[k + 2]];
+                pos.push(x, z, size - y);
+                uv.push(...uvOf(x, y, z));
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+            g.computeVertexNormals();
+            return new THREE.Mesh(g, material);
+        };
+        for (const e of area.entrances) {
+            const sc = entranceScenery(e, height);
+            const [bx, by] = entranceAt(e, e.depth + 2, 0);
+            const bi = Math.min(area.n - 1, Math.max(0, Math.round(bx / SPACING))), bj = Math.min(area.n - 1, Math.max(0, Math.round(by / SPACING)));
+            const hill = area.palette[area.materials[bj * area.n + bi]];
+            this.blackMaterial ??= Object.assign(new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }), { userData: { shared: true } });
+            this.entranceGroup.add(
+                mesh(sc.top, flat, this.libraryMaterial(hill, 0x5d7a3a)),
+                mesh(sc.rock, tilted, this.libraryMaterial(e.rock ?? 'rockCliff', 0x77716a)),
+                mesh(sc.back, flat, this.blackMaterial),
+            );
             const door = new THREE.Mesh(new THREE.PlaneGeometry(e.width * 0.8, 2.2), new THREE.MeshBasicMaterial({ color: 0xff9a1f, transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
-            door.position.set(e.depth - 0.15, 1.1, 0);
-            door.rotation.y = -Math.PI / 2;
-            g.add(hood, back, door);
-            this.entranceGroup.add(g);
+            const [dx, dy] = entranceAt(e, e.depth - 0.15, 0);
+            door.position.set(dx, e.floor + 1.1, size - dy);
+            door.rotation.y = e.dir + Math.PI / 2;
+            this.entranceGroup.add(door);
         }
         this.scene.add(this.entranceGroup);
     }
 
-    /** The hood's look: the texture landscaper gives it (the palette's
-     *  rockCliff, else its first), repeating every 4 m like the ground. */
-    hoodMaterial() {
-        const palette = this.area.palette;
-        const id = palette.includes('rockCliff') ? 'rockCliff' : palette[0];
+    /** A library texture as a plain lit material (shared; `fallback` colour
+     *  while the library isn't there). */
+    libraryMaterial(id, fallback) {
         const entry = this.library?.byId.get(id);
-        if (!entry) return new THREE.MeshLambertMaterial({ color: 0x77716a });
-        this.hoodTextures ??= new Map();
-        if (!this.hoodTextures.has(id)) {
-            const t = new THREE.TextureLoader().load(`textures/${entry.render}`);
-            t.colorSpace = THREE.SRGBColorSpace;
-            t.wrapS = t.wrapT = THREE.RepeatWrapping;
-            this.hoodTextures.set(id, t);
+        this.libraryMaterials ??= new Map();
+        const key = entry ? id : `#${fallback}`;
+        if (!this.libraryMaterials.has(key)) {
+            let material;
+            if (entry) {
+                const t = new THREE.TextureLoader().load(`textures/${entry.render}`);
+                t.colorSpace = THREE.SRGBColorSpace;
+                t.wrapS = t.wrapT = THREE.RepeatWrapping;
+                material = new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide });
+            } else {
+                material = new THREE.MeshLambertMaterial({ color: fallback, side: THREE.DoubleSide });
+            }
+            material.userData.shared = true;
+            this.libraryMaterials.set(key, material);
         }
-        return new THREE.MeshLambertMaterial({ map: this.hoodTextures.get(id) });
+        return this.libraryMaterials.get(key);
     }
 
     /** What the game draws beyond the edge (landscaper's edge models): each

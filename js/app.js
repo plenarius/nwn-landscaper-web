@@ -6,7 +6,7 @@ import { TOOLS, stamp } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { PRESETS, copyPreset } from './atmosphere.js';
-import { carve, fitInTile, nearest as nearestEntrance } from './entrance.js';
+import { carve, fitInTile, rockFor, at as entranceAt, nearest as nearestEntrance } from './entrance.js';
 
 const $ = id => document.getElementById(id);
 
@@ -282,7 +282,12 @@ function entranceDown(e, p) {
     ent.floor = area.heightAt(ent.x, ent.y);
     area.beginStroke();
     area.entrances.push(ent);
-    const rock = library.byId.has('rockCliff') ? area.materialIndex('rockCliff') : undefined;
+    // Rock that suits the slope: what's painted just behind the mouth.
+    const [bx, by] = entranceAt(ent, ent.depth + 2, 0);
+    const bi = Math.min(area.n - 1, Math.max(0, Math.round(bx / SPACING))), bj = Math.min(area.n - 1, Math.max(0, Math.round(by / SPACING)));
+    const ground = area.palette[area.materials[bj * area.n + bi]];
+    ent.rock = rockFor(library.byId.get(ground)?.category, ground, id => library.byId.has(id));
+    const rock = ent.rock ? area.materialIndex(ent.rock) : undefined;
     view.markDirty(carve(area, ent, rock));
     view.syncPalette();
     if (area.water.length) waterChanged();
