@@ -12,6 +12,7 @@ export const TOOLS = {
     paint: { label: 'Paint', key: '5', hint: 'Paint the ground with a texture' },
     water: { label: 'Water', key: '6', hint: 'Click in a hollow and drag up to fill it; drag on water to change its level; Shift-click water to drain it' },
     entrance: { label: 'Entrance', key: '7', hint: 'Click a slope to carve a cave entrance (a door to link in the toolset); brush size is its width; Shift-click one to remove it' },
+    place: { label: 'Place', key: '8', hint: 'Place rocks, trees and other placeables, baked into the terrain' },
 };
 
 // Metres a second at full strength, for raise/lower.

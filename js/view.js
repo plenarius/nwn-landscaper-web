@@ -175,7 +175,7 @@ export class View {
     /** Shows a new area and frames the camera on it. */
     setArea(area) {
         this.area = area;
-        for (const o of [this.mesh, this.grid, this.markers, this.water, this.skirt, this.entranceGroup]) {
+        for (const o of [this.mesh, this.grid, this.markers, this.water, this.skirt, this.entranceGroup, this.objectGroup]) {
             if (o) { this.scene.remove(o); o.traverse?.(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); }
         }
         this.markers = null;
@@ -204,6 +204,7 @@ export class View {
         this.flush();
         this.updateWater();
         this.updateEntrances();
+        this.updateObjects();
         this.frame();
         this.syncPalette();
     }
@@ -366,6 +367,25 @@ export class View {
             this.entranceGroup.add(door);
         }
         this.scene.add(this.entranceGroup);
+    }
+
+    /** Placed objects, from the model library (set by the app). */
+    async updateObjects() {
+        if (this.objectGroup) this.scene.remove(this.objectGroup);
+        const group = this.objectGroup = new THREE.Group();
+        this.scene.add(group);
+        if (!this.models) return;
+        const size = this.area.size;
+        for (const o of this.area.objects) {
+            let model;
+            try { model = await this.models.group(o.model); } catch { continue; }
+            if (group !== this.objectGroup) return; // rebuilt meanwhile
+            const inst = model.clone();
+            inst.position.set(o.x, o.z, size - o.y);
+            inst.rotation.y = o.bearing;
+            inst.scale.setScalar(o.scale);
+            group.add(inst);
+        }
     }
 
     /** A library texture as a plain lit material (shared; `fallback` colour

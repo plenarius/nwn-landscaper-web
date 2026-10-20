@@ -38,6 +38,8 @@ export class Area {
         this.shadow = 0.6;
         // Cave entrances (entrance.js).
         this.entrances = [];
+        // Placeables baked in: { model, x, y, z, bearing, scale }.
+        this.objects = [];
         this.waterLevel = new Float32Array(this.n * this.n).fill(NaN);
         this.undoStack = [];
         this.redoStack = [];
@@ -145,8 +147,8 @@ export class Area {
     }
 
     // Undo: a snapshot of heights and paint before each stroke.
-    snapshot() { return { h: this.heights.slice(), m: this.materials.slice(), p: this.palette.slice(), w: this.water.map(b => ({ ...b })), e: this.entrances.map(e => ({ ...e })) }; }
-    restore(s) { this.heights.set(s.h); this.materials.set(s.m); this.palette = s.p.slice(); this.water = s.w.map(b => ({ ...b })); this.entrances = s.e.map(e => ({ ...e })); this.floodWater(); }
+    snapshot() { return { h: this.heights.slice(), m: this.materials.slice(), p: this.palette.slice(), w: this.water.map(b => ({ ...b })), e: this.entrances.map(e => ({ ...e })), o: this.objects.map(o => ({ ...o })) }; }
+    restore(s) { this.heights.set(s.h); this.materials.set(s.m); this.palette = s.p.slice(); this.water = s.w.map(b => ({ ...b })); this.entrances = s.e.map(e => ({ ...e })); this.objects = s.o.map(o => ({ ...o })); this.floodWater(); }
 
     beginStroke() {
         this.undoStack.push(this.snapshot());
@@ -174,7 +176,7 @@ export class Area {
             name: this.name, tiles: this.tiles,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
-            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances,
+            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects,
         };
     }
 
@@ -185,6 +187,7 @@ export class Area {
         if (o.atmosphere) area.atmosphere = o.atmosphere;
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.entrances) area.entrances = o.entrances;
+        if (o.objects) area.objects = o.objects;
         if (o.water) { area.water = o.water; area.floodWater(); }
         return area;
     }

@@ -71,6 +71,16 @@
             <label class="slider">View distance <output id="skyClipOut"></output>
                 <input type="range" id="skyClip" min="20" max="200" step="5"></label>
         </section>
+        <section id="placePanel" class="side-panel" hidden>
+            <h3>Place</h3>
+            <input id="placeSearch" type="search" placeholder="Search placeables…" autocomplete="off">
+            <div class="chips" id="placeChips"></div>
+            <label class="slider">Size <output id="placeScaleOut"></output>
+                <input type="range" id="placeScale" min="0.5" max="2" step="0.05" value="1"></label>
+            <label class="check"><input type="checkbox" id="placeRandom" checked> Random turn</label>
+            <p class="note">Click to place, drag to turn. Shift-click one to remove it. Baked into the terrain: it blocks walking and casts shadows.</p>
+            <div class="swatches" id="placeResults"></div>
+        </section>
         <section id="palette" class="side-panel" hidden>
             <h3>Textures</h3>
             <div id="paletteBody"></div>

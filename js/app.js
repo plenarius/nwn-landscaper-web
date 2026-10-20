@@ -7,6 +7,7 @@ import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { PRESETS, copyPreset } from './atmosphere.js';
 import { carve, fitInTile, rockFor, at as entranceAt, nearest as nearestEntrance } from './entrance.js';
+import { ModelLibrary } from './models.js';
 
 const $ = id => document.getElementById(id);
 
@@ -43,11 +44,13 @@ function selectTool(id) {
 }
 
 // One panel over the left of the view: the sky's when open, else the
-// texture picker while painting.
+// texture picker while painting, the placeables while placing.
 let skyOpen = false;
 function updatePanels() {
     $('skyPanel').hidden = !skyOpen;
     $('palette').hidden = skyOpen || tool !== 'paint';
+    $('placePanel').hidden = skyOpen || tool !== 'place';
+    if (tool === 'place' && !skyOpen) showPlaceables();
     $('btnSky').classList.toggle('active', skyOpen);
 }
 selectTool('raise');
@@ -109,6 +112,89 @@ library.load().then(ok => {
     buildPalette();
     if (ok) view.setLibrary(library);
 });
+
+// --- Placeables --------------------------------------------------------------------
+
+const models = new ModelLibrary();
+view.models = models;
+let placeModel = null;
+const QUICK = ['rock', 'boulder', 'tree', 'bush', 'ruin', 'pillar', 'statue', 'fence'];
+for (const q of QUICK) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = q;
+    b.onclick = () => { $('placeSearch').value = q; showPlaceables(); };
+    $('placeChips').appendChild(b);
+}
+
+let placeShown = null;
+async function showPlaceables() {
+    await models.load();
+    const query = $('placeSearch').value.trim() || 'rock';
+    if (query === placeShown) return;
+    placeShown = query;
+    const box = $('placeResults');
+    box.textContent = '';
+    for (const p of models.search(query)) {
+        const b = document.createElement('button');
+        b.className = 'swatch';
+        b.dataset.model = p.model;
+        b.title = `${p.name} (${p.model})`;
+        b.innerHTML = `<img class="thumb" alt=""><span>${p.name.replace(/</g, '&lt;')}</span>`;
+        b.onclick = () => selectPlaceable(p.model);
+        box.appendChild(b);
+        models.thumbnail(p.model).then(url => { if (url) b.querySelector('img').src = url; });
+    }
+    selectPlaceable(placeModel);
+}
+function selectPlaceable(model) {
+    placeModel = model;
+    for (const b of $('placeResults').children) b.classList.toggle('active', b.dataset.model === model);
+}
+let searchTimer = null;
+$('placeSearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(showPlaceables, 250); };
+const showScale = () => { $('placeScaleOut').textContent = `${Math.round($('placeScale').value * 100)}%`; };
+$('placeScale').oninput = showScale;
+showScale();
+
+/** Ground under an object: the lowest point under its outline, so it doesn't float on a slope. */
+function groundUnder(o, flat) {
+    const c = Math.cos(o.bearing), s = Math.sin(o.bearing);
+    const corners = [[flat.min[0], flat.min[1]], [flat.max[0], flat.min[1]], [flat.min[0], flat.max[1]], [flat.max[0], flat.max[1]], [0, 0]];
+    return Math.min(...corners.map(([x, y]) => area.heightAt(o.x + (c * x - s * y) * o.scale, o.y + (s * x + c * y) * o.scale)));
+}
+
+async function placeDown(e, p) {
+    if (e.shiftKey) {
+        let best = null, bd = 2.5;
+        for (const o of area.objects) { const d = Math.hypot(o.x - p.x, o.y - p.y); if (d < bd) { best = o; bd = d; } }
+        if (!best) return null;
+        area.beginStroke();
+        area.objects = area.objects.filter(o => o !== best);
+        view.updateObjects();
+        saveSoon();
+        return null;
+    }
+    if (!placeModel) { $('statusMsg').textContent = 'Pick a placeable in the panel first.'; return null; }
+    let flat;
+    try { flat = await models.flat(placeModel); } catch { $('statusMsg').textContent = `${placeModel} can't be read.`; return null; }
+    const o = { model: placeModel, x: p.x, y: p.y, z: 0, bearing: $('placeRandom').checked ? Math.random() * Math.PI * 2 : 0, scale: +$('placeScale').value };
+    o.z = groundUnder(o, flat);
+    area.beginStroke();
+    area.objects.push(o);
+    view.updateObjects();
+    saveSoon();
+    return { object: o, flat, from: p };
+}
+
+// Dragging turns it: towards the pointer.
+function placeDrag(e) {
+    const s = stroke.place, p = view.pick(e.clientX, e.clientY);
+    if (!p || Math.hypot(p.x - s.from.x, p.y - s.from.y) < 0.3) return;
+    s.object.bearing = Math.atan2(p.y - s.from.y, p.x - s.from.x);
+    s.object.z = groundUnder(s.object, s.flat);
+    view.updateObjects();
+}
 
 // --- Sky & fog -------------------------------------------------------------------
 
@@ -307,6 +393,16 @@ canvas.addEventListener('pointerdown', e => {
         entranceDown(e, p);
         return;
     }
+    if (tool === 'place') {
+        const pointerId = e.pointerId;
+        placeDown(e, p).then(s => {
+            if (s) {
+                stroke = { place: s };
+                try { canvas.setPointerCapture(pointerId); } catch { /* fine */ }
+            }
+        });
+        return;
+    }
     if (tool === 'water') {
         const w = waterDown(e, p);
         if (w) {
@@ -329,12 +425,13 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => {
     mouse = { x: e.clientX, y: e.clientY };
     if (stroke?.water) waterDrag(e);
+    if (stroke?.place) placeDrag(e);
 });
 canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(null); $('statusPos').textContent = ''; });
 const endStroke = () => {
     if (!stroke) return;
     // The ground moved: its shadows too.
-    if (!stroke.water && tool !== 'paint') view.updateShade();
+    if (!stroke.water && !stroke.place && tool !== 'paint') view.updateShade();
     // Sculpting may have flooded or drained hollows.
     if (!stroke.water && area.water.length && tool !== 'paint') waterChanged();
     if (stroke.water) $('statusMsg').textContent = '';
@@ -357,7 +454,7 @@ view.onFrame = () => {
         const what = deep > SHALLOW ? `water ${deep.toFixed(1)} m deep: too deep to walk` : deep > 0 ? `shallow water ${deep.toFixed(1)} m: wading` : walk ? 'walkable' : 'too steep to walk';
         $('statusPos').textContent = `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
     }
-    if (stroke && p && !stroke.water) {
+    if (stroke && p && !stroke.water && !stroke.place) {
         const now = performance.now();
         const dt = (now - stroke.last) / 1000;
         stroke.last = now;
@@ -389,6 +486,7 @@ function saveSoon() {
 function refreshAll() {
     view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
     view.updateEntrances();
+    view.updateObjects();
     view.updateShade();
     view.updateWater();
     view.syncPalette();
@@ -428,9 +526,12 @@ $('btnExport').onclick = async () => {
     $('statusMsg').textContent = `Exporting ${area.name}…`;
     try {
         // Heights (f32 per sample), then each sample's palette index (u8).
-        const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength);
+        // ... and JSON too long for the query: the objects.
+        const extra = new TextEncoder().encode(JSON.stringify({ objects: area.objects }));
+        const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength + extra.byteLength);
         body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
         body.set(area.materials, area.heights.byteLength);
+        body.set(extra, area.heights.byteLength + area.materials.byteLength);
         const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`
             + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
             + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
