@@ -4,7 +4,7 @@
 // the order `landscaper export` reads.
 
 import { generateHeightMap } from './noise.js';
-import { defaultAtmosphere } from './atmosphere.js';
+import { defaultAtmosphere, copyPreset, PRESETS } from './atmosphere.js';
 
 export const TILE = 10;
 export const DEFAULT_TEXTURE = 'grassMedium';
@@ -16,6 +16,10 @@ const WALKABLE_NZ = 0.64;
 export const MAX_RISE = SPACING * Math.sqrt(1 - WALKABLE_NZ * WALKABLE_NZ) / WALKABLE_NZ;
 // Water deeper than this can't be walked (landscaper's SHALLOW).
 export const SHALLOW = 0.5;
+// A cave starts as rock this high over its floor; its tops (from VOID_BELOW
+// under the roof up) are void, drawn black (landscaper's VOID_BELOW).
+export const CAVE_ROCK = 6;
+export const VOID_BELOW = 0.3;
 
 export class Area {
     constructor(name, tiles, heights, materials, palette) {
@@ -42,6 +46,9 @@ export class Area {
         // solid, baked }; baked: false is a real placeable (object mode).
         this.objects = [];
         this.nextObjectId = 1;
+        // 'surface', or 'underground' (a cave dug out of rock up to `roof`).
+        this.kind = 'surface';
+        this.roof = null;
         this.waterLevel = new Float32Array(this.n * this.n).fill(NaN);
         this.undoStack = [];
         this.redoStack = [];
@@ -62,7 +69,15 @@ export class Area {
         const area = new Area(name, tiles);
         const n = area.n;
         const base = 5;
-        if (start === 'flat') {
+        if (start === 'cave') {
+            // Solid rock to dig out: its floor at the base, its roof above.
+            area.kind = 'underground';
+            area.roof = base + CAVE_ROCK;
+            area.heights.fill(area.roof);
+            area.palette = ['rock'];
+            area.atmosphere = copyPreset(PRESETS.find(p => p.id === 'cave'));
+            area.shadow = 0.7;
+        } else if (start === 'flat') {
             area.heights.fill(base);
         } else {
             // Rolling or rough hills from the upstream fBm noise, scaled to metres.
@@ -138,9 +153,14 @@ export class Area {
     }
 
     /** Whether ground at sample (i, j) is walkable by landscaper's rule. */
+    /** Whether sample (i, j) is a cave's void (rock at its roof). */
+    void(i, j) {
+        return this.kind === 'underground' && this.heights[j * this.n + i] >= this.roof - VOID_BELOW;
+    }
+
     walkable(i, j) {
         const n = this.n, h = this.heights, z = h[j * n + i];
-        if (this.depth(i, j) > SHALLOW) return false;
+        if (this.depth(i, j) > SHALLOW || this.void(i, j)) return false;
         if (i > 0 && Math.abs(h[j * n + i - 1] - z) > MAX_RISE) return false;
         if (i < n - 1 && Math.abs(h[j * n + i + 1] - z) > MAX_RISE) return false;
         if (j > 0 && Math.abs(h[(j - 1) * n + i] - z) > MAX_RISE) return false;
@@ -178,7 +198,7 @@ export class Area {
             name: this.name, tiles: this.tiles,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
-            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId,
+            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId, kind: this.kind, roof: this.roof,
         };
     }
 
@@ -190,6 +210,7 @@ export class Area {
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.entrances) area.entrances = o.entrances;
         if (o.objects) area.objects = o.objects;
+        if (o.kind) { area.kind = o.kind; area.roof = o.roof; }
         area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;
         if (o.water) { area.water = o.water; area.floodWater(); }
         return area;

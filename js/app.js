@@ -1,6 +1,6 @@
 // NWN Landscaper: sculpt an NWN area, export it with `landscaper serve`.
 
-import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW } from './area.js';
+import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW, CAVE_ROCK } from './area.js';
 import { View } from './view.js';
 import { TOOLS, stamp } from './tools.js';
 import { ICONS } from './icons.js';
@@ -576,6 +576,14 @@ canvas.addEventListener('pointerdown', e => {
         stroke.paintIndex = area.materialIndex(paintTexture);
         view.syncPalette();
     }
+    if (tool === 'dig') {
+        // Down to the floor, or to the level of dug ground where it starts;
+        // the floor painted with the picked texture (dirt unless painted).
+        const start = area.heightAt(p.x, p.y);
+        stroke.flattenTo = area.kind === 'underground' && start >= area.roof - 0.5 ? area.roof - CAVE_ROCK : start;
+        stroke.paintIndex = area.materialIndex(paintTexture === DEFAULT_TEXTURE ? 'dirt' : paintTexture);
+        view.syncPalette();
+    }
     dbg.strokes++;
     dbg.note = '';
     showDebug();
@@ -699,7 +707,8 @@ function areaRequest() {
         + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
         + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
         + `&shadow=${area.shadow}`
-        + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`;
+        + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`
+        + (area.kind === 'underground' ? `&kind=underground&roof=${area.roof}` : '');
     return { query, body };
 }
 

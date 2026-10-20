@@ -39,9 +39,10 @@ function occlusion(x, y, z, height) {
 }
 
 /** The shadow-map value at (x, y): 1 unshaded; `strength` 0..1. */
-export function shade(x, y, strength, height) {
+export function shade(x, y, strength, height, sun = true) {
     const z = height(x, y);
-    const lit = 1 - 0.6 * castShadow(x, y, z, height);
+    // Underground: no sun, only the ambient occlusion.
+    const lit = sun ? 1 - 0.6 * castShadow(x, y, z, height) : 1;
     const open = 1 - 0.8 * occlusion(x, y, z, height);
     return Math.min(1, Math.max(0.15, 1 - strength * (1 - lit * open)));
 }
@@ -59,7 +60,7 @@ export function shadeArea(area, strength) {
     for (let j = 0; j < m; j++) {
         for (let i = 0; i < m; i++) {
             const x = i * SHADE_STEP, y = j * SHADE_STEP;
-            const s = shade(x, y, strength, height);
+            const s = shade(x, y, strength, height, area.kind !== 'underground');
             out[j * m + i] = Math.round(255 * s * darkness(area.entrances, x, y));
         }
     }

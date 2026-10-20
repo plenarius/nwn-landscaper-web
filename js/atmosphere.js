@@ -14,6 +14,8 @@ export const PRESETS = [
     { id: 'overcast', name: 'Overcast', time: 'cycle', fogClip: 120, sun: sky('#454950', '#a8a693', '#7a7a7a', 14, false), moon: sky('#000000', '#4d4d4d', '#000000', 14, false) },
     { id: 'swamp', name: 'Swamp', time: 'cycle', fogClip: 150, sun: sky('#4e3127', '#b4c594', '#6b844a', 10), moon: sky('#302821', '#425238', '#183117', 10) },
     { id: 'mist', name: 'Thick mist', time: 'cycle', fogClip: 60, sun: sky('#707070', '#b0b0b0', '#c8c8c8', 25, false), moon: sky('#101010', '#404040', '#303030', 25, false) },
+    { id: 'cave', name: 'Cave', time: 'day', fogClip: 60, sun: sky('#2d2d2d', '#878a62', '#000000', 5, false), moon: sky('#2d2d2d', '#878a62', '#000000', 5, false) },
+    { id: 'torchlit', name: 'Torchlit cave', time: 'day', fogClip: 45, sun: sky('#3a2a1a', '#d08040', '#100804', 6, false), moon: sky('#3a2a1a', '#d08040', '#100804', 6, false) },
     { id: 'night', name: 'Dark night', time: 'night', fogClip: 150, sun: sky('#504f60', '#d6d6d6', '#bbbbbb', 7), moon: sky('#0a0a18', '#3c4878', '#05070f', 12) },
 ];
 

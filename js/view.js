@@ -37,6 +37,7 @@ const SHADE_FRAGMENT = `
         float extent = (uShadeCells - 1.0) * ${SHADE_STEP.toFixed(4)};
         if (all(greaterThanEqual(vArea, vec2(0.0))) && all(lessThanEqual(vArea, vec2(extent))))
             diffuseColor.rgb *= texture2D(uShade, (vArea / ${SHADE_STEP.toFixed(4)} + 0.5) / uShadeCells).r;
+        if (vUp >= uVoid) diffuseColor.rgb = vec3(0.0);
     }`;
 
 const SPLAT_VERTEX = `
@@ -114,6 +115,8 @@ export class View {
             // Baked shadows (shade.js): a grid SHADE_STEP apart over the area.
             uShade: { value: null },
             uShadeCells: { value: 1 },
+            // A cave's rock tops from here up are void: black.
+            uVoid: { value: 1e9 },
         };
         this.uniforms.uTex.value.needsUpdate = true;
         this.raycaster = new THREE.Raycaster();
@@ -193,6 +196,7 @@ export class View {
         this.uniforms.uMat.value = mat;
         this.uniforms.uN.value = n;
         this.uniforms.uSize.value = size;
+        this.uniforms.uVoid.value = area.kind === 'underground' ? area.roof - 0.3 : 1e9;
         this.updateShade();
         this.mesh = new THREE.Mesh(geo, this.splatMaterial());
         this.scene.add(this.mesh);
@@ -217,7 +221,7 @@ export class View {
                 .replace('#include <common>', '#include <common>\nuniform float uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>' + SPLAT_VERTEX);
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform float uShadeCells;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
+                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform float uShadeCells;\nuniform float uVoid;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT + SHADE_FRAGMENT);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
@@ -484,6 +488,8 @@ export class View {
         }
         geo.setIndex(index);
         this.skirt = new THREE.Mesh(geo, this.mesh.material);
+        // A cave has no edge scenery.
+        this.skirt.visible = this.area.kind !== 'underground';
         this.skirt.material.side = THREE.DoubleSide;
         this.scene.add(this.skirt);
     }
