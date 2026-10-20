@@ -64,7 +64,12 @@ export function carve(area, e, rock) {
                 const du = u < r.u0 ? r.u0 - u : u > r.u1 ? u - r.u1 : 0;
                 const dv = Math.max(0, Math.abs(v) - r.v);
                 const d = Math.hypot(du, dv);
-                h[k] = Math.max(h[k], e.floor + RIM - MOUND_SLOPE * d);
+                const raised = e.floor + RIM - MOUND_SLOPE * d;
+                if (raised > h[k] + 0.05) {
+                    h[k] = raised;
+                    // The rock block's sides are rock too.
+                    if (rock !== undefined) area.materials[k] = rock;
+                }
             }
         }
     }

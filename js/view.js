@@ -239,6 +239,7 @@ export class View {
     /** Uses the texture library to show painted textures. */
     setLibrary(library) {
         this.library = library;
+        if (this.area) this.updateEntrances();
         this.paletteKey = null;
         this.syncPalette();
     }
@@ -337,7 +338,11 @@ export class View {
             g.rotation.y = e.dir;
             // In the group: x = u (into the slope), -z = v (across), y up.
             const u0 = -HOOD_OUT, u1 = e.depth + 1, vw = e.width / 2 + HOOD_SIDE;
-            const hood = new THREE.Mesh(new THREE.BoxGeometry(u1 - u0, HOOD_TOP - HOOD_UNDER, 2 * vw), new THREE.MeshLambertMaterial({ color: 0x77716a }));
+            const box = new THREE.BoxGeometry(u1 - u0, HOOD_TOP - HOOD_UNDER, 2 * vw);
+            // Its texture repeating every 4 m, like the ground's.
+            const uv = box.attributes.uv, repeat = Math.max(u1 - u0, 2 * vw) / 4;
+            for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * repeat, uv.getY(k) * repeat);
+            const hood = new THREE.Mesh(box, this.hoodMaterial());
             hood.position.set((u0 + u1) / 2, (HOOD_UNDER + HOOD_TOP) / 2, 0);
             const back = new THREE.Mesh(new THREE.PlaneGeometry(e.width, HOOD_UNDER + 0.1), new THREE.MeshBasicMaterial({ color: 0x000000 }));
             back.position.set(e.depth - 0.05, (HOOD_UNDER - 0.1) / 2, 0);
@@ -349,6 +354,23 @@ export class View {
             this.entranceGroup.add(g);
         }
         this.scene.add(this.entranceGroup);
+    }
+
+    /** The hood's look: the texture landscaper gives it (the palette's
+     *  rockCliff, else its first), repeating every 4 m like the ground. */
+    hoodMaterial() {
+        const palette = this.area.palette;
+        const id = palette.includes('rockCliff') ? 'rockCliff' : palette[0];
+        const entry = this.library?.byId.get(id);
+        if (!entry) return new THREE.MeshLambertMaterial({ color: 0x77716a });
+        this.hoodTextures ??= new Map();
+        if (!this.hoodTextures.has(id)) {
+            const t = new THREE.TextureLoader().load(`textures/${entry.render}`);
+            t.colorSpace = THREE.SRGBColorSpace;
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            this.hoodTextures.set(id, t);
+        }
+        return new THREE.MeshLambertMaterial({ map: this.hoodTextures.get(id) });
     }
 
     /** What the game draws beyond the edge (landscaper's edge models): each
