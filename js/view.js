@@ -160,7 +160,7 @@ export class View {
     /** Shows a new area and frames the camera on it. */
     setArea(area) {
         this.area = area;
-        for (const o of [this.mesh, this.grid, this.markers, this.water]) {
+        for (const o of [this.mesh, this.grid, this.markers, this.water, this.skirt]) {
             if (o) { this.scene.remove(o); o.traverse?.(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); }
         }
         this.markers = null;
@@ -180,6 +180,7 @@ export class View {
         this.uniforms.uSize.value = size;
         this.mesh = new THREE.Mesh(geo, this.splatMaterial());
         this.scene.add(this.mesh);
+        this.buildSkirt();
         this.grid = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }));
         this.scene.add(this.grid);
         this.paletteKey = null;
@@ -237,7 +238,7 @@ export class View {
         this.controls.target.set(s / 2, mid, s / 2);
         this.camera.position.set(s / 2, mid + s * 0.95, s / 2 + s * 1.15);
         this.controls.minDistance = 5;
-        this.controls.maxDistance = s * 3;
+        this.controls.maxDistance = s * 3 + 100;
         this.controls.update();
     }
 
@@ -287,6 +288,58 @@ export class View {
         this.mesh.geometry.computeBoundingSphere();
         this.mesh.geometry.computeBoundingBox();
         this.updateGrid();
+        this.updateSkirt();
+    }
+
+    /** What the game draws beyond the edge (landscaper's edge models): each
+     *  boundary's profile carried 50 m straight out, and the corners flat
+     *  at the corner's height; a little darker, as it can't be walked. The
+     *  splat shading clamps to the edge, so its textures carry out too. */
+    buildSkirt() {
+        const n = this.area.n;
+        // Four strips of n samples (two vertices each) and four corner quads.
+        const verts = 4 * n * 2 + 4 * 4;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(verts * 3).fill(0.72), 3));
+        const index = [];
+        for (let s = 0; s < 4; s++) {
+            for (let k = 0; k < n - 1; k++) {
+                const a = (s * n + k) * 2, b = a + 2;
+                index.push(a, a + 1, b + 1, a, b + 1, b);
+            }
+        }
+        for (let c = 0; c < 4; c++) {
+            const a = 8 * n + c * 4;
+            index.push(a, a + 1, a + 2, a, a + 2, a + 3);
+        }
+        geo.setIndex(index);
+        this.skirt = new THREE.Mesh(geo, this.mesh.material);
+        this.skirt.material.side = THREE.DoubleSide;
+        this.scene.add(this.skirt);
+    }
+
+    updateSkirt() {
+        if (!this.skirt) return;
+        const area = this.area, n = area.n, size = area.size, h = area.heights, D = 50;
+        const pos = this.skirt.geometry.attributes.position;
+        // Area point (x, y) at height z, as three.js wants it.
+        const put = (v, x, y, z) => pos.setXYZ(v, x, z, size - y);
+        for (let k = 0; k < n; k++) {
+            const t = k * SPACING;
+            put((0 * n + k) * 2, -D, t, h[k * n]); put((0 * n + k) * 2 + 1, 0, t, h[k * n]);
+            put((1 * n + k) * 2, size, t, h[k * n + n - 1]); put((1 * n + k) * 2 + 1, size + D, t, h[k * n + n - 1]);
+            put((2 * n + k) * 2, t, -D, h[k]); put((2 * n + k) * 2 + 1, t, 0, h[k]);
+            put((3 * n + k) * 2, t, size, h[(n - 1) * n + k]); put((3 * n + k) * 2 + 1, t, size + D, h[(n - 1) * n + k]);
+        }
+        const corners = [[0, 0, -D, -D], [0, size, -D, size + D], [size, 0, size + D, -D], [size, size, size + D, size + D]];
+        corners.forEach(([x, y, fx, fy], c) => {
+            const z = area.heightAt(x, y), a = 8 * n + c * 4;
+            put(a, x, y, z); put(a + 1, fx, y, z); put(a + 2, fx, fy, z); put(a + 3, x, fy, z);
+        });
+        pos.needsUpdate = true;
+        this.skirt.geometry.computeVertexNormals();
+        this.skirt.geometry.computeBoundingSphere();
     }
 
     /** The water's surface: a flat quad at the level over each cell with a
@@ -306,6 +359,22 @@ export class View {
                 const x0 = i * SPACING, x1 = x0 + SPACING, z0 = size - j * SPACING, z1 = size - (j + 1) * SPACING;
                 pos.push(x0, level, z0, x1, level, z0, x1, level, z1, x0, level, z0, x1, level, z1, x0, level, z1);
             }
+        }
+        // Carried out past the edge, as the edge scenery has it.
+        const D = 50;
+        const quad = (x0, y0, x1, y1, l) => pos.push(x0, l, size - y0, x1, l, size - y0, x1, l, size - y1, x0, l, size - y0, x1, l, size - y1, x0, l, size - y1);
+        const wet = (i, j) => L[j * n + i];
+        for (let k = 0; k < n - 1; k++) {
+            const t0 = k * SPACING, t1 = t0 + SPACING;
+            const lv = (a, b) => Math.max(Number.isNaN(a) ? -Infinity : a, Number.isNaN(b) ? -Infinity : b);
+            let l;
+            if ((l = lv(wet(0, k), wet(0, k + 1))) > -Infinity) quad(-D, t0, 0, t1, l);
+            if ((l = lv(wet(n - 1, k), wet(n - 1, k + 1))) > -Infinity) quad(size, t0, size + D, t1, l);
+            if ((l = lv(wet(k, 0), wet(k + 1, 0))) > -Infinity) quad(t0, -D, t1, 0, l);
+            if ((l = lv(wet(k, n - 1), wet(k + 1, n - 1))) > -Infinity) quad(t0, size, t1, size + D, l);
+        }
+        for (const [i, j, x0, y0, x1, y1] of [[0, 0, -D, -D, 0, 0], [0, n - 1, -D, size, 0, size + D], [n - 1, 0, size, -D, size + D, 0], [n - 1, n - 1, size, size, size + D, size + D]]) {
+            if (!Number.isNaN(wet(i, j))) quad(x0, y0, x1, y1, wet(i, j));
         }
         if (!pos.length) return;
         const geo = new THREE.BufferGeometry();
