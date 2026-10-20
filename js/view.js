@@ -15,29 +15,43 @@ const ROCK = new THREE.Color(0x8a8378);
 const BLOCKED = new THREE.Color(0xc0503c);
 // Multiplies the painted texture on ground too steep to walk.
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
-// Metres one texture repeat covers on the ground.
+// Metres one texture repeat covers on the ground (landscaper's TEXTURE_METRES).
 const TEXTURE_METRES = 4;
+// Steeper than this (normal's up component) can't be walked (landscaper's WALKABLE_NZ).
+const WALKABLE_NZ = 0.64;
 
-// Splat shading: each sample has a texture (an index into the area palette,
-// stored in uMat); a point blends its four surrounding samples' textures
-// bilinearly, so painted edges soften over one 0.625 m sample.
+// Splat shading, as landscaper bakes it into the NWN tiles: each sample has
+// a texture (an index into the area palette, stored in uMat); a point
+// blends its four surrounding samples' textures bilinearly, so painted
+// edges soften over one 0.625 m sample. Ground too steep to walk takes its
+// texture from the side (along x + y, and up) and from the nearest sample.
+// v is negated: the texture array's rows run top first, NWN's bottom first.
 const SPLAT_VERTEX = `
-    vArea = vec2(transformed.x, uSize - transformed.z);`;
+    vArea = vec2(transformed.x, uSize - transformed.z);
+    vUp = transformed.y;
+    vNormalUp = normal.y;`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
         vec2 f = clamp(vArea / ${SPACING.toFixed(4)}, vec2(0.0), vec2(uN - 1.0));
         vec2 base = min(floor(f), vec2(uN - 2.0));
         vec2 t = f - base;
         ivec2 b = ivec2(base);
-        vec2 uv = vArea / ${TEXTURE_METRES.toFixed(1)};
+        vec2 uv = vec2(vArea.x, -vArea.y) / ${TEXTURE_METRES.toFixed(1)};
         float m00 = floor(texelFetch(uMat, b, 0).r * 255.0 + 0.5);
         float m10 = floor(texelFetch(uMat, b + ivec2(1, 0), 0).r * 255.0 + 0.5);
         float m01 = floor(texelFetch(uMat, b + ivec2(0, 1), 0).r * 255.0 + 0.5);
         float m11 = floor(texelFetch(uMat, b + ivec2(1, 1), 0).r * 255.0 + 0.5);
-        vec4 splat = texture(uTex, vec3(uv, m00)) * (1.0 - t.x) * (1.0 - t.y)
-                   + texture(uTex, vec3(uv, m10)) * t.x * (1.0 - t.y)
-                   + texture(uTex, vec3(uv, m01)) * (1.0 - t.x) * t.y
-                   + texture(uTex, vec3(uv, m11)) * t.x * t.y;
+        vec4 splat;
+        if (vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
+            vec2 side = vec2(vArea.x + vArea.y, -vUp) / ${TEXTURE_METRES.toFixed(1)};
+            float nearest = t.x < 0.5 ? (t.y < 0.5 ? m00 : m01) : (t.y < 0.5 ? m10 : m11);
+            splat = texture(uTex, vec3(side, nearest));
+        } else {
+            splat = texture(uTex, vec3(uv, m00)) * (1.0 - t.x) * (1.0 - t.y)
+                  + texture(uTex, vec3(uv, m10)) * t.x * (1.0 - t.y)
+                  + texture(uTex, vec3(uv, m01)) * (1.0 - t.x) * t.y
+                  + texture(uTex, vec3(uv, m11)) * t.x * t.y;
+        }
         diffuseColor.rgb *= splat.rgb;
     }`;
 
@@ -136,10 +150,10 @@ export class View {
         material.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, this.uniforms);
             shader.vertexShader = shader.vertexShader
-                .replace('#include <common>', '#include <common>\nuniform float uSize;\nvarying vec2 vArea;')
+                .replace('#include <common>', '#include <common>\nuniform float uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>' + SPLAT_VERTEX);
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nvarying vec2 vArea;')
+                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
