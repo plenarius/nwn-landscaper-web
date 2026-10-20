@@ -4,6 +4,7 @@
 // the order `landscaper export` reads.
 
 import { generateHeightMap } from './noise.js';
+import { defaultAtmosphere } from './atmosphere.js';
 
 export const TILE = 10;
 export const DEFAULT_TEXTURE = 'grassMedium';
@@ -25,6 +26,8 @@ export class Area {
         // (texture ids from the library catalog).
         this.materials = materials ?? new Uint8Array(this.n * this.n);
         this.palette = palette ?? [DEFAULT_TEXTURE];
+        // Light and fog (see atmosphere.js).
+        this.atmosphere = defaultAtmosphere();
         this.undoStack = [];
         this.redoStack = [];
     }
@@ -115,13 +118,16 @@ export class Area {
             name: this.name, tiles: this.tiles,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
+            atmosphere: this.atmosphere,
         };
     }
 
     static fromJSON(o) {
         const heights = new Float32Array(fromBase64(o.heights).buffer);
         const materials = o.materials ? fromBase64(o.materials) : undefined;
-        return new Area(o.name, o.tiles, heights, materials, o.palette);
+        const area = new Area(o.name, o.tiles, heights, materials, o.palette);
+        if (o.atmosphere) area.atmosphere = o.atmosphere;
+        return area;
     }
 }
 

@@ -20,6 +20,7 @@
         <div class="brand">Layonara <b>Landscaper</b></div>
         <button class="top-btn" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span>New area</button>
         <div id="areaInfo"></div>
+        <button class="top-btn" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span>Sky &amp; fog</button>
         <div class="spacer"></div>
         <button class="top-btn" id="btnUndo" title="Undo (Ctrl+Z)"><span class="icon" data-icon="undo"></span>Undo</button>
         <button class="top-btn" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span>Redo</button>
@@ -38,7 +39,36 @@
     </nav>
 
     <main id="viewport">
-        <section id="palette" hidden>
+        <section id="skyPanel" class="side-panel" hidden>
+            <button class="panel-close" id="skyClose" title="Close">×</button>
+            <h3>Sky &amp; fog</h3>
+            <div class="segmented" id="dayNight">
+                <button type="button" data-night="0" class="active">☀ Day</button>
+                <button type="button" data-night="1">☾ Night</button>
+            </div>
+            <label class="check"><input type="checkbox" id="skyPreview" checked> Show in the view</label>
+            <h4>Looks</h4>
+            <div class="presets" id="skyPresets"></div>
+            <h4>Time</h4>
+            <div class="radios" id="skyTime">
+                <label><input type="radio" name="skyTime" value="cycle"> Day and night</label>
+                <label><input type="radio" name="skyTime" value="day"> Always day</label>
+                <label><input type="radio" name="skyTime" value="night"> Always night</label>
+            </div>
+            <h4 id="skyWhich">Sun</h4>
+            <div class="colours">
+                <label><input type="color" id="skyAmbient"> Shade <small>(ambient)</small></label>
+                <label><input type="color" id="skyDiffuse"> Light <small>(diffuse)</small></label>
+                <label><input type="color" id="skyFog"> Fog colour</label>
+            </div>
+            <label class="slider">Fog <output id="skyFogOut"></output>
+                <input type="range" id="skyFogAmount" min="0" max="40" step="1"></label>
+            <label class="check"><input type="checkbox" id="skyShadows"> Shadows</label>
+            <h4>View</h4>
+            <label class="slider">View distance <output id="skyClipOut"></output>
+                <input type="range" id="skyClip" min="20" max="200" step="5"></label>
+        </section>
+        <section id="palette" class="side-panel" hidden>
             <h3>Textures</h3>
             <div id="paletteBody"></div>
         </section>

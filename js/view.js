@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE } from './area.js';
+import { fogRange } from './atmosphere.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
@@ -73,10 +74,17 @@ export class View {
         this.controls.mouseButtons = { LEFT: -1, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
         this.renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
-        const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-        sun.position.set(-0.6, 1.0, 0.5);
-        this.scene.add(sun);
-        this.scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x3a3226, 1.0));
+        // The working light, and the area's own (setAtmosphere).
+        this.workSun = new THREE.DirectionalLight(0xffffff, 2.2);
+        this.workSun.position.set(-0.6, 1.0, 0.5);
+        this.workSky = new THREE.HemisphereLight(0xcfe3ff, 0x3a3226, 1.0);
+        // The game's sun and moon shine from towards (4000, 4500, 7000).
+        this.areaSun = new THREE.DirectionalLight(0xffffff, Math.PI);
+        this.areaSun.position.set(4000, 7000, -4500).normalize();
+        this.areaAmbient = new THREE.AmbientLight(0x000000, Math.PI);
+        this.scene.add(this.workSun, this.workSky, this.areaSun, this.areaAmbient);
+        this.areaSun.visible = this.areaAmbient.visible = false;
+        this.fog = null; // { start, end } as the game's camera sees it
 
         this.cursor = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff }));
         this.cursor.visible = false;
@@ -101,9 +109,44 @@ export class View {
             this.onFrame?.();
             if (this.dirty) this.flush();
             this.controls.update();
+            this.updateFog();
             this.renderer.render(this.scene, this.camera);
         };
         requestAnimationFrame(loop);
+    }
+
+    /**
+     * Lights the view as the game will (`atmosphere`, by day or `night`),
+     * or with `null` the plain working light.
+     */
+    setAtmosphere(atmosphere, night) {
+        const on = !!atmosphere;
+        this.workSun.visible = this.workSky.visible = !on;
+        this.areaSun.visible = this.areaAmbient.visible = on;
+        if (!on) {
+            this.fog = null;
+            this.scene.fog = null;
+            this.renderer.setClearColor(0x1d2228);
+            return;
+        }
+        const s = night ? atmosphere.moon : atmosphere.sun;
+        // Colours are gamma-space; three.js lights in linear and divides by pi.
+        this.areaAmbient.color.set(s.ambient);
+        this.areaSun.color.set(s.diffuse);
+        const f = fogRange(atmosphere, night);
+        this.fog = f;
+        this.scene.fog = new THREE.Fog(new THREE.Color(f.color), f.start, f.end);
+        this.renderer.setClearColor(new THREE.Color(f.color));
+    }
+
+    /** The game measures fog from its camera, which stays about 20 m from
+     *  the player: the fog as such a camera at the view's target sees it
+     *  (as Moonglow shows it), so pulling back doesn't fog everything. */
+    updateFog() {
+        if (!this.fog || !this.scene.fog) return;
+        const beyond = Math.max(0, this.camera.position.distanceTo(this.controls.target) - 20);
+        this.scene.fog.near = this.fog.start + beyond;
+        this.scene.fog.far = this.fog.end + beyond;
     }
 
     resize() {

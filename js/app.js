@@ -5,6 +5,7 @@ import { View } from './view.js';
 import { TOOLS, stamp } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
+import { PRESETS, copyPreset } from './atmosphere.js';
 
 const $ = id => document.getElementById(id);
 
@@ -37,7 +38,16 @@ for (const [id, t] of Object.entries(TOOLS)) {
 function selectTool(id) {
     tool = id;
     for (const b of document.querySelectorAll('#toolButtons .tool')) b.classList.toggle('active', b.dataset.tool === id);
-    $('palette').hidden = id !== 'paint';
+    updatePanels();
+}
+
+// One panel over the left of the view: the sky's when open, else the
+// texture picker while painting.
+let skyOpen = false;
+function updatePanels() {
+    $('skyPanel').hidden = !skyOpen;
+    $('palette').hidden = skyOpen || tool !== 'paint';
+    $('btnSky').classList.toggle('active', skyOpen);
 }
 selectTool('raise');
 
@@ -98,6 +108,74 @@ library.load().then(ok => {
     buildPalette();
     if (ok) view.setLibrary(library);
 });
+
+// --- Sky & fog -------------------------------------------------------------------
+
+let skyNight = false;
+
+for (const p of PRESETS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'preset';
+    b.dataset.preset = p.id;
+    const s = p.time === 'night' ? p.moon : p.sun;
+    b.innerHTML = `<span class="look" style="background: linear-gradient(${s.diffuse}, ${s.fog} 70%, ${s.ambient})"></span><span>${p.name}</span>`;
+    b.onclick = () => {
+        area.atmosphere = copyPreset(p);
+        skyNight = p.time === 'night';
+        skyChanged();
+    };
+    $('skyPresets').appendChild(b);
+}
+
+/** The sun's settings by day, the moon's by night. */
+const currentSky = () => (skyNight ? area.atmosphere.moon : area.atmosphere.sun);
+
+function showSky() {
+    const a = area.atmosphere, s = currentSky();
+    for (const b of $('skyPresets').children) b.classList.toggle('active', b.dataset.preset === a.preset);
+    for (const b of $('dayNight').children) b.classList.toggle('active', (b.dataset.night === '1') === skyNight);
+    for (const r of document.querySelectorAll('[name=skyTime]')) r.checked = r.value === a.time;
+    $('skyWhich').textContent = skyNight ? 'Moon (night)' : 'Sun (day)';
+    $('skyAmbient').value = s.ambient;
+    $('skyDiffuse').value = s.diffuse;
+    $('skyFog').value = s.fog;
+    $('skyFogAmount').value = s.fogAmount;
+    $('skyFogOut').textContent = s.fogAmount === 0 ? 'light' : s.fogAmount < 10 ? `${s.fogAmount} · some` : s.fogAmount < 20 ? `${s.fogAmount} · heavy` : `${s.fogAmount} · thick`;
+    $('skyShadows').checked = s.shadows;
+    $('skyClip').value = a.fogClip;
+    $('skyClipOut').textContent = `${a.fogClip} m`;
+    view.setAtmosphere($('skyPreview').checked ? a : null, skyNight);
+}
+
+function skyChanged() {
+    showSky();
+    saveSoon();
+}
+
+// Hand edits make it the area's own look.
+function editSky(change) {
+    change(area.atmosphere, currentSky());
+    area.atmosphere.preset = 'custom';
+    skyChanged();
+}
+$('skyAmbient').oninput = e => editSky((a, s) => { s.ambient = e.target.value; });
+$('skyDiffuse').oninput = e => editSky((a, s) => { s.diffuse = e.target.value; });
+$('skyFog').oninput = e => editSky((a, s) => { s.fog = e.target.value; });
+$('skyFogAmount').oninput = e => editSky((a, s) => { s.fogAmount = +e.target.value; });
+$('skyShadows').onchange = e => editSky((a, s) => { s.shadows = e.target.checked; });
+$('skyClip').oninput = e => editSky(a => { a.fogClip = +e.target.value; });
+for (const r of document.querySelectorAll('[name=skyTime]')) {
+    r.onchange = () => editSky(a => {
+        a.time = r.value;
+        // Show what the game will.
+        if (r.value !== 'cycle') skyNight = r.value === 'night';
+    });
+}
+for (const b of $('dayNight').children) b.onclick = () => { skyNight = b.dataset.night === '1'; showSky(); };
+$('skyPreview').onchange = showSky;
+$('btnSky').onclick = () => { skyOpen = !skyOpen; updatePanels(); };
+$('skyClose').onclick = () => { skyOpen = false; updatePanels(); };
 
 // --- Sculpting ---------------------------------------------------------------
 
@@ -172,6 +250,8 @@ function setArea(a) {
     view.setArea(a);
     $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tiles} tiles (${a.size} m)`;
     $('report').hidden = true;
+    skyNight = a.atmosphere.time === 'night';
+    showSky();
 }
 
 let saveTimer = null;
@@ -224,7 +304,8 @@ $('btnExport').onclick = async () => {
         const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength);
         body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
         body.set(area.materials, area.heights.byteLength);
-        const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`;
+        const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`
+            + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`;
         const res = await fetch(`/api/export?${query}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream' },
@@ -269,6 +350,7 @@ function updated(u) {
     if (u.outside.length) {
         html += `<p class="warn">● ${u.outside.length} now outside the area: ${u.outside.slice(0, 5).map(o => `${esc(o.tag || '(no tag)')} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`).join('; ')}${u.outside.length > 5 ? '…' : ''}</p>`;
     }
+    html += u.atmosphere ? '<p>Light and fog: set from the editor.</p>' : '<p>Light and fog: unchanged in the editor, so the module keeps its own.</p>';
     html += `<p class="note">Close the module in the toolset before exporting, or saving there will overwrite this update.</p>`;
     return html;
 }
@@ -290,6 +372,7 @@ window.addEventListener('keydown', e => {
     else if (e.key === '[') { sizeIn.value = +sizeIn.value - 1; showSliders(); }
     else if (e.key === ']') { sizeIn.value = +sizeIn.value + 1; showSliders(); }
     else if (e.key === 'w') $('btnWalk').click();
+    else if (e.key === 'l') $('btnSky').click();
     else if (e.key === 'n') $('btnNew').click();
     else if (e.key === 'f') view.frame();
 });

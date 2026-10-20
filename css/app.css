@@ -59,6 +59,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
     border-radius: 8px;
 }
 .top-btn:hover { background: #3a4452; }
+.top-btn.active { border-color: var(--accent); background: #3d3a30; }
 .top-btn:disabled { opacity: 0.45; cursor: default; }
 .top-btn.primary { background: var(--accent); color: #1d1a12; font-weight: 600; }
 .top-btn.primary:hover { background: #e6b562; }
@@ -177,8 +178,8 @@ dialog menu button.primary { background: var(--accent); color: #1d1a12; font-wei
 #nowebgl { position: fixed; inset: 0; z-index: 10; padding: 60px; background: var(--bg); }
 #nowebgl pre { background: var(--panel); padding: 12px; border-radius: 8px; white-space: pre-wrap; }
 
-/* Texture picker, over the left of the view while painting. */
-#palette {
+/* Texture picker and sky panel, over the left of the view. */
+.side-panel {
     position: absolute;
     left: 12px;
     top: 12px;
@@ -192,8 +193,8 @@ dialog menu button.primary { background: var(--accent); color: #1d1a12; font-wei
     border-radius: 12px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
-#palette h3 { margin: 0 0 6px; font-size: 16px; }
-#palette h4 { margin: 12px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.side-panel h3 { margin: 0 0 6px; font-size: 16px; }
+.side-panel h4 { margin: 12px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .swatches { display: grid; grid-template-columns: repeat(3, 76px); gap: 8px; }
 .swatch {
     display: flex;
@@ -212,3 +213,30 @@ dialog menu button.primary { background: var(--accent); color: #1d1a12; font-wei
 .swatch:hover { background: #3a4452; }
 .swatch.active { border-color: var(--accent); background: #3d3a30; color: #fff; }
 .swatch .used { color: var(--accent); }
+
+.panel-close { position: absolute; right: 8px; top: 4px; background: none; border: none; font-size: 22px; color: var(--muted); }
+.segmented { display: flex; margin: 8px 0; border: 1px solid #000; border-radius: 8px; overflow: hidden; }
+.segmented button { flex: 1; padding: 8px; background: var(--panel-2); border: none; }
+.segmented button.active { background: var(--accent); color: #1d1a12; font-weight: 600; }
+.side-panel .check { display: flex; gap: 8px; align-items: center; margin: 6px 0; font-size: 14px; }
+.presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.preset {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 4px 6px;
+    background: var(--panel-2);
+    border: 2px solid transparent;
+    border-radius: 10px;
+    font-size: 12px;
+}
+.preset .look { height: 44px; border-radius: 6px; }
+.preset:hover { background: #3a4452; }
+.preset.active { border-color: var(--accent); background: #3d3a30; color: #fff; }
+.radios { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.colours { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.colours label { display: flex; align-items: center; gap: 8px; }
+.colours small { color: var(--muted); }
+input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #000; border-radius: 6px; background: none; }
+.side-panel .slider { display: flex; flex-direction: column; gap: 2px; margin: 8px 0 2px; font-size: 14px; }
+.side-panel .slider output { color: var(--muted); }
