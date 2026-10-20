@@ -376,7 +376,7 @@ export class View {
         this.scene.add(group);
         if (!this.models) return;
         const size = this.area.size;
-        for (const o of this.area.objects) {
+        for (const [i, o] of this.area.objects.entries()) {
             let model;
             try { model = await this.models.group(o.model); } catch { continue; }
             if (group !== this.objectGroup) return; // rebuilt meanwhile
@@ -384,8 +384,36 @@ export class View {
             inst.position.set(o.x, o.z, size - o.y);
             inst.rotation.y = o.bearing;
             inst.scale.setScalar(o.scale);
+            inst.userData.object = o;
             group.add(inst);
+            if (o === this.selected) this.showSelection(inst);
         }
+    }
+
+    /** The placed object under the pointer, or null. */
+    pickObject(clientX, clientY) {
+        if (!this.objectGroup) return null;
+        const r = this.renderer.domElement.getBoundingClientRect();
+        const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+        this.raycaster.setFromCamera(ndc, this.camera);
+        const hit = this.raycaster.intersectObject(this.objectGroup, true)[0];
+        let n = hit?.object;
+        while (n && !n.userData.object) n = n.parent;
+        return n?.userData.object ?? null;
+    }
+
+    /** Marks object `o` (or none) as selected: a box round it. */
+    select(o) {
+        this.selected = o;
+        if (this.selectionBox) { this.scene.remove(this.selectionBox); this.selectionBox.geometry.dispose(); this.selectionBox = null; }
+        const inst = this.objectGroup?.children.find(c => c.userData.object === o);
+        if (inst) this.showSelection(inst);
+    }
+
+    showSelection(inst) {
+        if (this.selectionBox) { this.scene.remove(this.selectionBox); this.selectionBox.geometry.dispose(); }
+        this.selectionBox = new THREE.BoxHelper(inst, 0xd8a24a);
+        this.scene.add(this.selectionBox);
     }
 
     /** A library texture as a plain lit material (shared; `fallback` colour

@@ -50,6 +50,7 @@ function updatePanels() {
     $('skyPanel').hidden = !skyOpen;
     $('palette').hidden = skyOpen || tool !== 'paint';
     $('placePanel').hidden = skyOpen || tool !== 'place';
+    if (tool !== 'place' && view.selected) selectObject(null);
     if (tool === 'place' && !skyOpen) showPlaceables();
     $('btnSky').classList.toggle('active', skyOpen);
 }
@@ -154,7 +155,11 @@ function selectPlaceable(model) {
 let searchTimer = null;
 $('placeSearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(showPlaceables, 250); };
 const showScale = () => { $('placeScaleOut').textContent = `${Math.round($('placeScale').value * 100)}%`; };
-$('placeScale').oninput = showScale;
+$('placeScale').oninput = () => {
+    showScale();
+    // The selected object takes the size too.
+    if (view.selected && tool === 'place') changeSelected(o => { o.scale = +$('placeScale').value; });
+};
 showScale();
 
 /** Ground under an object: the lowest point under its outline, so it doesn't float on a slope. */
@@ -164,15 +169,38 @@ function groundUnder(o, flat) {
     return Math.min(...corners.map(([x, y]) => area.heightAt(o.x + (c * x - s * y) * o.scale, o.y + (s * x + c * y) * o.scale)));
 }
 
+function removeObject(o) {
+    area.beginStroke();
+    area.objects = area.objects.filter(x => x !== o);
+    if (view.selected === o) selectObject(null);
+    view.updateObjects();
+    saveSoon();
+}
+
+function selectObject(o) {
+    view.select(o);
+    if (o) {
+        $('placeScale').value = o.scale;
+        showScale();
+        $('statusMsg').textContent = `${o.model}: drag to move · Q/E to turn · size slider · Delete to remove · Esc to deselect`;
+    } else {
+        $('statusMsg').textContent = '';
+    }
+}
+
 async function placeDown(e, p) {
+    // On an object: Shift removes it, else select it and drag to move it.
+    const hit = view.pickObject(e.clientX, e.clientY);
+    if (hit && e.shiftKey) { removeObject(hit); return null; }
+    if (hit) {
+        selectObject(hit);
+        area.beginStroke();
+        return { object: hit, flat: await models.flat(hit.model), from: p, move: { dx: hit.x - p.x, dy: hit.y - p.y } };
+    }
     if (e.shiftKey) {
         let best = null, bd = 2.5;
         for (const o of area.objects) { const d = Math.hypot(o.x - p.x, o.y - p.y); if (d < bd) { best = o; bd = d; } }
-        if (!best) return null;
-        area.beginStroke();
-        area.objects = area.objects.filter(o => o !== best);
-        view.updateObjects();
-        saveSoon();
+        if (best) removeObject(best);
         return null;
     }
     if (!placeModel) { $('statusMsg').textContent = 'Pick a placeable in the panel first.'; return null; }
@@ -182,18 +210,39 @@ async function placeDown(e, p) {
     o.z = groundUnder(o, flat);
     area.beginStroke();
     area.objects.push(o);
+    view.selected = o;
     view.updateObjects();
+    selectObject(o);
     saveSoon();
     return { object: o, flat, from: p };
 }
 
-// Dragging turns it: towards the pointer.
+// Dragging a new object turns it (towards the pointer); dragging a
+// selected one moves it, kept on the ground.
 function placeDrag(e) {
     const s = stroke.place, p = view.pick(e.clientX, e.clientY);
-    if (!p || Math.hypot(p.x - s.from.x, p.y - s.from.y) < 0.3) return;
-    s.object.bearing = Math.atan2(p.y - s.from.y, p.x - s.from.x);
+    if (!p) return;
+    if (s.move) {
+        s.object.x = Math.min(area.size, Math.max(0, p.x + s.move.dx));
+        s.object.y = Math.min(area.size, Math.max(0, p.y + s.move.dy));
+    } else {
+        if (Math.hypot(p.x - s.from.x, p.y - s.from.y) < 0.3) return;
+        s.object.bearing = Math.atan2(p.y - s.from.y, p.x - s.from.x);
+    }
     s.object.z = groundUnder(s.object, s.flat);
     view.updateObjects();
+}
+
+// The selected object: turn, resize, remove.
+async function changeSelected(change) {
+    const o = view.selected;
+    if (!o) return false;
+    area.beginStroke();
+    change(o);
+    o.z = groundUnder(o, await models.flat(o.model));
+    view.updateObjects();
+    saveSoon();
+    return true;
 }
 
 // --- Sky & fog -------------------------------------------------------------------
@@ -395,8 +444,11 @@ canvas.addEventListener('pointerdown', e => {
     }
     if (tool === 'place') {
         const pointerId = e.pointerId;
+        // Placing waits for the model: a quick click may be released first,
+        // and must not leave a drag running (it turned the next object).
+        placePointer = pointerId;
         placeDown(e, p).then(s => {
-            if (s) {
+            if (s && placePointer === pointerId) {
                 stroke = { place: s };
                 try { canvas.setPointerCapture(pointerId); } catch { /* fine */ }
             }
@@ -428,7 +480,9 @@ canvas.addEventListener('pointermove', e => {
     if (stroke?.place) placeDrag(e);
 });
 canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(null); $('statusPos').textContent = ''; });
+let placePointer = null;
 const endStroke = () => {
+    placePointer = null;
     if (!stroke) return;
     // The ground moved: its shadows too.
     if (!stroke.water && !stroke.place && tool !== 'paint') view.updateShade();
@@ -484,6 +538,7 @@ function saveSoon() {
 }
 
 function refreshAll() {
+    if (view.selected && !area.objects.includes(view.selected)) selectObject(null);
     view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
     view.updateEntrances();
     view.updateObjects();
@@ -599,6 +654,13 @@ $('reportClose').onclick = () => { $('report').hidden = true; };
 
 window.addEventListener('keydown', e => {
     if (e.target.closest('input, dialog')) return;
+    // The selected placeable (Place tool).
+    if (tool === 'place' && view.selected) {
+        const turn = { q: Math.PI / 12, e: -Math.PI / 12 }[e.key.toLowerCase()];
+        if (turn) { changeSelected(o => { o.bearing += turn; }); return; }
+        if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeObject(view.selected); return; }
+        if (e.key === 'Escape') { selectObject(null); return; }
+    }
     const t = Object.entries(TOOLS).find(([, v]) => v.key === e.key);
     if (t) selectTool(t[0]);
     else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); $('btnUndo').click(); }
