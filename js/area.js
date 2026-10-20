@@ -49,6 +49,8 @@ export class Area {
         // 'surface', or 'underground' (a cave dug out of rock up to `roof`).
         this.kind = 'surface';
         this.roof = null;
+        // The NWN module it is exported into (another area's, to link them).
+        this.module = name;
         this.waterLevel = new Float32Array(this.n * this.n).fill(NaN);
         this.undoStack = [];
         this.redoStack = [];
@@ -198,7 +200,7 @@ export class Area {
             name: this.name, tiles: this.tiles,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
-            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId, kind: this.kind, roof: this.roof,
+            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId, kind: this.kind, roof: this.roof, module: this.module,
         };
     }
 
@@ -211,6 +213,7 @@ export class Area {
         if (o.entrances) area.entrances = o.entrances;
         if (o.objects) area.objects = o.objects;
         if (o.kind) { area.kind = o.kind; area.roof = o.roof; }
+        if (o.module) area.module = o.module;
         area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;
         if (o.water) { area.water = o.water; area.floodWater(); }
         return area;

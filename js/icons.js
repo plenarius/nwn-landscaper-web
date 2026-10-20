@@ -15,6 +15,7 @@ export const ICONS = {
     scatter: svg('<circle cx="12" cy="30" r="5" fill="currentColor" fill-opacity="0.3"/><circle cx="26" cy="22" r="4" fill="currentColor" fill-opacity="0.3"/><circle cx="36" cy="34" r="6" fill="currentColor" fill-opacity="0.3"/><circle cx="22" cy="38" r="3" fill="currentColor" fill-opacity="0.3"/><path d="M38 6 L42 10 M40 6 V14 M36 10 H44" stroke-width="2"/>'),
     check: svg('<path d="M6 36 C14 36 14 22 22 22 S30 10 40 10" stroke-dasharray="4 4"/><circle cx="6" cy="36" r="3" fill="currentColor"/><path d="M34 32 L39 37 L46 28" stroke-width="3.5"/>'),
     dig: svg('<path d="M4 40 V14 H44 V40 Z" fill="currentColor" fill-opacity="0.35"/><path d="M14 40 C14 26 34 26 34 40" fill="#1d2228" stroke="currentColor"/><path d="M30 6 L40 16 M40 6 L36 10"/>'),
+    open: svg('<path d="M6 38 V12 H18 L22 16 H40 V22"/><path d="M6 38 L12 22 H44 L38 38 Z" fill="currentColor" fill-opacity="0.25"/>'),
     newArea: svg('<rect x="8" y="8" width="32" height="32" rx="3"/><path d="M8 19 H40 M8 30 H40 M19 8 V40 M30 8 V40" stroke-width="1.5" stroke-opacity="0.6"/><circle cx="38" cy="38" r="9" fill="currentColor"/><path d="M38 33 V43 M33 38 H43" stroke="#1d2228" stroke-width="3"/>'),
     undo: svg('<path d="M14 16 H30 A10 10 0 0 1 30 36 H18"/><path d="M20 10 L14 16 L20 22"/>'),
     redo: svg('<path d="M34 16 H18 A10 10 0 0 0 18 36 H30"/><path d="M28 10 L34 16 L28 22"/>'),

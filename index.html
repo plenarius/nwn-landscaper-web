@@ -19,6 +19,7 @@
     <header id="topbar">
         <div class="brand">NWN <b>Landscaper</b></div>
         <button class="top-btn" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span>New area</button>
+        <button class="top-btn" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span>Open</button>
         <div id="areaInfo"></div>
         <button class="top-btn" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span>Sky &amp; fog</button>
         <div class="spacer"></div>
@@ -102,6 +103,11 @@
             <label class="check"><input type="checkbox" id="scatterSteep" checked> Not on steep ground or water</label>
             <div class="swatches" id="scatterResults"></div>
         </section>
+        <section id="entrancePanel" class="side-panel" hidden>
+            <h3>Entrances</h3>
+            <p class="note">Click a slope (or a cave wall) to carve one; Shift-click one to remove it. Each has a door: pick where it leads (an entrance door in the same module), or link it in the toolset.</p>
+            <div id="entranceList"></div>
+        </section>
         <section id="palette" class="side-panel" hidden>
             <h3>Textures</h3>
             <div id="paletteBody"></div>
@@ -123,6 +129,8 @@
             <h2>New area</h2>
             <label>Name <small>1–9 letters, digits or _ (prefixes every resref)</small>
                 <input id="newName" required pattern="[a-z0-9_]{1,9}" maxlength="9" value="myarea"></label>
+            <label>Module <small>its NWN module; another area's to link to it (a cave beside its surface). Empty: its own</small>
+                <input id="newModule" pattern="[a-z0-9_]{0,16}" maxlength="16" placeholder="same as the name"></label>
             <label>Size <small>NWN tiles of 10 m</small></label>
             <div class="size-choices" id="sizeChoices"></div>
             <label>Start from</label>
@@ -136,6 +144,14 @@
                 <button value="cancel" formnovalidate>Cancel</button>
                 <button value="ok" class="primary">Create</button>
             </menu>
+        </form>
+    </dialog>
+
+    <dialog id="openDialog">
+        <form method="dialog">
+            <h2>Open an area</h2>
+            <div id="openList" class="open-list"></div>
+            <menu><button value="cancel">Cancel</button></menu>
         </form>
     </dialog>
 

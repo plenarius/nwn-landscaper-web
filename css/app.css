@@ -257,3 +257,10 @@ input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #00
 /* Dragging across the view must not select the panels' text. */
 #tools, .side-panel, #topbar, #status { user-select: none; -webkit-user-select: none; }
 .side-panel input { user-select: text; -webkit-user-select: text; }
+
+.open-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; min-width: 360px; }
+.open-list button { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; text-align: left; background: var(--panel-2); border: 1px solid #000; border-radius: 8px; }
+.open-list button:hover { background: #3a4452; }
+.open-list small { color: var(--muted); }
+.entrance-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid #000; font-size: 13px; }
+.entrance-row select { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 6px; padding: 4px; }

@@ -50,6 +50,8 @@ function updatePanels() {
     $('skyPanel').hidden = !skyOpen;
     $('palette').hidden = skyOpen || tool !== 'paint';
     $('placePanel').hidden = skyOpen || tool !== 'place';
+    $('entrancePanel').hidden = skyOpen || tool !== 'entrance';
+    if (tool === 'entrance' && !skyOpen) showEntrances();
     $('scatterPanel').hidden = skyOpen || tool !== 'scatter';
     if (tool === 'scatter' && !skyOpen) showScatterables();
     if (tool !== 'place' && view.selected && typeof selectObject === 'function') selectObject(null);
@@ -276,6 +278,75 @@ async function changeSelected(change) {
     return true;
 }
 
+// --- Open, and where entrances lead ---------------------------------------------------
+
+$('btnOpen').onclick = async () => {
+    const list = $('openList');
+    list.textContent = 'Loading…';
+    $('openDialog').showModal();
+    let areas = [];
+    try { areas = (await (await fetch('/api/areas')).json()).areas; } catch { /* none */ }
+    // Areas only saved here (never exported) too.
+    const local = Object.keys(localStorage).filter(k => k.startsWith('landscaper.area.')).map(k => k.slice(16));
+    for (const name of local) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
+    list.textContent = '';
+    for (const a of areas) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        const what = a.local ? 'not exported yet' : `${a.tiles}×${a.tiles}${a.kind === 'underground' ? ' cave' : ''} · module ${a.module}`;
+        b.innerHTML = `<span><b>${a.name}</b>${a.name === area.name ? ' (open)' : ''}</span><small>${what}</small>`;
+        b.onclick = () => { $('openDialog').close(); openArea(a); };
+        list.appendChild(b);
+    }
+    if (!areas.length) list.textContent = 'No areas yet: export one first.';
+};
+
+/** Opens area `a`: its save here when newer than its export, else the export. */
+async function openArea(a) {
+    const local = localStorage.getItem(`landscaper.area.${a.name}`);
+    const savedAt = +(localStorage.getItem(`landscaper.saved.${a.name}`) ?? 0);
+    try {
+        if (local && (a.local || savedAt >= (a.exported ?? 0) * 1000)) {
+            setArea(Area.fromJSON(JSON.parse(local)));
+        } else {
+            const res = await fetch(`/api/area?name=${encodeURIComponent(a.name)}`);
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || res.statusText);
+            setArea(Area.fromJSON(json));
+        }
+        $('statusMsg').textContent = `Opened ${area.name} (module ${area.module}).`;
+        saveSoon();
+    } catch (err) {
+        showError(`Couldn't open ${a.name}: ${err.message}`);
+    }
+}
+
+/** The Entrance panel: this area's entrances and where each leads. */
+async function showEntrances() {
+    const box = $('entranceList');
+    box.textContent = '';
+    if (!area.entrances.length) { box.innerHTML = '<p class="note">No entrances yet.</p>'; return; }
+    let doors = [];
+    try { doors = (await (await fetch(`/api/doors?module=${encodeURIComponent(area.module || area.name)}`)).json()).doors; } catch { /* none */ }
+    area.entrances.forEach((e, k) => {
+        const tag = `${area.name}_ent${k + 1}`;
+        const row = document.createElement('div');
+        row.className = 'entrance-row';
+        const others = doors.filter(d => !d.tag.startsWith(`${area.name}_ent`));
+        const options = ['<option value="">(not linked here: the toolset\'s link stays)</option>']
+            .concat(others.map(d => `<option value="${d.tag}"${e.link === d.tag ? ' selected' : ''}>${d.tag} (area ${d.area})</option>`));
+        if (e.link && !others.some(d => d.tag === e.link)) options.push(`<option value="${e.link}" selected>${e.link}</option>`);
+        row.innerHTML = `<b>Entrance ${k + 1}</b><span>door <code>${tag}</code> leads to</span><select>${options.join('')}</select>`;
+        row.querySelector('select').onchange = ev => {
+            area.beginStroke();
+            e.link = ev.target.value || undefined;
+            saveSoon();
+        };
+        box.appendChild(row);
+    });
+    if (!doors.length) box.insertAdjacentHTML('beforeend', `<p class="note">No other entrance doors in module ${area.module} yet: export the other area into it first.</p>`);
+}
+
 // --- Scatter --------------------------------------------------------------------------
 
 const scatterMix = new Set();
@@ -488,6 +559,23 @@ function waterChanged() {
 // Entrances: a click on a slope carves one facing into it (where it
 // rises); on flat ground, facing away from the camera. Shift removes the
 // one clicked (its carving stays: Undo takes it back).
+/** In a cave, the direction from p to the nearest wall (ground a metre
+ *  or more above the floor there) within 5 m, or null. */
+function nearestWall(p) {
+    const floor = area.heightAt(p.x, p.y);
+    let best = null, bestD = Infinity;
+    for (let k = 0; k < 32; k++) {
+        const a = k * Math.PI / 16;
+        for (let d = 0.3; d <= 5; d += 0.3) {
+            if (area.heightAt(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d) > floor + 1) {
+                if (d < bestD) { bestD = d; best = a; }
+                break;
+            }
+        }
+    }
+    return best;
+}
+
 function entranceDown(e, p) {
     if (e.shiftKey) {
         const hit = nearestEntrance(area.entrances, p.x, p.y);
@@ -495,14 +583,24 @@ function entranceDown(e, p) {
         area.beginStroke();
         area.entrances = area.entrances.filter(x => x !== hit);
         view.updateEntrances();
+        showEntrances();
         view.updateShade();
         saveSoon();
+        return;
+    }
+    // In a cave: on the floor beside a wall, not on the rock (the void).
+    const ci = Math.min(area.n - 1, Math.round(p.x / SPACING)), cj = Math.min(area.n - 1, Math.round(p.y / SPACING));
+    if (area.void(ci, cj)) {
+        $('statusMsg').textContent = 'In a cave, click the floor right beside a wall: the entrance is carved into that wall.';
         return;
     }
     const gx = area.heightAt(p.x + 1, p.y) - area.heightAt(p.x - 1, p.y);
     const gy = area.heightAt(p.x, p.y + 1) - area.heightAt(p.x, p.y - 1);
     let dir;
-    if (Math.hypot(gx, gy) > 0.1) {
+    const wall = area.kind === 'underground' ? nearestWall(p) : null;
+    if (wall !== null) {
+        dir = wall;
+    } else if (Math.hypot(gx, gy) > 0.1) {
         dir = Math.atan2(gy, gx);
     } else {
         const c = view.camera.position;
@@ -525,6 +623,7 @@ function entranceDown(e, p) {
     if (area.water.length) waterChanged();
     view.updateEntrances();
     view.updateShade();
+    showEntrances();
     $('statusMsg').textContent = `Entrance ${area.entrances.length}: its door will be tagged ${area.name}_ent${area.entrances.length}`
         + (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '');
     saveSoon();
@@ -653,7 +752,12 @@ let saveTimer = null;
 function saveSoon() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-        try { localStorage.setItem('landscaper.area', JSON.stringify(area.toJSON())); } catch (err) { console.warn('autosave failed', err); }
+        // Each area its own save, and which one was open.
+        try {
+            localStorage.setItem(`landscaper.area.${area.name}`, JSON.stringify(area.toJSON()));
+            localStorage.setItem('landscaper.current', area.name);
+            localStorage.setItem(`landscaper.saved.${area.name}`, String(Date.now()));
+        } catch (err) { console.warn('autosave failed', err); }
     }, 800);
 }
 
@@ -688,7 +792,9 @@ $('btnNew').onclick = () => {
 $('newDialog').addEventListener('close', () => {
     if ($('newDialog').returnValue !== 'ok') return;
     const start = new FormData($('newDialog').querySelector('form')).get('start');
-    setArea(Area.create($('newName').value.trim().toLowerCase(), chosenSize, start));
+    const created = Area.create($('newName').value.trim().toLowerCase(), chosenSize, start);
+    created.module = $('newModule').value.trim().toLowerCase() || created.name;
+    setArea(created);
     saveSoon();
 });
 
@@ -708,7 +814,8 @@ function areaRequest() {
         + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
         + `&shadow=${area.shadow}`
         + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`
-        + (area.kind === 'underground' ? `&kind=underground&roof=${area.roof}` : '');
+        + (area.kind === 'underground' ? `&kind=underground&roof=${area.roof}` : '')
+        + `&module=${encodeURIComponent(area.module || area.name)}`;
     return { query, body };
 }
 
@@ -772,7 +879,7 @@ function showReport(r, checkOnly = false) {
         ${closed ? `<p class="bad">● ${closed} passage(s) closed: NWN's tile pathfinding has no way through there, so the export made them unwalkable (red markers). Move or widen the gap, away from tile corners and edges.</p>` : ''}
         ${winding ? `<p class="warn">● ${winding} tile(s) too winding for NWN: orange markers. Straighten or widen the passages there.</p>` : ''}
         <p>Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%</p>
-        ${checkOnly ? '<p class="note">Nothing was exported: this only checks.</p>' : `${updated(r.updated)}
+        ${checkOnly ? '<p class="note">Nothing was exported: this only checks.</p>' : `${updated(r.updated)}${r.added_to_module ? `<p>Added to module <b>${r.added_to_module.module}</b> as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).</p>` : ''}
         <p>Ready to play: <b>${r.name}</b> is in your NWN modules list.<br><code>${r.installed_module || r.module}</code></p>`}`;
     $('report').hidden = false;
 }
@@ -819,14 +926,15 @@ window.addEventListener('keydown', e => {
     else if (e.key === 'w') $('btnWalk').click();
     else if (e.key === 'l') $('btnSky').click();
     else if (e.key === 'n') $('btnNew').click();
+    else if (e.key === 'o') $('btnOpen').click();
     else if (e.key === 'f') view.frame();
 });
 
 // --- Start ---------------------------------------------------------------------------
 
-const saved = localStorage.getItem('landscaper.area');
+const saved = localStorage.getItem(`landscaper.area.${localStorage.getItem('landscaper.current')}`) ?? localStorage.getItem('landscaper.area');
 if (saved) {
-    try { setArea(Area.fromJSON(JSON.parse(saved))); } catch { setArea(Area.create('myarea', 8, 'hills')); }
+    try { setArea(Area.fromJSON(JSON.parse(saved))); } catch { setArea(Area.create('untitled', 8, 'hills')); }
 } else {
-    setArea(Area.create('myarea', 8, 'hills'));
+    setArea(Area.create('untitled', 8, 'hills'));
 }
