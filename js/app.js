@@ -322,12 +322,16 @@ async function openArea(a) {
 }
 
 /** The Entrance panel: this area's entrances and where each leads. */
+let entranceRender = 0;
 async function showEntrances() {
+    // Only the latest of overlapping renders fills the panel.
+    const mine = ++entranceRender;
     const box = $('entranceList');
-    box.textContent = '';
     if (!area.entrances.length) { box.innerHTML = '<p class="note">No entrances yet.</p>'; return; }
     let doors = [];
     try { doors = (await (await fetch(`/api/doors?module=${encodeURIComponent(area.module || area.name)}`)).json()).doors; } catch { /* none */ }
+    if (mine !== entranceRender) return;
+    box.textContent = '';
     area.entrances.forEach((e, k) => {
         const tag = `${area.name}_ent${k + 1}`;
         const row = document.createElement('div');
