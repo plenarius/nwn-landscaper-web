@@ -1,4 +1,4 @@
-import { createNoise2D } from 'simplex-noise';
+import { createNoise2D } from '../vendor/simplex-noise/simplex-noise.js';
 
 // Mulberry32 seeded PRNG - returns function () => [0, 1)
 function mulberry32(seed) {
