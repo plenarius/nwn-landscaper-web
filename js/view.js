@@ -433,7 +433,8 @@ export class View {
 
     showSelection(inst) {
         if (this.selectionBox) { this.scene.remove(this.selectionBox); this.selectionBox.geometry.dispose(); }
-        this.selectionBox = new THREE.BoxHelper(inst, 0xd8a24a);
+        // Gold for scenery, blue for a real placeable.
+        this.selectionBox = new THREE.BoxHelper(inst, inst.userData.object?.baked === false ? 0x5aa0ff : 0xd8a24a);
         this.scene.add(this.selectionBox);
     }
 

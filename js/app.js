@@ -183,12 +183,32 @@ function removeObject(o) {
     saveSoon();
 }
 
+/** The place mode the panel shows: baked (true) or object (false). */
+const placeBaked = () => $('placeMode').querySelector('.active')?.dataset.baked !== '0';
+function showPlaceMode(baked) {
+    for (const b of $('placeMode').children) b.classList.toggle('active', (b.dataset.baked === '1') === baked);
+}
+for (const b of $('placeMode').children) {
+    b.onclick = () => {
+        showPlaceMode(b.dataset.baked === '1');
+        // The selected object takes the mode too.
+        if (view.selected) changeSelected(o => { o.baked = b.dataset.baked === '1'; }).then(() => view.select(view.selected));
+    };
+}
+
+$('placeSolid').onchange = () => { if (view.selected && tool === 'place') changeSelected(o => { o.solid = $('placeSolid').checked; }); };
+
+/** placeables.2da's row of a model (object mode's appearance). */
+const appearanceOf = model => models.list?.find(p => p.model === model)?.row;
+
 function selectObject(o) {
     view.select(o);
     if (o) {
         $('placeScale').value = o.scale;
         showScale();
-        $('statusMsg').textContent = `${o.model}: drag to move · Q/E to turn · size slider · Delete to remove · Esc to deselect`;
+        showPlaceMode(o.baked !== false);
+        $('placeSolid').checked = o.solid !== false;
+        $('statusMsg').textContent = `${o.model} (${o.baked === false ? `object, tag ${area.name}_p${o.id}` : 'baked'}): drag to move · Q/E to turn · size slider · Delete to remove · Esc to deselect`;
     } else {
         $('statusMsg').textContent = '';
     }
@@ -212,13 +232,18 @@ async function placeDown(e, p) {
     if (!placeModel) { $('statusMsg').textContent = 'Pick a placeable in the panel first.'; return null; }
     let flat;
     try { flat = await models.flat(placeModel); } catch { $('statusMsg').textContent = `${placeModel} can't be read.`; return null; }
-    const o = { model: placeModel, x: p.x, y: p.y, z: 0, bearing: $('placeRandom').checked ? Math.random() * Math.PI * 2 : 0, scale: +$('placeScale').value, solid: $('placeSolid').checked };
+    const o = {
+        id: area.nextObjectId++, model: placeModel, appearance: appearanceOf(placeModel), x: p.x, y: p.y, z: 0,
+        bearing: $('placeRandom').checked ? Math.random() * Math.PI * 2 : 0, scale: +$('placeScale').value,
+        solid: $('placeSolid').checked, baked: placeBaked(),
+    };
     o.z = groundUnder(o, flat);
     area.beginStroke();
     area.objects.push(o);
-    view.selected = o;
+    // Not selected: the panel's settings are for the next one (selecting it
+    // made changing them change this one instead). Click it to edit it.
+    selectObject(null);
     view.updateObjects();
-    selectObject(o);
     saveSoon();
     return { object: o, flat, from: p };
 }
@@ -310,7 +335,7 @@ function scatterStamp(p, radius) {
         const i = Math.min(area.n - 1, Math.round(x / SPACING)), j = Math.min(area.n - 1, Math.round(y / SPACING));
         if ($('scatterSteep').checked && (!area.walkable(i, j) || area.depth(i, j) > 0)) continue;
         const [model, flat] = mix[Math.floor(Math.random() * mix.length)];
-        const o = { model, x, y, z: 0, bearing: Math.random() * Math.PI * 2, scale: lo + Math.random() * (hi - lo), solid: $('scatterSolid').checked };
+        const o = { id: area.nextObjectId++, model, appearance: appearanceOf(model), x, y, z: 0, bearing: Math.random() * Math.PI * 2, scale: lo + Math.random() * (hi - lo), solid: $('scatterSolid').checked, baked: true };
         o.z = groundUnder(o, flat);
         area.objects.push(o);
         view.addObject(o);
@@ -725,6 +750,7 @@ function updated(u) {
     if (u.outside.length) {
         html += `<p class="warn">● ${u.outside.length} now outside the area: ${u.outside.slice(0, 5).map(o => `${esc(o.tag || '(no tag)')} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`).join('; ')}${u.outside.length > 5 ? '…' : ''}</p>`;
     }
+    if (u.placeables_added || u.placeables_removed) html += `<p>Placeables (objects): ${u.placeables_added} added, ${u.placeables_removed} removed; the others moved where you put them, keeping what the toolset gave them.</p>`;
     if (u.doors_added) html += `<p>${u.doors_added} new entrance door(s) added: link their transitions in the toolset.</p>`;
     html += u.atmosphere ? '<p>Light and fog: set from the editor.</p>' : '<p>Light and fog: unchanged in the editor, so the module keeps its own.</p>';
     html += `<p class="note">Close the module in the toolset before exporting, or saving there will overwrite this update.</p>`;

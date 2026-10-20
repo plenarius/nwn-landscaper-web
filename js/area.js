@@ -38,8 +38,10 @@ export class Area {
         this.shadow = 0.6;
         // Cave entrances (entrance.js).
         this.entrances = [];
-        // Placeables baked in: { model, x, y, z, bearing, scale }.
+        // Placeables: { id, model, appearance, x, y, z, bearing, scale,
+        // solid, baked }; baked: false is a real placeable (object mode).
         this.objects = [];
+        this.nextObjectId = 1;
         this.waterLevel = new Float32Array(this.n * this.n).fill(NaN);
         this.undoStack = [];
         this.redoStack = [];
@@ -176,7 +178,7 @@ export class Area {
             name: this.name, tiles: this.tiles,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
-            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects,
+            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId,
         };
     }
 
@@ -188,6 +190,7 @@ export class Area {
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.entrances) area.entrances = o.entrances;
         if (o.objects) area.objects = o.objects;
+        area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;
         if (o.water) { area.water = o.water; area.floodWater(); }
         return area;
     }
