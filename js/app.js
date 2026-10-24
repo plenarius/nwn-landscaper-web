@@ -280,7 +280,7 @@ async function changeSelected(change) {
 
 // --- Import an NWN area ----------------------------------------------------------------
 
-let importSources = null, importChosen = null;
+let importSources = null, importChosen = null, importing = false;
 $('btnImport').onclick = async () => {
     $('openDialog').close();
     $('importStatus').textContent = '';
@@ -293,7 +293,19 @@ $('btnImport').onclick = async () => {
     $('importFind').focus();
 };
 $('importFind').oninput = () => showImportList();
-$('importName').oninput = () => { $('importGo').disabled = !importChosen || !$('importName').checkValidity() || !$('importName').value; };
+// Not closed (Escape, Cancel) while an import runs: it opens the area when done.
+$('importDialog').addEventListener('cancel', e => { if (importing) e.preventDefault(); });
+$('importDialog').querySelector('button[value=cancel]').addEventListener('click', e => { if (importing) e.preventDefault(); });
+$('importName').oninput = () => { $('importGo').disabled = importing || !importChosen || !$('importName').checkValidity() || !$('importName').value; };
+
+/** While an import runs: its button, the list and the fields can't change it. */
+function setImporting(on) {
+    importing = on;
+    $('importGo').textContent = on ? 'Importing…' : 'Import';
+    for (const id of ['importFind', 'importName']) $(id).disabled = on;
+    for (const b of $('importList').querySelectorAll('button')) b.disabled = on;
+    $('importName').oninput();
+}
 
 function showImportList() {
     const words = $('importFind').value.toLowerCase().split(/\s+/).filter(Boolean);
@@ -321,19 +333,21 @@ function showImportList() {
 
 $('importGo').onclick = async () => {
     if (!importChosen) return;
+    if (importing) return;
     const name = $('importName').value;
-    $('importGo').disabled = true;
+    setImporting(true);
     $('importStatus').textContent = `Importing ${importChosen.tag || importChosen.area} as ${name}… (reading its tiles and the module's haks takes a little while)`;
     try {
         const res = await fetch(`/api/import?source=${encodeURIComponent(importChosen.source)}&name=${encodeURIComponent(name)}`, { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
+        setImporting(false);
         $('importDialog').close();
         await openArea({ name });
         $('statusMsg').textContent = `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ' Notes: ' + r.notes.join('; ') : ''}`;
     } catch (err) {
         $('importStatus').textContent = `Couldn't import: ${err.message}`;
-        $('importGo').disabled = false;
+        setImporting(false);
     }
 };
 
