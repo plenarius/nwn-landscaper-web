@@ -1196,6 +1196,8 @@ $('reportClose').onclick = () => { $('report').hidden = true; };
 // --- Keys -------------------------------------------------------------------------
 
 window.addEventListener('keydown', e => {
+    // F5 / Ctrl+R reload, as in a browser (the app's window has no such keys).
+    if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) { e.preventDefault(); location.reload(); return; }
     if (e.target.closest('input, dialog')) return;
     // The selected placeable (Place tool).
     if (tool === 'place' && view.selected) {
