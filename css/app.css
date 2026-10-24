@@ -287,3 +287,6 @@ input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #00
 .open-row > button:first-child { flex: 1; }
 .open-list button.reimport { flex: none; justify-content: center; align-items: center; color: var(--muted); }
 .open-list button.reimport:hover { color: var(--text); }
+#report details { margin: -4px 0 10px 14px; }
+#report summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+#report details p { margin: 6px 0 0; line-height: 1.45; }

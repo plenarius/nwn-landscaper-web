@@ -1141,14 +1141,18 @@ function showReport(r, checkOnly = false) {
     const failed = r.warnings.filter(w => w.kind === 'failed_route').length;
     const closed = r.warnings.filter(w => w.kind === 'closed_passage').length;
     const winding = r.warnings.length - failed - closed;
-    const allGood = r.routes.ok === r.routes.total && !r.warnings.length;
+    const level = failed ? 'bad' : r.warnings.length ? 'warn' : 'good';
+    const explain = text => `<details><summary>What this means</summary><p class="note">${text}</p></details>`;
     $('reportBody').innerHTML = `
         <h3>${checkOnly ? 'Path check' : `Exported ${r.name}`}</h3>
-        <div class="big ${allGood ? 'good' : 'warn'}">${r.routes.ok} of ${r.routes.total} routes work</div>
-        <p>NWN's pathfinding, simulated on random routes across the area.</p>
-        ${failed ? `<p class="bad">● ${failed} route(s) stop short: red markers.</p>` : ''}
-        ${closed ? `<p class="warn">● ${closed} passage(s) closed: NWN's tile pathfinding has no way through there, so the export made them unwalkable (orange markers). Fine where nobody needs to pass; otherwise move or widen the gap, away from tile corners and edges.</p>` : ''}
-        ${winding ? `<p class="warn">● ${winding} tile(s) too winding for NWN: orange markers. Straighten or widen the passages there.</p>` : ''}
+        <div class="big ${level}">${r.routes.ok} of ${r.routes.total} routes work</div>
+        <p>NWN's pathfinding, simulated on random routes between places your ground joins.</p>
+        ${failed ? `<p class="bad">● ${failed} route(s) stop short: red markers, where the walker stops.</p>
+            ${explain(`The ground joins the two ends, but NWN's pathfinding finds no way through, so a player clicking past there stops short. NWN only crosses from one 10 m tile to the next at a few fixed points on each tile edge, so the usual causes are a passage the tiles can't use (see closed passages), a steep step between tile heights, or a narrow way along a tile edge or corner. Widen or straighten the way there, soften the slope, or keep openings away from tile edges and corners (every 10 m on the grid).`)}` : ''}
+        ${closed ? `<p class="warn">● ${closed} passage(s) closed: orange markers.</p>
+            ${explain(`Ground you can walk through, but no NWN tile layout can use it (a gap between obstacles at a tile corner, a strip along a tile edge), so the export made that bit unwalkable. Harmless where nobody needs to pass: a sliver beside a wall, a corner behind rocks. Where players should get through, move or widen the gap, away from tile corners and edges; if it cut a way off, routes through it show as red too.`)}` : ''}
+        ${winding ? `<p class="warn">● ${winding} tile(s) too winding: orange markers.</p>
+            ${explain(`NWN searches inside each tile with a time limit. Ground that twists within one tile (U-bends, zigzags, many small pockets) can take too long, so creatures there sometimes give up or go the long way. Usually it still works; if creatures misbehave there, straighten or widen the passages in that tile.`)}` : ''}
         <p>Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%</p>
         ${checkOnly ? '<p class="note">Nothing was exported: this only checks.</p>' : `${updated(r.updated)}${r.added_to_module ? `<p>Added to module <b>${r.added_to_module.module}</b> as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).</p>` : ''}
         <p>Ready to play: <b>${r.name}</b> is in your NWN modules list.<br><code>${r.installed_module || r.module}</code></p>`}`;
