@@ -55,16 +55,18 @@ const SPLAT_FRAGMENT = `
         float m10 = floor(texelFetch(uMat, b + ivec2(1, 0), 0).r * 255.0 + 0.5);
         float m01 = floor(texelFetch(uMat, b + ivec2(0, 1), 0).r * 255.0 + 0.5);
         float m11 = floor(texelFetch(uMat, b + ivec2(1, 1), 0).r * 255.0 + 0.5);
+        // An imported area's ground: its picture over the whole area.
+        vec4 imported = texture2D(uImport, vArea / uSize);
         vec4 splat;
         if (vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
             vec2 side = vec2(vArea.x + vArea.y, -vUp) / ${TEXTURE_METRES.toFixed(1)};
             float nearest = t.x < 0.5 ? (t.y < 0.5 ? m00 : m01) : (t.y < 0.5 ? m10 : m11);
-            splat = texture(uTex, vec3(side, nearest));
+            splat = nearest == uImportLayer ? imported : texture(uTex, vec3(side, nearest));
         } else {
-            splat = texture(uTex, vec3(uv, m00)) * (1.0 - t.x) * (1.0 - t.y)
-                  + texture(uTex, vec3(uv, m10)) * t.x * (1.0 - t.y)
-                  + texture(uTex, vec3(uv, m01)) * (1.0 - t.x) * t.y
-                  + texture(uTex, vec3(uv, m11)) * t.x * t.y;
+            splat = (m00 == uImportLayer ? imported : texture(uTex, vec3(uv, m00))) * (1.0 - t.x) * (1.0 - t.y)
+                  + (m10 == uImportLayer ? imported : texture(uTex, vec3(uv, m10))) * t.x * (1.0 - t.y)
+                  + (m01 == uImportLayer ? imported : texture(uTex, vec3(uv, m01))) * (1.0 - t.x) * t.y
+                  + (m11 == uImportLayer ? imported : texture(uTex, vec3(uv, m11))) * t.x * t.y;
         }
         diffuseColor.rgb *= splat.rgb;
     }`;
@@ -117,6 +119,9 @@ export class View {
             uShadeCells: { value: 1 },
             // A cave's rock tops from here up are void: black.
             uVoid: { value: 1e9 },
+            // An imported area's picture, and its palette index (-1: none).
+            uImport: { value: null },
+            uImportLayer: { value: -1 },
         };
         this.uniforms.uTex.value.needsUpdate = true;
         this.raycaster = new THREE.Raycaster();
@@ -221,7 +226,7 @@ export class View {
                 .replace('#include <common>', '#include <common>\nuniform float uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>' + SPLAT_VERTEX);
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform float uShadeCells;\nuniform float uVoid;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
+                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform float uShadeCells;\nuniform float uVoid;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform float uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT + SHADE_FRAGMENT);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
@@ -256,7 +261,23 @@ export class View {
         if (key === this.paletteKey) return;
         this.paletteKey = key;
         const tex = await this.library.buildArray(this.area.palette.slice());
-        if (key !== this.paletteKey) { tex.dispose(); return; }
+        // An import's picture (exports/<name>.import.view.png).
+        const at = this.area.palette.findIndex(id => id.startsWith('@import:'));
+        let picture = null;
+        if (at >= 0) {
+            const name = this.area.palette[at].slice('@import:'.length);
+            picture = await new Promise(resolve => new THREE.TextureLoader().load(`/api/import/${encodeURIComponent(name)}`, resolve, undefined, () => resolve(null)));
+            if (picture) {
+                picture.colorSpace = THREE.SRGBColorSpace;
+                picture.wrapS = picture.wrapT = THREE.ClampToEdgeWrapping;
+                picture.anisotropy = 4;
+            }
+        }
+        if (key !== this.paletteKey) { tex.dispose(); picture?.dispose(); return; }
+        this.uniforms.uImport.value?.dispose();
+        this.uniforms.uImport.value = picture ?? new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1);
+        this.uniforms.uImport.value.needsUpdate = !picture;
+        this.uniforms.uImportLayer.value = picture ? at : -1;
         const old = this.uniforms.uTex.value;
         this.uniforms.uTex.value = tex;
         old.dispose();
