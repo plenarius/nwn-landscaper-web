@@ -673,14 +673,15 @@ export class View {
         this.cursor.visible = true;
     }
 
-    /** Pillars at export warnings: red where a route stops, orange on winding tiles. */
+    /** Pillars at export warnings: red where a route stops (it breaks
+     *  routes); orange to look at: a passage closed, a tile too winding. */
     setMarkers(warnings) {
         if (this.markers) { this.scene.remove(this.markers); this.markers.traverse(c => { c.geometry?.dispose(); c.material?.map?.dispose(); c.material?.dispose?.(); }); }
         this.markers = new THREE.Group();
         for (const w of warnings) {
             const failed = w.kind === 'failed_route', closed = w.kind === 'closed_passage';
             const at = failed ? w.stops_at : closed ? w.at : [(w.from[0] + w.to[0]) / 2, (w.from[1] + w.to[1]) / 2];
-            const color = failed || closed ? 0xe0402a : 0xff9a1f;
+            const color = failed ? 0xe0402a : 0xff9a1f;
             const ground = this.area.heightAt(at[0], at[1]);
             const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 5, 12), new THREE.MeshBasicMaterial({ color }));
             pillar.position.set(at[0], ground + 2.5, this.area.sizeY - at[1]);

@@ -1141,7 +1141,7 @@ function showReport(r, checkOnly = false) {
         <div class="big ${allGood ? 'good' : 'warn'}">${r.routes.ok} of ${r.routes.total} routes work</div>
         <p>NWN's pathfinding, simulated on random routes across the area.</p>
         ${failed ? `<p class="bad">● ${failed} route(s) stop short: red markers.</p>` : ''}
-        ${closed ? `<p class="bad">● ${closed} passage(s) closed: NWN's tile pathfinding has no way through there, so the export made them unwalkable (red markers). Move or widen the gap, away from tile corners and edges.</p>` : ''}
+        ${closed ? `<p class="warn">● ${closed} passage(s) closed: NWN's tile pathfinding has no way through there, so the export made them unwalkable (orange markers). Fine where nobody needs to pass; otherwise move or widen the gap, away from tile corners and edges.</p>` : ''}
         ${winding ? `<p class="warn">● ${winding} tile(s) too winding for NWN: orange markers. Straighten or widen the passages there.</p>` : ''}
         <p>Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%</p>
         ${checkOnly ? '<p class="note">Nothing was exported: this only checks.</p>' : `${updated(r.updated)}${r.added_to_module ? `<p>Added to module <b>${r.added_to_module.module}</b> as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).</p>` : ''}
