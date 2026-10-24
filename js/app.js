@@ -364,16 +364,48 @@ $('btnOpen').onclick = async () => {
     for (const name of local) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
     list.textContent = '';
     for (const a of areas) {
+        const row = document.createElement('div');
+        row.className = 'open-row';
         const b = document.createElement('button');
         b.type = 'button';
         const kind = a.kind === 'underground' ? ' cave' : a.kind === 'interior' ? ' interior' : '';
         const what = a.local ? 'only in this browser' : `${a.tiles}×${a.tilesY ?? a.tiles}${kind} · module ${a.module}${a.exported ? '' : ' · not exported yet'}`;
         b.innerHTML = `<span><b>${a.name}</b>${a.name === area.name ? ' (open)' : ''}</span><small>${what}</small>`;
         b.onclick = () => { $('openDialog').close(); openArea(a); };
-        list.appendChild(b);
+        row.appendChild(b);
+        if (a.imported) {
+            // Import it again from the original it was imported from (with
+            // whatever the importer now does better).
+            const re = document.createElement('button');
+            re.type = 'button';
+            re.className = 'reimport';
+            re.textContent = 'Re-import';
+            re.title = 'Import this area again from its original: its ground, pictures and objects start over';
+            re.onclick = () => reimport(a, re);
+            row.appendChild(re);
+        }
+        list.appendChild(row);
     }
     if (!areas.length) list.textContent = 'No areas yet: export one first.';
 };
+
+/** Imports area `a` again from its kept original, then opens it. */
+async function reimport(a, button) {
+    if (!confirm(`Import ${a.name} again from its original?\n\nYour changes to it here are replaced (the last copy is kept as a backup). Its next export puts the original's placeables, creatures and lighting into the module again, replacing what was changed there in the toolset.`)) return;
+    for (const b of $('openList').querySelectorAll('button')) b.disabled = true;
+    button.textContent = 'Importing…';
+    try {
+        const res = await fetch(`/api/reimport?name=${encodeURIComponent(a.name)}`, { method: 'POST' });
+        const r = await res.json();
+        if (!res.ok) throw new Error(r.error || res.statusText);
+        $('openDialog').close();
+        await openArea({ name: a.name });
+        $('statusMsg').textContent = `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ' Notes: ' + r.notes.join('; ') : ''}`;
+    } catch (err) {
+        $('openDialog').close();
+        showError(`Couldn't import ${a.name} again: ${err.message}`);
+    }
+}
 
 /** Opens area `a`: from landscaper (its saved copy, else its last export),
  *  or from this browser if it only lives here (a save that failed). */
