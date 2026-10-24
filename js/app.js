@@ -682,7 +682,14 @@ canvas.addEventListener('pointerdown', e => {
     }
     if (tool === 'room') {
         // From here to where the button comes up; cut out then.
-        const start = area.heightAt(p.x, p.y);
+        // Started in a room: its floor (the lowest ground within 2 m, not a
+        // point up its wall), else in the rock: the area's floor.
+        let start = Infinity;
+        for (let dy = -2; dy <= 2; dy += 0.5) {
+            for (let dx = -2; dx <= 2; dx += 0.5) {
+                if (dx * dx + dy * dy <= 4) start = Math.min(start, area.heightAt(Math.min(area.size, Math.max(0, p.x + dx)), Math.min(area.size, Math.max(0, p.y + dy))));
+            }
+        }
         stroke.room = { from: p, to: p, floor: area.enclosed() && start >= area.roof - 0.5 ? area.roof - CAVE_ROCK : start };
         const floorTexture = library.byId.get(paintTexture)?.category === 'Floors' ? paintTexture : 'woodOld';
         stroke.paintIndex = library.byId.has(floorTexture) ? area.materialIndex(floorTexture) : undefined;

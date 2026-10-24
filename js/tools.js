@@ -2,7 +2,7 @@
 // with a smooth falloff, scaled by `strength` (0..1) and the frame time,
 // so holding the mouse keeps working at a steady rate.
 
-import { SPACING } from './area.js';
+import { SPACING, TILE } from './area.js';
 
 export const TOOLS = {
     raise: { label: 'Raise', key: '1', hint: 'Build up the ground' },
@@ -122,15 +122,35 @@ function dig(area, x, y, radius, floor, paintIndex) {
 // Rooms snap to this grid and are at least this wide: narrower ones were
 // hard on NWN's tile pathfinding, as cave passages were.
 export const ROOM_GRID = 1.25;
-export const ROOM_MIN = 5;
+/** Narrowest a room (a corridor) can be. */
+export const ROOM_MIN = 2.5;
 
-/** The room a drag from a to b makes: snapped, at least ROOM_MIN a side. */
+/** The room a drag from a to b makes: snapped to ROOM_GRID, and fitted to
+ *  NWN's tile pathfinding. Routes cross a tile edge only at fixed exit
+ *  points, and every layout that joins edges uses the middle one (5 m along),
+ *  so a room must cover the middle of each tile edge it crosses: its west and
+ *  south walls sit in the first half of their tile (at most 3.75 m in), its
+ *  east and north walls in the second half (at least 6.25 m in). */
 export function roomRect(a, b, size) {
     const snap = v => Math.round(v / ROOM_GRID) * ROOM_GRID;
-    let x0 = snap(Math.min(a.x, b.x)), x1 = snap(Math.max(a.x, b.x));
-    let y0 = snap(Math.min(a.y, b.y)), y1 = snap(Math.max(a.y, b.y));
-    if (x1 - x0 < ROOM_MIN) x1 = x0 + ROOM_MIN;
-    if (y1 - y0 < ROOM_MIN) y1 = y0 + ROOM_MIN;
+    const low = v => {
+        const base = Math.floor(v / TILE) * TILE, o = v - base;
+        return o <= 3.75 ? v : o >= 7.5 ? base + TILE : base + 3.75;
+    };
+    const high = v => {
+        const base = Math.floor(v / TILE) * TILE, o = v - base;
+        return o === 0 || o >= 6.25 ? v : o <= 2.5 ? base : base + 6.25;
+    };
+    const side = (p, q) => {
+        let v0 = low(snap(Math.min(p, q))), v1 = high(snap(Math.max(p, q)));
+        if (v1 - v0 < ROOM_MIN) {
+            // Too small to cross a tile middle: the narrowest room around it.
+            const base = Math.floor((p + q) / 2 / TILE) * TILE;
+            v0 = base + 3.75; v1 = base + 6.25;
+        }
+        return [v0, v1];
+    };
+    const [x0, x1] = side(a.x, b.x), [y0, y1] = side(a.y, b.y);
     const c = v => Math.min(size, Math.max(0, v));
     return { x0: c(x0), x1: c(x1), y0: c(y0), y1: c(y1) };
 }
