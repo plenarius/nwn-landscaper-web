@@ -725,7 +725,14 @@ export class View {
             label.position.set(at[0], ground + 6, this.area.sizeY - at[1]);
             this.markers.add(label);
         }
+        this.markers.visible = this.showMarkers !== false;
         this.scene.add(this.markers);
+    }
+
+    /** Shows or hides the markers (they stay, and update, either way). */
+    setShowMarkers(on) {
+        this.showMarkers = on;
+        if (this.markers) this.markers.visible = on;
     }
 }
 

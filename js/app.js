@@ -1019,6 +1019,16 @@ async function liveCheck() {
     else showLive('ok', 'Paths OK', `All ${total} test routes work.`);
 }
 
+// The markers on the map: shown or hidden (M), remembered; the checks go on.
+function showMarkers(on) {
+    localStorage.setItem('landscaper.markers', on ? 'on' : 'off');
+    view.setShowMarkers(on);
+    $('btnMarkers').classList.toggle('active', on);
+    $('btnMarkers').textContent = on ? 'Markers' : 'Markers hidden';
+}
+$('btnMarkers').onclick = () => showMarkers(!$('btnMarkers').classList.contains('active'));
+showMarkers(localStorage.getItem('landscaper.markers') !== 'off');
+
 $('btnLive').onclick = () => {
     live.on = !live.on;
     localStorage.setItem('landscaper.live', live.on ? 'on' : 'off');
@@ -1205,6 +1215,7 @@ window.addEventListener('keydown', e => {
     else if (e.key === 'n') $('btnNew').click();
     else if (e.key === 'o') $('btnOpen').click();
     else if (e.key === 'f') view.frame();
+    else if (e.key === 'm') $('btnMarkers').click();
 });
 
 // --- Start ---------------------------------------------------------------------------
