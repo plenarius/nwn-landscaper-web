@@ -310,6 +310,7 @@ $('importName').oninput = () => { $('importGo').disabled = importing || !importC
 function setImporting(on) {
     importing = on;
     $('importGo').textContent = on ? 'Importing…' : 'Import';
+    $('importGo').classList.toggle('busy', on);
     for (const id of ['importFind', 'importName']) $(id).disabled = on;
     for (const b of $('importList').querySelectorAll('button')) b.disabled = on;
     $('importName').oninput();
@@ -404,6 +405,7 @@ async function reimport(a, button) {
     reimporting = true;
     for (const b of $('openDialog').querySelectorAll('button')) b.disabled = true;
     button.textContent = 'Importing…';
+    button.classList.add('busy');
     try {
         const res = await fetch(`/api/reimport?name=${encodeURIComponent(a.name)}`, { method: 'POST' });
         const r = await res.json();

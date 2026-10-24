@@ -292,3 +292,8 @@ input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #00
 #report details { margin: -4px 0 10px 14px; }
 #report summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 #report details p { margin: 6px 0 0; line-height: 1.45; }
+/* Buttons that can't be used now (a re-import or import running): greyed,
+   no hover, no clicks; the one doing the work stays readable. */
+dialog button:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+dialog button:disabled:hover { background: var(--panel-2); }
+dialog button.busy:disabled { opacity: 1; color: var(--accent); }
