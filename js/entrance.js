@@ -55,13 +55,13 @@ function outcrop(e, r, u, v) {
  * `rock`, a palette index); returns the changed sample rectangle.
  */
 export function carve(area, e, rock) {
-    const n = area.n, h = area.heights;
+    const n = area.nx, h = area.heights;
     const half = e.width / 2;
     // The walls' outline: from just inside the mouth to behind the back.
     const r = { u0: -0.5, u1: e.depth + WALL, v: half + WALL };
     const reach = Math.hypot(e.depth + WALL, half + WALL) + ROOF / MOUND_SLOPE + 1;
     const i0 = Math.max(0, Math.floor((e.x - reach) / SPACING)), i1 = Math.min(n - 1, Math.ceil((e.x + reach) / SPACING));
-    const j0 = Math.max(0, Math.floor((e.y - reach) / SPACING)), j1 = Math.min(n - 1, Math.ceil((e.y + reach) / SPACING));
+    const j0 = Math.max(0, Math.floor((e.y - reach) / SPACING)), j1 = Math.min(area.ny - 1, Math.ceil((e.y + reach) / SPACING));
     for (let j = j0; j <= j1; j++) {
         for (let i = i0; i <= i1; i++) {
             const k = j * n + i;
@@ -98,7 +98,7 @@ export function carve(area, e, rock) {
  * end across tile edges costs it millions of steps (the simulator showed
  * routes to the door failing). Returns how far it moved.
  */
-export function fitInTile(e, tile = 10, areaSize = Infinity) {
+export function fitInTile(e, tile = 10, sizeX = Infinity, sizeY = sizeX) {
     const margin = 0.4, half = e.width / 2 + 0.3;
     // The notch and 3 m of ground before it: in the same tile, the notch is
     // part of that ground's region and the game routes into it like any
@@ -106,9 +106,9 @@ export function fitInTile(e, tile = 10, areaSize = Infinity) {
     // routes from afar found no way in.)
     const corners = [[-APPROACH, -half], [-APPROACH, half], [e.depth + 0.3, -half], [e.depth + 0.3, half]].map(([u, v]) => at(e, u, v));
     const xs = corners.map(c => c[0]), ys = corners.map(c => c[1]);
-    const tiles = Math.max(1, Math.floor(areaSize / tile));
-    // The smallest move putting [lo, hi] inside a tile (of those it touches).
-    const shift = (lo, hi) => {
+    // The smallest move putting [lo, hi] inside a tile (of those it touches,
+    // `tiles` along that axis).
+    const shift = (lo, hi, tiles) => {
         let best = null;
         for (const t of new Set([lo, (lo + hi) / 2, hi].map(p => Math.min(Math.max(Math.floor(p / tile), 0), tiles - 1)))) {
             const a = t * tile + margin, b = (t + 1) * tile - margin;
@@ -117,7 +117,8 @@ export function fitInTile(e, tile = 10, areaSize = Infinity) {
         }
         return best;
     };
-    const dx = shift(Math.min(...xs), Math.max(...xs)), dy = shift(Math.min(...ys), Math.max(...ys));
+    const along = size => Math.max(1, Math.floor(size / tile));
+    const dx = shift(Math.min(...xs), Math.max(...xs), along(sizeX)), dy = shift(Math.min(...ys), Math.max(...ys), along(sizeY));
     e.x += dx;
     e.y += dy;
     return Math.hypot(dx, dy);

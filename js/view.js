@@ -34,20 +34,20 @@ const WALKABLE_NZ = 0.64;
 // Only over the area: the edge scenery has no shadow map.
 const SHADE_FRAGMENT = `
     {
-        float extent = (uShadeCells - 1.0) * ${SHADE_STEP.toFixed(4)};
-        if (all(greaterThanEqual(vArea, vec2(0.0))) && all(lessThanEqual(vArea, vec2(extent))))
+        vec2 extent = (uShadeCells - 1.0) * ${SHADE_STEP.toFixed(4)};
+        if (all(greaterThanEqual(vArea, vec2(0.0))) && all(lessThanEqual(vArea, extent)))
             diffuseColor.rgb *= texture2D(uShade, (vArea / ${SHADE_STEP.toFixed(4)} + 0.5) / uShadeCells).r;
         if (vUp >= uVoid) diffuseColor.rgb = vec3(0.0);
     }`;
 
 const SPLAT_VERTEX = `
-    vArea = vec2(transformed.x, uSize - transformed.z);
+    vArea = vec2(transformed.x, uSize.y - transformed.z);
     vUp = transformed.y;
     vNormalUp = normal.y;`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
-        vec2 f = clamp(vArea / ${SPACING.toFixed(4)}, vec2(0.0), vec2(uN - 1.0));
-        vec2 base = min(floor(f), vec2(uN - 2.0));
+        vec2 f = clamp(vArea / ${SPACING.toFixed(4)}, vec2(0.0), uN - 1.0);
+        vec2 base = min(floor(f), uN - 2.0);
         vec2 t = f - base;
         ivec2 b = ivec2(base);
         vec2 uv = vec2(vArea.x, -vArea.y) / ${TEXTURE_METRES.toFixed(1)};
@@ -61,10 +61,10 @@ const SPLAT_FRAGMENT = `
         vec2 folded = vArea;
         for (int k = 0; k < 2; k++) {
             float c = folded[k];
-            if (c < 0.0 || c > uSize) {
-                float m = mod(c < 0.0 ? -c : c - uSize, 10.0);
+            if (c < 0.0 || c > uSize[k]) {
+                float m = mod(c < 0.0 ? -c : c - uSize[k], 10.0);
                 m = m > 5.0 ? 10.0 - m : m;
-                folded[k] = c < 0.0 ? m : uSize - m;
+                folded[k] = c < 0.0 ? m : uSize[k] - m;
             }
         }
         vec4 imported = texture2D(uImport, folded / uSize);
@@ -122,12 +122,13 @@ export class View {
         this.uniforms = {
             uTex: { value: new THREE.DataArrayTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, 1) },
             uMat: { value: null },
-            uN: { value: 2 },
-            uSize: { value: 1 },
+            // Samples and metres, across and up.
+            uN: { value: new THREE.Vector2(2, 2) },
+            uSize: { value: new THREE.Vector2(1, 1) },
             uTextured: { value: false },
             // Baked shadows (shade.js): a grid SHADE_STEP apart over the area.
             uShade: { value: null },
-            uShadeCells: { value: 1 },
+            uShadeCells: { value: new THREE.Vector2(1, 1) },
             // A cave's rock tops from here up are void: black.
             uVoid: { value: 1e9 },
             // An imported area's picture, and its palette index (-1: none).
@@ -199,19 +200,19 @@ export class View {
         }
         this.markers = null;
         this.water = null;
-        const n = area.n, size = area.size;
-        const geo = new THREE.PlaneGeometry(size, size, n - 1, n - 1);
+        const { nx, ny, sizeX, sizeY } = area;
+        const geo = new THREE.PlaneGeometry(sizeX, sizeY, nx - 1, ny - 1);
         geo.rotateX(-Math.PI / 2);
-        geo.translate(size / 2, 0, size / 2);
-        geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * n * 3), 3));
+        geo.translate(sizeX / 2, 0, sizeY / 2);
+        geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
         this.uniforms.uMat.value?.dispose();
-        const mat = new THREE.DataTexture(area.materials, n, n, THREE.RedFormat, THREE.UnsignedByteType);
+        const mat = new THREE.DataTexture(area.materials, nx, ny, THREE.RedFormat, THREE.UnsignedByteType);
         mat.minFilter = mat.magFilter = THREE.NearestFilter;
         mat.unpackAlignment = 1;
         mat.needsUpdate = true;
         this.uniforms.uMat.value = mat;
-        this.uniforms.uN.value = n;
-        this.uniforms.uSize.value = size;
+        this.uniforms.uN.value.set(nx, ny);
+        this.uniforms.uSize.value.set(sizeX, sizeY);
         this.uniforms.uVoid.value = area.enclosed() ? area.roof - 0.3 : 1e9;
         this.updateShade();
         this.mesh = new THREE.Mesh(geo, this.splatMaterial());
@@ -220,7 +221,7 @@ export class View {
         this.grid = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }));
         this.scene.add(this.grid);
         this.paletteKey = null;
-        this.markDirty({ i0: 0, i1: n - 1, j0: 0, j1: n - 1 });
+        this.markDirty(this.everything());
         this.flush();
         this.updateWater();
         this.updateEntrances();
@@ -234,10 +235,10 @@ export class View {
         material.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, this.uniforms);
             shader.vertexShader = shader.vertexShader
-                .replace('#include <common>', '#include <common>\nuniform float uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
+                .replace('#include <common>', '#include <common>\nuniform vec2 uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>' + SPLAT_VERTEX);
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform float uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform float uShadeCells;\nuniform float uVoid;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform float uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
+                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform float uVoid;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform vec2 uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT + SHADE_FRAGMENT);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
@@ -246,14 +247,14 @@ export class View {
 
     /** Bakes the shadows again (after the ground or their strength changed). */
     updateShade() {
-        const { m, data } = shadeArea(this.area, this.area.shadow);
+        const { mx, my, data } = shadeArea(this.area, this.area.shadow);
         const old = this.uniforms.uShade.value;
-        const tex = new THREE.DataTexture(data, m, m, THREE.RedFormat, THREE.UnsignedByteType);
+        const tex = new THREE.DataTexture(data, mx, my, THREE.RedFormat, THREE.UnsignedByteType);
         tex.minFilter = tex.magFilter = THREE.LinearFilter;
         tex.unpackAlignment = 1;
         tex.needsUpdate = true;
         this.uniforms.uShade.value = tex;
-        this.uniforms.uShadeCells.value = m;
+        this.uniforms.uShadeCells.value.set(mx, my);
         old?.dispose();
     }
 
@@ -295,19 +296,24 @@ export class View {
         if (!this.textured) {
             this.textured = true;
             this.uniforms.uTextured.value = true;
-            this.markDirty({ i0: 0, i1: this.area.n - 1, j0: 0, j1: this.area.n - 1 });
+            this.markDirty(this.everything());
         }
     }
 
     frame() {
-        const s = this.area.size;
+        const { sizeX: sx, sizeY: sy } = this.area, s = Math.max(sx, sy);
         // The whole area in view, from the south, tilted down ~40 degrees.
-        const mid = this.area.heightAt(s / 2, s / 2);
-        this.controls.target.set(s / 2, mid, s / 2);
-        this.camera.position.set(s / 2, mid + s * 0.95, s / 2 + s * 1.15);
+        const mid = this.area.heightAt(sx / 2, sy / 2);
+        this.controls.target.set(sx / 2, mid, sy / 2);
+        this.camera.position.set(sx / 2, mid + s * 0.95, sy / 2 + s * 1.15);
         this.controls.minDistance = 5;
         this.controls.maxDistance = s * 3 + 100;
         this.controls.update();
+    }
+
+    /** The whole area, as a dirty range. */
+    everything() {
+        return { i0: 0, i1: this.area.nx - 1, j0: 0, j1: this.area.ny - 1 };
     }
 
     markDirty(r) {
@@ -318,15 +324,15 @@ export class View {
     }
 
     /** Vertex index of sample (i, j): plane rows run north to south. */
-    vertex(i, j) { return (this.area.n - 1 - j) * this.area.n + i; }
+    vertex(i, j) { return (this.area.ny - 1 - j) * this.area.nx + i; }
 
     flush() {
-        const area = this.area, n = area.n, d = this.dirty;
+        const area = this.area, n = area.nx, d = this.dirty;
         this.dirty = null;
         const pos = this.mesh.geometry.attributes.position;
         const col = this.mesh.geometry.attributes.color;
         // Heights of the changed rows and a margin (walkability uses neighbours).
-        const i0 = Math.max(0, d.i0 - 1), i1 = Math.min(n - 1, d.i1 + 1), j0 = Math.max(0, d.j0 - 1), j1 = Math.min(n - 1, d.j1 + 1);
+        const i0 = Math.max(0, d.i0 - 1), i1 = Math.min(n - 1, d.i1 + 1), j0 = Math.max(0, d.j0 - 1), j1 = Math.min(area.ny - 1, d.j1 + 1);
         let lo = Infinity, hi = -Infinity;
         for (const v of area.heights) { if (v < lo) lo = v; if (v > hi) hi = v; }
         const span = Math.max(hi - lo, 1);
@@ -367,7 +373,7 @@ export class View {
             this.entranceGroup.traverse(c => { c.geometry?.dispose(); if (c.material && !c.material.userData.shared) c.material.dispose(); });
         }
         this.entranceGroup = new THREE.Group();
-        const area = this.area, size = area.size, height = (x, y) => area.heightAt(x, y);
+        const area = this.area, size = area.sizeY, height = (x, y) => area.heightAt(x, y);
         // Texture coordinates as landscaper writes them: from above, and
         // tilted with height for the rock.
         const flat = (x, y) => [x / 4, y / 4];
@@ -388,8 +394,8 @@ export class View {
         for (const e of area.entrances) {
             const sc = entranceScenery(e, height);
             const [bx, by] = entranceAt(e, e.depth + 2, 0);
-            const bi = Math.min(area.n - 1, Math.max(0, Math.round(bx / SPACING))), bj = Math.min(area.n - 1, Math.max(0, Math.round(by / SPACING)));
-            const hill = area.palette[area.materials[bj * area.n + bi]];
+            const bi = Math.min(area.nx - 1, Math.max(0, Math.round(bx / SPACING))), bj = Math.min(area.ny - 1, Math.max(0, Math.round(by / SPACING)));
+            const hill = area.palette[area.materials[bj * area.nx + bi]];
             this.blackMaterial ??= Object.assign(new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }), { userData: { shared: true } });
             this.entranceGroup.add(
                 mesh(sc.top, flat, this.libraryMaterial(hill, 0x5d7a3a)),
@@ -411,7 +417,7 @@ export class View {
         const group = this.objectGroup = new THREE.Group();
         this.scene.add(group);
         if (!this.models) return;
-        const size = this.area.size;
+        const size = this.area.sizeY;
         // All at once, each drawn as its model arrives.
         await Promise.all(this.area.objects.map(async o => {
             let model;
@@ -435,7 +441,7 @@ export class View {
         try { model = await this.models.group(o.model); } catch { return; }
         if (group !== this.objectGroup || !this.area.objects.includes(o)) return;
         const inst = model.clone();
-        inst.position.set(o.x, o.z, this.area.size - o.y);
+        inst.position.set(o.x, o.z, this.area.sizeY - o.y);
         inst.rotation.y = o.bearing;
         inst.scale.setScalar(o.scale);
         inst.userData.object = o;
@@ -502,21 +508,23 @@ export class View {
      *  at the corner's height; a little darker, as it can't be walked. The
      *  splat shading clamps to the edge, so its textures carry out too. */
     buildSkirt() {
-        const n = this.area.n;
-        // Four strips of n samples (two vertices each) and four corner quads.
-        const verts = 4 * n * 2 + 4 * 4;
+        const { nx, ny } = this.area;
+        // Strips west and east (ny samples, two vertices each), south and
+        // north (nx), then four corner quads.
+        const strips = [ny, ny, nx, nx], first = [0, ny, 2 * ny, 2 * ny + nx], corners = 2 * (2 * ny + 2 * nx);
+        const verts = corners + 4 * 4;
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(verts * 3).fill(0.72), 3));
         const index = [];
         for (let s = 0; s < 4; s++) {
-            for (let k = 0; k < n - 1; k++) {
-                const a = (s * n + k) * 2, b = a + 2;
+            for (let k = 0; k < strips[s] - 1; k++) {
+                const a = (first[s] + k) * 2, b = a + 2;
                 index.push(a, a + 1, b + 1, a, b + 1, b);
             }
         }
         for (let c = 0; c < 4; c++) {
-            const a = 8 * n + c * 4;
+            const a = corners + c * 4;
             index.push(a, a + 1, a + 2, a, a + 2, a + 3);
         }
         geo.setIndex(index);
@@ -529,20 +537,24 @@ export class View {
 
     updateSkirt() {
         if (!this.skirt) return;
-        const area = this.area, n = area.n, size = area.size, h = area.heights, D = 50;
+        const area = this.area, { nx, ny, sizeX: sx, sizeY: sy } = area, h = area.heights, D = 50;
         const pos = this.skirt.geometry.attributes.position;
         // Area point (x, y) at height z, as three.js wants it.
-        const put = (v, x, y, z) => pos.setXYZ(v, x, z, size - y);
-        for (let k = 0; k < n; k++) {
+        const put = (v, x, y, z) => pos.setXYZ(v, x, z, sy - y);
+        for (let k = 0; k < ny; k++) {
             const t = k * SPACING;
-            put((0 * n + k) * 2, -D, t, h[k * n]); put((0 * n + k) * 2 + 1, 0, t, h[k * n]);
-            put((1 * n + k) * 2, size, t, h[k * n + n - 1]); put((1 * n + k) * 2 + 1, size + D, t, h[k * n + n - 1]);
-            put((2 * n + k) * 2, t, -D, h[k]); put((2 * n + k) * 2 + 1, t, 0, h[k]);
-            put((3 * n + k) * 2, t, size, h[(n - 1) * n + k]); put((3 * n + k) * 2 + 1, t, size + D, h[(n - 1) * n + k]);
+            put(k * 2, -D, t, h[k * nx]); put(k * 2 + 1, 0, t, h[k * nx]);
+            put((ny + k) * 2, sx, t, h[k * nx + nx - 1]); put((ny + k) * 2 + 1, sx + D, t, h[k * nx + nx - 1]);
         }
-        const corners = [[0, 0, -D, -D], [0, size, -D, size + D], [size, 0, size + D, -D], [size, size, size + D, size + D]];
+        for (let k = 0; k < nx; k++) {
+            const t = k * SPACING;
+            put((2 * ny + k) * 2, t, -D, h[k]); put((2 * ny + k) * 2 + 1, t, 0, h[k]);
+            put((2 * ny + nx + k) * 2, t, sy, h[(ny - 1) * nx + k]); put((2 * ny + nx + k) * 2 + 1, t, sy + D, h[(ny - 1) * nx + k]);
+        }
+        const first = 2 * (2 * ny + 2 * nx);
+        const corners = [[0, 0, -D, -D], [0, sy, -D, sy + D], [sx, 0, sx + D, -D], [sx, sy, sx + D, sy + D]];
         corners.forEach(([x, y, fx, fy], c) => {
-            const z = area.heightAt(x, y), a = 8 * n + c * 4;
+            const z = area.heightAt(x, y), a = first + c * 4;
             put(a, x, y, z); put(a + 1, fx, y, z); put(a + 2, fx, fy, z); put(a + 3, x, fy, z);
         });
         pos.needsUpdate = true;
@@ -554,11 +566,11 @@ export class View {
      *  corner under water, as landscaper builds it (the ground hides it
      *  beyond the shore). */
     updateWater() {
-        const area = this.area, n = area.n, size = area.size, L = area.waterLevel;
+        const area = this.area, n = area.nx, rows = area.ny, size = area.sizeY, sx = area.sizeX, L = area.waterLevel;
         if (this.water) { this.scene.remove(this.water); this.water.geometry.dispose(); }
         this.water = null;
         const pos = [];
-        for (let j = 0; j < n - 1; j++) {
+        for (let j = 0; j < rows - 1; j++) {
             for (let i = 0; i < n - 1; i++) {
                 // The wet corners' highest level.
                 let level = -Infinity;
@@ -572,16 +584,19 @@ export class View {
         const D = 50;
         const quad = (x0, y0, x1, y1, l) => pos.push(x0, l, size - y0, x1, l, size - y0, x1, l, size - y1, x0, l, size - y0, x1, l, size - y1, x0, l, size - y1);
         const wet = (i, j) => L[j * n + i];
+        const lv = (a, b) => Math.max(Number.isNaN(a) ? -Infinity : a, Number.isNaN(b) ? -Infinity : b);
+        let l;
+        for (let k = 0; k < rows - 1; k++) {
+            const t0 = k * SPACING, t1 = t0 + SPACING;
+            if ((l = lv(wet(0, k), wet(0, k + 1))) > -Infinity) quad(-D, t0, 0, t1, l);
+            if ((l = lv(wet(n - 1, k), wet(n - 1, k + 1))) > -Infinity) quad(sx, t0, sx + D, t1, l);
+        }
         for (let k = 0; k < n - 1; k++) {
             const t0 = k * SPACING, t1 = t0 + SPACING;
-            const lv = (a, b) => Math.max(Number.isNaN(a) ? -Infinity : a, Number.isNaN(b) ? -Infinity : b);
-            let l;
-            if ((l = lv(wet(0, k), wet(0, k + 1))) > -Infinity) quad(-D, t0, 0, t1, l);
-            if ((l = lv(wet(n - 1, k), wet(n - 1, k + 1))) > -Infinity) quad(size, t0, size + D, t1, l);
             if ((l = lv(wet(k, 0), wet(k + 1, 0))) > -Infinity) quad(t0, -D, t1, 0, l);
-            if ((l = lv(wet(k, n - 1), wet(k + 1, n - 1))) > -Infinity) quad(t0, size, t1, size + D, l);
+            if ((l = lv(wet(k, rows - 1), wet(k + 1, rows - 1))) > -Infinity) quad(t0, size, t1, size + D, l);
         }
-        for (const [i, j, x0, y0, x1, y1] of [[0, 0, -D, -D, 0, 0], [0, n - 1, -D, size, 0, size + D], [n - 1, 0, size, -D, size + D, 0], [n - 1, n - 1, size, size, size + D, size + D]]) {
+        for (const [i, j, x0, y0, x1, y1] of [[0, 0, -D, -D, 0, 0], [0, rows - 1, -D, size, 0, size + D], [n - 1, 0, sx, -D, sx + D, 0], [n - 1, rows - 1, sx, size, sx + D, size + D]]) {
             if (!Number.isNaN(wet(i, j))) quad(x0, y0, x1, y1, wet(i, j));
         }
         if (!pos.length) return;
@@ -597,20 +612,25 @@ export class View {
 
     setShowWalkability(on) {
         this.showWalkability = on;
-        this.markDirty({ i0: 0, i1: this.area.n - 1, j0: 0, j1: this.area.n - 1 });
+        this.markDirty(this.everything());
     }
 
     /** The tile grid, draped 5 cm above the ground. */
     updateGrid() {
-        const area = this.area, n = area.n, size = area.size, tiles = area.tiles;
+        const area = this.area, size = area.sizeY;
         const pts = [];
-        const per = n - 1;
-        for (let t = 0; t <= tiles; t++) {
+        // Lines of constant x (running north), then of constant y (running east).
+        for (let t = 0; t <= area.tiles; t++) {
             const along = t * TILE;
-            for (let k = 0; k < per; k++) {
+            for (let k = 0; k < area.ny - 1; k++) {
                 const a = k * SPACING, b = (k + 1) * SPACING;
-                // Line of constant x (running north) and of constant y.
                 pts.push(along, area.heightAt(along, a) + 0.05, size - a, along, area.heightAt(along, b) + 0.05, size - b);
+            }
+        }
+        for (let t = 0; t <= area.tilesY; t++) {
+            const along = t * TILE;
+            for (let k = 0; k < area.nx - 1; k++) {
+                const a = k * SPACING, b = (k + 1) * SPACING;
                 pts.push(a, area.heightAt(a, along) + 0.05, size - along, b, area.heightAt(b, along) + 0.05, size - along);
             }
         }
@@ -626,14 +646,14 @@ export class View {
         this.raycaster.setFromCamera(ndc, this.camera);
         const hit = this.raycaster.intersectObject(this.mesh)[0];
         if (!hit) return null;
-        return { x: hit.point.x, y: this.area.size - hit.point.z, z: hit.point.y };
+        return { x: hit.point.x, y: this.area.sizeY - hit.point.z, z: hit.point.y };
     }
 
     /** The room being dragged out: its outline on the floor (or none). */
     setRoomOutline(r, z) {
         if (this.roomLine) { this.scene.remove(this.roomLine); this.roomLine.geometry.dispose(); this.roomLine = null; }
         if (!r) return;
-        const s = this.area.size, y = z + 0.1;
+        const s = this.area.sizeY, y = z + 0.1;
         const pts = [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1], [r.x0, r.y0]].map(([x, yy]) => new THREE.Vector3(x, y, s - yy));
         this.roomLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xd8a24a, depthTest: false }));
         this.roomLine.renderOrder = 2;
@@ -647,7 +667,7 @@ export class View {
         for (let k = 0; k <= 64; k++) {
             const a = (k / 64) * Math.PI * 2;
             const x = p.x + Math.cos(a) * radius, y = p.y + Math.sin(a) * radius;
-            pts.push(new THREE.Vector3(x, this.area.heightAt(x, y) + 0.15, this.area.size - y));
+            pts.push(new THREE.Vector3(x, this.area.heightAt(x, y) + 0.15, this.area.sizeY - y));
         }
         this.cursor.geometry.setFromPoints(pts);
         this.cursor.visible = true;
@@ -663,10 +683,10 @@ export class View {
             const color = failed || closed ? 0xe0402a : 0xff9a1f;
             const ground = this.area.heightAt(at[0], at[1]);
             const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 5, 12), new THREE.MeshBasicMaterial({ color }));
-            pillar.position.set(at[0], ground + 2.5, this.area.size - at[1]);
+            pillar.position.set(at[0], ground + 2.5, this.area.sizeY - at[1]);
             this.markers.add(pillar);
             const label = makeLabel(failed ? 'Route stops here' : closed ? 'Passage closed' : `Tile ${w.tile[0]},${w.tile[1]}: too winding`, color);
-            label.position.set(at[0], ground + 6, this.area.size - at[1]);
+            label.position.set(at[0], ground + 6, this.area.sizeY - at[1]);
             this.markers.add(label);
         }
         this.scene.add(this.markers);

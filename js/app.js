@@ -256,8 +256,8 @@ function placeDrag(e) {
     const s = stroke.place, p = view.pick(e.clientX, e.clientY);
     if (!p) return;
     if (s.move) {
-        s.object.x = Math.min(area.size, Math.max(0, p.x + s.move.dx));
-        s.object.y = Math.min(area.size, Math.max(0, p.y + s.move.dy));
+        s.object.x = Math.min(area.sizeX, Math.max(0, p.x + s.move.dx));
+        s.object.y = Math.min(area.sizeY, Math.max(0, p.y + s.move.dy));
     } else {
         if (Math.hypot(p.x - s.from.x, p.y - s.from.y) < 0.3) return;
         s.object.bearing = Math.atan2(p.y - s.from.y, p.x - s.from.x);
@@ -466,9 +466,9 @@ function scatterStamp(p, radius) {
     for (let k = 0; k < 4; k++) {
         const a = Math.random() * Math.PI * 2, d = radius * Math.sqrt(Math.random());
         const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
-        if (x < 0.5 || y < 0.5 || x > area.size - 0.5 || y > area.size - 0.5) continue;
+        if (x < 0.5 || y < 0.5 || x > area.sizeX - 0.5 || y > area.sizeY - 0.5) continue;
         if (area.objects.some(o => Math.hypot(o.x - x, o.y - y) < spacing)) continue;
-        const i = Math.min(area.n - 1, Math.round(x / SPACING)), j = Math.min(area.n - 1, Math.round(y / SPACING));
+        const i = Math.min(area.nx - 1, Math.round(x / SPACING)), j = Math.min(area.ny - 1, Math.round(y / SPACING));
         if ($('scatterSteep').checked && (!area.walkable(i, j) || area.depth(i, j) > 0)) continue;
         const [model, flat] = mix[Math.floor(Math.random() * mix.length)];
         const o = { id: area.nextObjectId++, model, appearance: appearanceOf(model), x, y, z: 0, bearing: Math.random() * Math.PI * 2, scale: lo + Math.random() * (hi - lo), solid: $('scatterSolid').checked, baked: true };
@@ -588,8 +588,8 @@ let mouse = null;  // last client position over the canvas
 // or down sets its level; Shift drains the one clicked.
 const LEVEL_PER_PIXEL = 0.03;
 function waterDown(e, p) {
-    const i = Math.min(Math.max(Math.round(p.x / SPACING), 0), area.n - 1);
-    const j = Math.min(Math.max(Math.round(p.y / SPACING), 0), area.n - 1);
+    const i = Math.min(Math.max(Math.round(p.x / SPACING), 0), area.nx - 1);
+    const j = Math.min(Math.max(Math.round(p.y / SPACING), 0), area.ny - 1);
     const body = area.bodyAt(i, j);
     if (e.shiftKey) {
         if (!body) return null;
@@ -602,11 +602,11 @@ function waterDown(e, p) {
     area.beginStroke();
     let b = body;
     if (!b) {
-        b = { i, j, level: area.heights[j * area.n + i] + 0.3 };
+        b = { i, j, level: area.heights[j * area.nx + i] + 0.3 };
         area.water.push(b);
         waterChanged();
     }
-    return { body: b, startY: e.clientY, startLevel: b.level, ground: area.heights[b.j * area.n + b.i] };
+    return { body: b, startY: e.clientY, startLevel: b.level, ground: area.heights[b.j * area.nx + b.i] };
 }
 
 function waterDrag(e) {
@@ -619,7 +619,7 @@ function waterDrag(e) {
 function waterChanged() {
     area.floodWater();
     view.updateWater();
-    view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
+    view.markDirty(view.everything());
 }
 
 // Entrances: a click on a slope carves one facing into it (where it
@@ -655,7 +655,7 @@ function entranceDown(e, p) {
         return;
     }
     // In a cave: on the floor beside a wall, not on the rock (the void).
-    const ci = Math.min(area.n - 1, Math.round(p.x / SPACING)), cj = Math.min(area.n - 1, Math.round(p.y / SPACING));
+    const ci = Math.min(area.nx - 1, Math.round(p.x / SPACING)), cj = Math.min(area.ny - 1, Math.round(p.y / SPACING));
     if (area.void(ci, cj)) {
         $('statusMsg').textContent = 'In a cave, click the floor right beside a wall: the entrance is carved into that wall.';
         return;
@@ -670,18 +670,18 @@ function entranceDown(e, p) {
         dir = Math.atan2(gy, gx);
     } else {
         const c = view.camera.position;
-        dir = Math.atan2((area.size - c.z) - p.y, c.x - p.x) + Math.PI;
+        dir = Math.atan2((area.sizeY - c.z) - p.y, c.x - p.x) + Math.PI;
     }
     const ent = { x: p.x, y: p.y, dir, width: Math.min(8, Math.max(2.5, +sizeIn.value)), depth: 4, floor: 0 };
     // Inside one tile, for the game's pathfinding; the floor where it lands.
-    const moved = fitInTile(ent, TILE, area.size);
+    const moved = fitInTile(ent, TILE, area.sizeX, area.sizeY);
     ent.floor = area.heightAt(ent.x, ent.y);
     area.beginStroke();
     area.entrances.push(ent);
     // Rock that suits the slope: what's painted just behind the mouth.
     const [bx, by] = entranceAt(ent, ent.depth + 2, 0);
-    const bi = Math.min(area.n - 1, Math.max(0, Math.round(bx / SPACING))), bj = Math.min(area.n - 1, Math.max(0, Math.round(by / SPACING)));
-    const ground = area.palette[area.materials[bj * area.n + bi]];
+    const bi = Math.min(area.nx - 1, Math.max(0, Math.round(bx / SPACING))), bj = Math.min(area.ny - 1, Math.max(0, Math.round(by / SPACING)));
+    const ground = area.palette[area.materials[bj * area.nx + bi]];
     ent.rock = rockFor(library.byId.get(ground)?.category, ground, id => library.byId.has(id));
     const rock = ent.rock ? area.materialIndex(ent.rock) : undefined;
     view.markDirty(carve(area, ent, rock));
@@ -748,13 +748,13 @@ canvas.addEventListener('pointerdown', e => {
         let start = Infinity;
         for (let dy = -2; dy <= 2; dy += 0.5) {
             for (let dx = -2; dx <= 2; dx += 0.5) {
-                if (dx * dx + dy * dy <= 4) start = Math.min(start, area.heightAt(Math.min(area.size, Math.max(0, p.x + dx)), Math.min(area.size, Math.max(0, p.y + dy))));
+                if (dx * dx + dy * dy <= 4) start = Math.min(start, area.heightAt(Math.min(area.sizeX, Math.max(0, p.x + dx)), Math.min(area.sizeY, Math.max(0, p.y + dy))));
             }
         }
         stroke.room = { from: p, to: p, floor: area.enclosed() && start >= area.roof - 0.5 ? area.roof - CAVE_ROCK : start };
         const floorTexture = library.byId.get(paintTexture)?.category === 'Floors' ? paintTexture : 'woodOld';
         stroke.paintIndex = library.byId.has(floorTexture) ? area.materialIndex(floorTexture) : undefined;
-        view.setRoomOutline(roomRect(p, p, area.size), stroke.room.floor);
+        view.setRoomOutline(roomRect(p, p, area.sizeX, area.sizeY), stroke.room.floor);
     }
     if (tool === 'dig') {
         // Down to the floor, or to the level of dug ground where it starts;
@@ -777,7 +777,7 @@ canvas.addEventListener('pointermove', e => {
         const p = view.pick(e.clientX, e.clientY);
         if (p) {
             stroke.room.to = p;
-            const r = roomRect(stroke.room.from, p, area.size);
+            const r = roomRect(stroke.room.from, p, area.sizeX, area.sizeY);
             view.setRoomOutline(r, stroke.room.floor);
             $('statusMsg').textContent = `Room ${(r.x1 - r.x0).toFixed(2)} × ${(r.y1 - r.y0).toFixed(2)} m`;
         }
@@ -789,7 +789,7 @@ const endStroke = () => {
     placePointer = null;
     if (!stroke) return;
     if (stroke.room) {
-        const r = roomRect(stroke.room.from, stroke.room.to, area.size);
+        const r = roomRect(stroke.room.from, stroke.room.to, area.sizeX, area.sizeY);
         view.markDirty(cutRoom(area, r, stroke.room.floor, stroke.paintIndex));
         view.setRoomOutline(null);
         view.syncPalette();
@@ -814,7 +814,7 @@ view.onFrame = () => {
     if (p) {
         const tx = Math.floor(p.x / TILE), ty = Math.floor(p.y / TILE);
         const i = Math.round(p.x / 0.625), j = Math.round(p.y / 0.625);
-        const ci = Math.min(i, area.n - 1), cj = Math.min(j, area.n - 1);
+        const ci = Math.min(i, area.nx - 1), cj = Math.min(j, area.ny - 1);
         const walk = area.walkable(ci, cj), deep = area.depth(ci, cj);
         const what = deep > SHALLOW ? `water ${deep.toFixed(1)} m deep: too deep to walk` : deep > 0 ? `shallow water ${deep.toFixed(1)} m: wading` : walk ? 'walkable' : 'too steep to walk';
         $('statusPos').textContent = `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
@@ -839,7 +839,7 @@ view.onFrame = () => {
 function setArea(a) {
     area = a;
     view.setArea(a);
-    $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tiles} tiles (${a.size} m)`;
+    $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
     $('report').hidden = true;
     skyNight = a.atmosphere.time === 'night';
     showSky();
@@ -914,7 +914,7 @@ showLive('off');
 
 function refreshAll() {
     if (view.selected && !area.objects.includes(view.selected)) selectObject(null);
-    view.markDirty({ i0: 0, i1: area.n - 1, j0: 0, j1: area.n - 1 });
+    view.markDirty(view.everything());
     view.updateEntrances();
     view.updateObjects();
     view.updateShade();
@@ -925,16 +925,21 @@ function refreshAll() {
 $('btnUndo').onclick = () => { if (area?.undo()) refreshAll(); };
 $('btnRedo').onclick = () => { if (area?.redo()) refreshAll(); };
 
+// Square sizes to pick, or any width and height (2 to 32 tiles each).
 const SIZES = [4, 8, 12, 16, 20, 24, 28, 32];
-let chosenSize = 8;
+const showSize = () => {
+    for (const o of $('sizeChoices').children) o.classList.toggle('active', +o.dataset.size === +$('newW').value && +o.dataset.size === +$('newH').value);
+};
 for (const s of SIZES) {
     const b = document.createElement('button');
     b.type = 'button';
+    b.dataset.size = s;
     b.innerHTML = `${s}×${s}<small>${s * TILE} m</small>`;
-    b.onclick = () => { chosenSize = s; for (const o of $('sizeChoices').children) o.classList.toggle('active', o === b); };
-    if (s === chosenSize) b.classList.add('active');
+    b.onclick = () => { $('newW').value = $('newH').value = s; showSize(); };
     $('sizeChoices').appendChild(b);
 }
+$('newW').oninput = $('newH').oninput = showSize;
+showSize();
 
 $('btnNew').onclick = () => {
     if (area) $('newName').value = area.name;
@@ -944,7 +949,8 @@ $('newDialog').addEventListener('close', () => {
     if ($('newDialog').returnValue !== 'ok') return;
     const start = new FormData($('newDialog').querySelector('form')).get('start');
     const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
-    const created = Area.create($('newName').value.trim().toLowerCase(), chosenSize, start, base);
+    const tiles = v => Math.min(32, Math.max(2, Math.round(+v || 8)));
+    const created = Area.create($('newName').value.trim().toLowerCase(), tiles($('newW').value), start, base, tiles($('newH').value));
     created.module = $('newModule').value.trim().toLowerCase() || created.name;
     setArea(created);
     saveSoon();
@@ -961,7 +967,7 @@ function areaRequest() {
     body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
     body.set(area.materials, area.heights.byteLength);
     body.set(extra, area.heights.byteLength + area.materials.byteLength);
-    const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&palette=${encodeURIComponent(area.palette.join(','))}`
+    const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&tilesY=${area.tilesY}&palette=${encodeURIComponent(area.palette.join(','))}`
         + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
         + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
         + `&shadow=${area.shadow}`

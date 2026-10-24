@@ -50,19 +50,20 @@ export function shade(x, y, strength, height, sun = true) {
 // Metres between the preview's samples.
 export const SHADE_STEP = 1.25;
 
-/** The area's shadows on a grid SHADE_STEP apart (rows from the south). */
+/** The area's shadows on a grid SHADE_STEP apart: mx across, my rows
+ *  from the south. */
 export function shadeArea(area, strength) {
-    const m = Math.round(area.size / SHADE_STEP) + 1;
-    const out = new Uint8Array(m * m).fill(255);
+    const mx = Math.round(area.sizeX / SHADE_STEP) + 1, my = Math.round(area.sizeY / SHADE_STEP) + 1;
+    const out = new Uint8Array(mx * my).fill(255);
     // No shadow maps at 0 (landscaper writes none), so no dark entrances either.
-    if (strength <= 0) return { m, data: out };
+    if (strength <= 0) return { mx, my, data: out };
     const height = (x, y) => area.heightAt(x, y);
-    for (let j = 0; j < m; j++) {
-        for (let i = 0; i < m; i++) {
+    for (let j = 0; j < my; j++) {
+        for (let i = 0; i < mx; i++) {
             const x = i * SHADE_STEP, y = j * SHADE_STEP;
             const s = shade(x, y, strength, height, !area.enclosed());
-            out[j * m + i] = Math.round(255 * s * darkness(area.entrances, x, y));
+            out[j * mx + i] = Math.round(255 * s * darkness(area.entrances, x, y));
         }
     }
-    return { m, data: out };
+    return { mx, my, data: out };
 }

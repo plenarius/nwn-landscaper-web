@@ -278,3 +278,6 @@ input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #00
 .import-list button.selected { border-color: var(--accent); background: #3d3a30; }
 .import-list button:disabled { opacity: 0.45; cursor: default; }
 #importStatus:empty { display: none; }
+.size-free { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.size-free label { display: flex; align-items: center; gap: 6px; margin: 0; }
+.size-free input { width: 4.5em; }

@@ -134,6 +134,8 @@
                 <input id="newModule" pattern="[a-z0-9_]{0,16}" maxlength="16" placeholder="same as the name"></label>
             <label>Size <small>NWN tiles of 10 m</small></label>
             <div class="size-choices" id="sizeChoices"></div>
+            <div class="size-free"><label>Across <input id="newW" type="number" min="2" max="32" step="1" value="8"></label>
+                <label>Up <input id="newH" type="number" min="2" max="32" step="1" value="8"></label><small>tiles, west to east and south to north</small></div>
             <label>Start from</label>
             <div class="start-choices">
                 <label><input type="radio" name="start" value="flat" checked> Flat</label>

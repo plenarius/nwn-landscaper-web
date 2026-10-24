@@ -22,15 +22,20 @@ export const CAVE_ROCK = 6;
 export const VOID_BELOW = 0.3;
 
 export class Area {
-    constructor(name, tiles, heights, materials, palette) {
+    /** `tiles` across (west to east), `tilesY` up (south to north). */
+    constructor(name, tiles, heights, materials, palette, tilesY = tiles) {
         this.name = name;
         this.tiles = tiles;
-        this.n = tiles * SAMPLES_PER_TILE + 1;
-        this.size = tiles * TILE;
-        this.heights = heights ?? new Float32Array(this.n * this.n);
+        this.tilesY = tilesY;
+        // Samples across and up (rows from the south, nx a row), and metres.
+        this.nx = tiles * SAMPLES_PER_TILE + 1;
+        this.ny = tilesY * SAMPLES_PER_TILE + 1;
+        this.sizeX = tiles * TILE;
+        this.sizeY = tilesY * TILE;
+        this.heights = heights ?? new Float32Array(this.nx * this.ny);
         // The painted texture of each sample: an index into `palette`
         // (texture ids from the library catalog).
-        this.materials = materials ?? new Uint8Array(this.n * this.n);
+        this.materials = materials ?? new Uint8Array(this.nx * this.ny);
         this.palette = palette ?? [DEFAULT_TEXTURE];
         // Light and fog (see atmosphere.js).
         this.atmosphere = defaultAtmosphere();
@@ -52,7 +57,7 @@ export class Area {
         this.roof = null;
         // The NWN module it is exported into (another area's, to link them).
         this.module = name;
-        this.waterLevel = new Float32Array(this.n * this.n).fill(NaN);
+        this.waterLevel = new Float32Array(this.nx * this.ny).fill(NaN);
         this.undoStack = [];
         this.redoStack = [];
     }
@@ -70,9 +75,9 @@ export class Area {
 
     /** A new area; its ground (or a cave's floor) at `base` metres: start
      *  high to dig valleys and canyons down into it. */
-    static create(name, tiles, start, base = 5) {
-        const area = new Area(name, tiles);
-        const n = area.n;
+    static create(name, tiles, start, base = 5, tilesY = tiles) {
+        const area = new Area(name, tiles, undefined, undefined, undefined, tilesY);
+        const { nx, ny } = area;
         if (start === 'interior') {
             // A solid mass with walls of stone; rooms are cut out of it.
             area.kind = 'interior';
@@ -94,25 +99,26 @@ export class Area {
         } else {
             // Rolling or rough hills from the upstream fBm noise, scaled to metres.
             const rough = start === 'rough';
+            const n = Math.max(nx, ny);
             const noise = generateHeightMap({
                 seed: Math.floor(Math.random() * 100000), mapSize: n,
                 octaves: rough ? 6 : 4, persistence: rough ? 0.5 : 0.4, lacunarity: 2.1,
                 scale: (rough ? 70 : 140) / SPACING, panX: 0, panY: 0, blackLevel: 0, whiteLevel: 1,
             });
             const amplitude = rough ? 14 : 6;
-            for (let i = 0; i < n * n; i++) area.heights[i] = base + noise[i] * amplitude;
+            for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) area.heights[j * nx + i] = base + noise[j * n + i] * amplitude;
         }
         return area;
     }
 
-    index(i, j) { return j * this.n + i; }
+    index(i, j) { return j * this.nx + i; }
 
     /** Height at area metres (bilinear, clamped). */
     heightAt(x, y) {
-        const n = this.n;
+        const n = this.nx;
         const fx = Math.min(Math.max(x / SPACING, 0), n - 1);
-        const fy = Math.min(Math.max(y / SPACING, 0), n - 1);
-        const i = Math.min(Math.floor(fx), n - 2), j = Math.min(Math.floor(fy), n - 2);
+        const fy = Math.min(Math.max(y / SPACING, 0), this.ny - 1);
+        const i = Math.min(Math.floor(fx), n - 2), j = Math.min(Math.floor(fy), this.ny - 2);
         const tx = fx - i, ty = fy - j;
         const h = this.heights;
         const a = h[j * n + i] + (h[j * n + i + 1] - h[j * n + i]) * tx;
@@ -123,8 +129,8 @@ export class Area {
     /** Each body's samples: joined to its own (4-connected) through samples
      *  lower than its level. */
     flood(body) {
-        const n = this.n, h = this.heights, wet = new Uint8Array(n * n);
-        if (body.i < 0 || body.j < 0 || body.i >= n || body.j >= n) return wet;
+        const n = this.nx, rows = this.ny, h = this.heights, wet = new Uint8Array(n * rows);
+        if (body.i < 0 || body.j < 0 || body.i >= n || body.j >= rows) return wet;
         const stack = [body.j * n + body.i];
         while (stack.length) {
             const k = stack.pop();
@@ -134,7 +140,7 @@ export class Area {
             if (x > 0) stack.push(k - 1);
             if (x + 1 < n) stack.push(k + 1);
             if (y > 0) stack.push(k - n);
-            if (y + 1 < n) stack.push(k + n);
+            if (y + 1 < rows) stack.push(k + n);
         }
         return wet;
     }
@@ -152,7 +158,7 @@ export class Area {
 
     /** The body of water over sample (i, j), if any (the highest). */
     bodyAt(i, j) {
-        const k = j * this.n + i;
+        const k = j * this.nx + i;
         let best = null;
         for (const b of this.water) if (this.flood(b)[k] && (!best || b.level > best.level)) best = b;
         return best;
@@ -160,14 +166,14 @@ export class Area {
 
     /** Water depth over sample (i, j) (0 when dry). */
     depth(i, j) {
-        const k = j * this.n + i, l = this.waterLevel[k];
+        const k = j * this.nx + i, l = this.waterLevel[k];
         return Number.isNaN(l) ? 0 : l - this.heights[k];
     }
 
     /** Whether ground at sample (i, j) is walkable by landscaper's rule. */
     /** Whether sample (i, j) is a cave's void (rock at its roof). */
     void(i, j) {
-        return this.enclosed() && this.heights[j * this.n + i] >= this.roof - VOID_BELOW;
+        return this.enclosed() && this.heights[j * this.nx + i] >= this.roof - VOID_BELOW;
     }
 
     /** A cave or an interior: dug out of a mass, its tops void, no sky. */
@@ -176,12 +182,12 @@ export class Area {
     }
 
     walkable(i, j) {
-        const n = this.n, h = this.heights, z = h[j * n + i];
+        const n = this.nx, h = this.heights, z = h[j * n + i];
         if (this.depth(i, j) > SHALLOW || this.void(i, j)) return false;
         if (i > 0 && Math.abs(h[j * n + i - 1] - z) > MAX_RISE) return false;
         if (i < n - 1 && Math.abs(h[j * n + i + 1] - z) > MAX_RISE) return false;
         if (j > 0 && Math.abs(h[(j - 1) * n + i] - z) > MAX_RISE) return false;
-        if (j < n - 1 && Math.abs(h[(j + 1) * n + i] - z) > MAX_RISE) return false;
+        if (j < this.ny - 1 && Math.abs(h[(j + 1) * n + i] - z) > MAX_RISE) return false;
         return true;
     }
 
@@ -212,7 +218,7 @@ export class Area {
     // Saved in the browser between sessions.
     toJSON() {
         return {
-            name: this.name, tiles: this.tiles,
+            name: this.name, tiles: this.tiles, tilesY: this.tilesY,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
             atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId, kind: this.kind, roof: this.roof, module: this.module,
@@ -222,7 +228,7 @@ export class Area {
     static fromJSON(o) {
         const heights = new Float32Array(fromBase64(o.heights).buffer);
         const materials = o.materials ? fromBase64(o.materials) : undefined;
-        const area = new Area(o.name, o.tiles, heights, materials, o.palette);
+        const area = new Area(o.name, o.tiles, heights, materials, o.palette, o.tilesY ?? o.tiles);
         if (o.atmosphere) area.atmosphere = o.atmosphere;
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.entrances) area.entrances = o.entrances;

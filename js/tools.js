@@ -37,9 +37,9 @@ function falloff(d, r) {
  */
 export function stamp(area, tool, x, y, radius, strength, dt, flattenTo, paintIndex) {
     if (tool === 'dig') return dig(area, x, y, Math.max(radius, DIG_MIN), flattenTo, paintIndex);
-    const n = area.n, h = area.heights;
+    const n = area.nx, h = area.heights;
     const i0 = Math.max(0, Math.floor((x - radius) / SPACING)), i1 = Math.min(n - 1, Math.ceil((x + radius) / SPACING));
-    const j0 = Math.max(0, Math.floor((y - radius) / SPACING)), j1 = Math.min(n - 1, Math.ceil((y + radius) / SPACING));
+    const j0 = Math.max(0, Math.floor((y - radius) / SPACING)), j1 = Math.min(area.ny - 1, Math.ceil((y + radius) / SPACING));
     if (i0 > i1 || j0 > j1) return null;
     const amount = strength * Math.min(dt, 0.1);
 
@@ -63,7 +63,7 @@ export function stamp(area, tool, x, y, radius, strength, dt, flattenTo, paintIn
                 for (let dj = -2; dj <= 2; dj++) {
                     for (let di = -2; di <= 2; di++) {
                         const ii = i + di, jj = j + dj;
-                        if (ii >= 0 && ii < n && jj >= 0 && jj < n) { sum += h[jj * n + ii]; count++; }
+                        if (ii >= 0 && ii < n && jj >= 0 && jj < area.ny) { sum += h[jj * n + ii]; count++; }
                     }
                 }
                 avg[(j - j0) * w + (i - i0)] = sum / count;
@@ -97,9 +97,9 @@ export function stamp(area, tool, x, y, radius, strength, dt, flattenTo, paintIn
  * walls aren't smooth arcs) down to `floor`, painted `paintIndex`.
  */
 function dig(area, x, y, radius, floor, paintIndex) {
-    const n = area.n, h = area.heights, reach = radius * 1.2;
+    const n = area.nx, h = area.heights, reach = radius * 1.2;
     const i0 = Math.max(0, Math.floor((x - reach) / SPACING)), i1 = Math.min(n - 1, Math.ceil((x + reach) / SPACING));
-    const j0 = Math.max(0, Math.floor((y - reach) / SPACING)), j1 = Math.min(n - 1, Math.ceil((y + reach) / SPACING));
+    const j0 = Math.max(0, Math.floor((y - reach) / SPACING)), j1 = Math.min(area.ny - 1, Math.ceil((y + reach) / SPACING));
     if (i0 > i1 || j0 > j1) return null;
     for (let j = j0; j <= j1; j++) {
         for (let i = i0; i <= i1; i++) {
@@ -131,7 +131,7 @@ export const ROOM_MIN = 2.5;
  *  so a room must cover the middle of each tile edge it crosses: its west and
  *  south walls sit in the first half of their tile (at most 3.75 m in), its
  *  east and north walls in the second half (at least 6.25 m in). */
-export function roomRect(a, b, size) {
+export function roomRect(a, b, sizeX, sizeY = sizeX) {
     const snap = v => Math.round(v / ROOM_GRID) * ROOM_GRID;
     const low = v => {
         const base = Math.floor(v / TILE) * TILE, o = v - base;
@@ -151,21 +151,21 @@ export function roomRect(a, b, size) {
         return [v0, v1];
     };
     const [x0, x1] = side(a.x, b.x), [y0, y1] = side(a.y, b.y);
-    const c = v => Math.min(size, Math.max(0, v));
-    return { x0: c(x0), x1: c(x1), y0: c(y0), y1: c(y1) };
+    const cx = v => Math.min(sizeX, Math.max(0, v)), cy = v => Math.min(sizeY, Math.max(0, v));
+    return { x0: cx(x0), x1: cx(x1), y0: cy(y0), y1: cy(y1) };
 }
 
 /** Cuts room `r` out down to `floor`, its floor painted `paintIndex`. */
 export function cutRoom(area, r, floor, paintIndex) {
-    const n = area.n, h = area.heights;
+    const n = area.nx, rows = area.ny, h = area.heights;
     const i0 = Math.ceil(r.x0 / SPACING), i1 = Math.floor(r.x1 / SPACING);
     const j0 = Math.ceil(r.y0 / SPACING), j1 = Math.floor(r.y1 / SPACING);
-    for (let j = Math.max(0, j0); j <= Math.min(n - 1, j1); j++) {
+    for (let j = Math.max(0, j0); j <= Math.min(rows - 1, j1); j++) {
         for (let i = Math.max(0, i0); i <= Math.min(n - 1, i1); i++) {
             const k = j * n + i;
             h[k] = floor;
             if (paintIndex !== undefined) area.materials[k] = paintIndex;
         }
     }
-    return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(n - 1, j1 + 1) };
+    return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(rows - 1, j1 + 1) };
 }
