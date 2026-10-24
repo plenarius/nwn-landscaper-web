@@ -171,6 +171,12 @@ $('placeScale').oninput = () => {
 showScale();
 
 /** Ground under an object: the lowest point under its outline, so it doesn't float on a slope. */
+/** Where object `o` sits: on the ground under it, or for an imported
+ *  tile's trees and cliffs (their heights built in, from 0) where it is. */
+function settle(o, flat) {
+    return o.model.startsWith('@import:') ? o.z : groundUnder(o, flat);
+}
+
 function groundUnder(o, flat) {
     const c = Math.cos(o.bearing), s = Math.sin(o.bearing);
     const corners = [[flat.min[0], flat.min[1]], [flat.max[0], flat.min[1]], [flat.min[0], flat.max[1]], [flat.max[0], flat.max[1]], [0, 0]];
@@ -262,7 +268,7 @@ function placeDrag(e) {
         if (Math.hypot(p.x - s.from.x, p.y - s.from.y) < 0.3) return;
         s.object.bearing = Math.atan2(p.y - s.from.y, p.x - s.from.x);
     }
-    s.object.z = groundUnder(s.object, s.flat);
+    s.object.z = settle(s.object, s.flat);
     view.updateObjects();
 }
 
@@ -272,7 +278,7 @@ async function changeSelected(change) {
     if (!o) return false;
     area.beginStroke();
     change(o);
-    o.z = groundUnder(o, await models.flat(o.model));
+    o.z = settle(o, await models.flat(o.model));
     view.updateObjects();
     saveSoon();
     return true;
