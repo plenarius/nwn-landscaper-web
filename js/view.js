@@ -55,8 +55,19 @@ const SPLAT_FRAGMENT = `
         float m10 = floor(texelFetch(uMat, b + ivec2(1, 0), 0).r * 255.0 + 0.5);
         float m01 = floor(texelFetch(uMat, b + ivec2(0, 1), 0).r * 255.0 + 0.5);
         float m11 = floor(texelFetch(uMat, b + ivec2(1, 1), 0).r * 255.0 + 0.5);
-        // An imported area's ground: its picture over the whole area.
-        vec4 imported = texture2D(uImport, vArea / uSize);
+        // An imported area's ground: its picture over the whole area; beyond
+        // the edge, the border's outer 5 m mirrored out and back every 10 m
+        // (as landscaper's edge models draw it).
+        vec2 folded = vArea;
+        for (int k = 0; k < 2; k++) {
+            float c = folded[k];
+            if (c < 0.0 || c > uSize) {
+                float m = mod(c < 0.0 ? -c : c - uSize, 10.0);
+                m = m > 5.0 ? 10.0 - m : m;
+                folded[k] = c < 0.0 ? m : uSize - m;
+            }
+        }
+        vec4 imported = texture2D(uImport, folded / uSize);
         vec4 splat;
         if (vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
             vec2 side = vec2(vArea.x + vArea.y, -vUp) / ${TEXTURE_METRES.toFixed(1)};
