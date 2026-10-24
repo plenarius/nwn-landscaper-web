@@ -516,10 +516,11 @@ if (debug) {
 }
 
 // ?debug: the editor's state for test scripts.
-if (debug) window.landscaper = { area: () => area, view };
+if (debug) window.landscaper = { area: () => area, view, live: () => live };
 
 const canvas = view.renderer.domElement;
 let stroke = null; // { flattenTo, last }
+const live = { on: localStorage.getItem('landscaper.live') !== 'off', timer: null, running: false, again: false, edits: 0 };
 let mouse = null;  // last client position over the canvas
 
 // Water: a press starts a body (or takes the one clicked) and dragging up
@@ -774,6 +775,7 @@ function setArea(a) {
     $('report').hidden = true;
     skyNight = a.atmosphere.time === 'night';
     showSky();
+    checkSoon();
 }
 
 let saveTimer = null;
@@ -787,7 +789,60 @@ function saveSoon() {
             localStorage.setItem(`landscaper.saved.${area.name}`, String(Date.now()));
         } catch (err) { console.warn('autosave failed', err); }
     }, 800);
+    checkSoon();
 }
+
+// Live check: Check paths again a moment after each edit, one at a time
+// (serve does one request at a time; an export waits behind it). A result
+// for an area that has changed since is dropped and the check runs again.
+const LIVE_DELAY = 1500;
+
+function showLive(state, text, title) {
+    const b = $('btnLive');
+    b.className = `top-btn live ${live.on ? state : 'off'}`;
+    $('liveText').textContent = live.on ? text : 'Live off';
+    b.title = live.on ? `${title}\nClick to stop checking after each edit.` : 'Check paths after each edit (click to turn on)';
+}
+
+function checkSoon() {
+    live.edits++;
+    clearTimeout(live.timer);
+    if (!live.on || !area) return;
+    showLive('busy', 'Live …', 'Waiting for you to stop editing.');
+    live.timer = setTimeout(liveCheck, LIVE_DELAY);
+}
+
+async function liveCheck() {
+    if (!live.on || !area) return;
+    if (stroke) return; // its end schedules one
+    if (live.running) { live.again = true; return; }
+    live.running = true;
+    const edits = live.edits, checked = area;
+    showLive('busy', 'Checking…', 'Checking how NWN will path this area.');
+    let report = null, error = null;
+    try { report = await sendArea('check'); } catch (err) { error = err; }
+    live.running = false;
+    if (live.again || edits !== live.edits || checked !== area) {
+        live.again = false;
+        if (live.on && area) live.timer = setTimeout(liveCheck, LIVE_DELAY);
+        return;
+    }
+    if (error) { showLive('bad', 'Live: error', error.message); return; }
+    view.setMarkers(report.warnings || []);
+    const { ok, total } = report.routes;
+    const failed = total - ok, others = report.warnings.length - report.warnings.filter(w => w.kind === 'failed_route').length;
+    if (failed) showLive('bad', `${failed} blocked`, `${ok} of ${total} test routes reach their goal; red pillars mark where they stop.`);
+    else if (others) showLive('warn', `${others} spot${others > 1 ? 's' : ''}`, `All ${total} test routes work; orange pillars mark ${others} spot(s) to look at (Check paths explains).`);
+    else showLive('ok', 'Paths OK', `All ${total} test routes work.`);
+}
+
+$('btnLive').onclick = () => {
+    live.on = !live.on;
+    localStorage.setItem('landscaper.live', live.on ? 'on' : 'off');
+    if (live.on) checkSoon();
+    else { clearTimeout(live.timer); view.setMarkers([]); showLive('off'); }
+};
+showLive('off');
 
 function refreshAll() {
     if (view.selected && !area.objects.includes(view.selected)) selectObject(null);

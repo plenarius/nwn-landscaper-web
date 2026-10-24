@@ -61,6 +61,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .top-btn:hover { background: #3a4452; }
 .top-btn.active { border-color: var(--accent); background: #3d3a30; }
 .top-btn:disabled { opacity: 0.45; cursor: default; }
+.top-btn { white-space: nowrap; }
+.top-btn.live { gap: 6px; min-width: 7em; font-variant-numeric: tabular-nums; }
+.top-btn.live .dot { width: 9px; height: 9px; border-radius: 50%; background: #66707c; flex: none; }
+.top-btn.live.busy .dot { background: #8fb3e0; animation: livePulse 1s ease-in-out infinite; }
+.top-btn.live.ok .dot { background: #6cc070; }
+.top-btn.live.bad .dot { background: #e0554a; }
+.top-btn.live.warn .dot { background: #e0a040; }
+.top-btn.live.off { opacity: 0.6; }
+@keyframes livePulse { 50% { opacity: 0.3; } }
 .top-btn.primary { background: var(--accent); color: #1d1a12; font-weight: 600; }
 .top-btn.primary:hover { background: #e6b562; }
 
