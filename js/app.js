@@ -303,10 +303,8 @@ function showImportList() {
     for (const s of found.slice(0, 150)) {
         const b = document.createElement('button');
         b.type = 'button';
-        const square = s.width === s.height;
-        b.disabled = !square;
         const kind = s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors';
-        b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind} · ${s.from}${square ? '' : ' · not square: not yet'}</small>`;
+        b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind} · ${s.from}</small>`;
         if (importChosen === s) b.classList.add('selected');
         b.onclick = () => {
             importChosen = s;
