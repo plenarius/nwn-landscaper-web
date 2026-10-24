@@ -68,10 +68,11 @@ export class Area {
         return k;
     }
 
-    static create(name, tiles, start) {
+    /** A new area; its ground (or a cave's floor) at `base` metres: start
+     *  high to dig valleys and canyons down into it. */
+    static create(name, tiles, start, base = 5) {
         const area = new Area(name, tiles);
         const n = area.n;
-        const base = 5;
         if (start === 'interior') {
             // A solid mass with walls of stone; rooms are cut out of it.
             area.kind = 'interior';

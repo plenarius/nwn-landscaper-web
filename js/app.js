@@ -882,7 +882,8 @@ $('btnNew').onclick = () => {
 $('newDialog').addEventListener('close', () => {
     if ($('newDialog').returnValue !== 'ok') return;
     const start = new FormData($('newDialog').querySelector('form')).get('start');
-    const created = Area.create($('newName').value.trim().toLowerCase(), chosenSize, start);
+    const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
+    const created = Area.create($('newName').value.trim().toLowerCase(), chosenSize, start, base);
     created.module = $('newModule').value.trim().toLowerCase() || created.name;
     setArea(created);
     saveSoon();
