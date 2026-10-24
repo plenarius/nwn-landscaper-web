@@ -352,7 +352,8 @@ $('btnOpen').onclick = async () => {
     for (const a of areas) {
         const b = document.createElement('button');
         b.type = 'button';
-        const what = a.local ? 'not exported yet' : `${a.tiles}×${a.tiles}${a.kind === 'underground' ? ' cave' : ''} · module ${a.module}`;
+        const kind = a.kind === 'underground' ? ' cave' : a.kind === 'interior' ? ' interior' : '';
+        const what = a.local ? 'only in this browser' : `${a.tiles}×${a.tilesY ?? a.tiles}${kind} · module ${a.module}${a.exported ? '' : ' · not exported yet'}`;
         b.innerHTML = `<span><b>${a.name}</b>${a.name === area.name ? ' (open)' : ''}</span><small>${what}</small>`;
         b.onclick = () => { $('openDialog').close(); openArea(a); };
         list.appendChild(b);
@@ -360,12 +361,12 @@ $('btnOpen').onclick = async () => {
     if (!areas.length) list.textContent = 'No areas yet: export one first.';
 };
 
-/** Opens area `a`: its save here when newer than its export, else the export. */
+/** Opens area `a`: from landscaper (its saved copy, else its last export),
+ *  or from this browser if it only lives here (a save that failed). */
 async function openArea(a) {
     const local = localStorage.getItem(`landscaper.area.${a.name}`);
-    const savedAt = +(localStorage.getItem(`landscaper.saved.${a.name}`) ?? 0);
     try {
-        if (local && (a.local || savedAt >= (a.exported ?? 0) * 1000)) {
+        if (local && a.local) {
             setArea(Area.fromJSON(JSON.parse(local)));
         } else {
             const res = await fetch(`/api/area?name=${encodeURIComponent(a.name)}`);
@@ -850,18 +851,62 @@ function setArea(a) {
     checkSoon();
 }
 
+// Autosave: each area to landscaper (areas/<name>.json on disk) a moment
+// after each change. If that fails, into this browser until it works again,
+// and the status line says so.
 let saveTimer = null;
 function saveSoon() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-        // Each area its own save, and which one was open.
-        try {
-            localStorage.setItem(`landscaper.area.${area.name}`, JSON.stringify(area.toJSON()));
-            localStorage.setItem('landscaper.current', area.name);
-            localStorage.setItem(`landscaper.saved.${area.name}`, String(Date.now()));
-        } catch (err) { console.warn('autosave failed', err); }
-    }, 800);
+    saveTimer = setTimeout(() => saveArea(area), 800);
     checkSoon();
+}
+
+async function saveArea(a) {
+    const json = JSON.stringify(a.toJSON());
+    localStorage.setItem('landscaper.current', a.name);
+    try {
+        await putArea(a.name, json);
+        localStorage.removeItem(`landscaper.area.${a.name}`);
+        localStorage.removeItem(`landscaper.saved.${a.name}`);
+        if ($('statusMsg').dataset.saveFailed) { $('statusMsg').textContent = 'Saved.'; delete $('statusMsg').dataset.saveFailed; }
+    } catch (err) {
+        try {
+            localStorage.setItem(`landscaper.area.${a.name}`, json);
+            localStorage.setItem(`landscaper.saved.${a.name}`, String(Date.now()));
+            $('statusMsg').textContent = `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`;
+        } catch {
+            $('statusMsg').textContent = `Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`;
+        }
+        $('statusMsg').dataset.saveFailed = '1';
+    }
+}
+
+async function putArea(name, json) {
+    const res = await fetch(`/api/save?name=${encodeURIComponent(name)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: json });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+}
+
+/** Areas kept in this browser (before landscaper saved to disk, or when a
+ *  save failed) go to landscaper when newer than its copy, then leave the
+ *  browser. */
+async function moveBrowserAreas() {
+    const names = Object.keys(localStorage).filter(k => k.startsWith('landscaper.area.')).map(k => k.slice(16));
+    if (!names.length) return;
+    let known = [];
+    try { known = (await (await fetch('/api/areas')).json()).areas; } catch { return; }
+    let moved = 0;
+    for (const name of names) {
+        const json = localStorage.getItem(`landscaper.area.${name}`);
+        const at = +(localStorage.getItem(`landscaper.saved.${name}`) ?? 0);
+        const there = known.find(a => a.name === name);
+        const theirs = Math.max(there?.saved ?? 0, there?.exported ?? 0) * 1000;
+        try {
+            if (!there || at > theirs) { await putArea(name, json); moved++; }
+            localStorage.removeItem(`landscaper.area.${name}`);
+            localStorage.removeItem(`landscaper.saved.${name}`);
+        } catch (err) { console.warn(`couldn't move ${name} to disk`, err); }
+    }
+    if (moved) $('statusMsg').textContent = `Moved ${moved} area${moved > 1 ? 's' : ''} from this browser to landscaper's folder.`;
 }
 
 // Live check: Check paths again a moment after each edit, one at a time
@@ -1094,9 +1139,18 @@ window.addEventListener('keydown', e => {
 
 // --- Start ---------------------------------------------------------------------------
 
-const saved = localStorage.getItem(`landscaper.area.${localStorage.getItem('landscaper.current')}`) ?? localStorage.getItem('landscaper.area');
-if (saved) {
-    try { setArea(Area.fromJSON(JSON.parse(saved))); } catch { setArea(Area.create('untitled', 8, 'hills')); }
-} else {
-    setArea(Area.create('untitled', 8, 'hills'));
+// The area last open: from landscaper, or this browser if it couldn't take it.
+await moveBrowserAreas();
+{
+    const current = localStorage.getItem('landscaper.current');
+    const local = current && localStorage.getItem(`landscaper.area.${current}`);
+    let opened = null;
+    if (current && !local) {
+        try {
+            const res = await fetch(`/api/area?name=${encodeURIComponent(current)}`);
+            if (res.ok) opened = Area.fromJSON(await res.json());
+        } catch { /* not served */ }
+    }
+    try { opened ??= local ? Area.fromJSON(JSON.parse(local)) : null; } catch { opened = null; }
+    setArea(opened ?? Area.create('untitled', 8, 'hills'));
 }
