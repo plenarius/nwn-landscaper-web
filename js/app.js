@@ -551,7 +551,13 @@ for (const r of document.querySelectorAll('[name=skyTime]')) {
     });
 }
 for (const b of $('dayNight').children) b.onclick = () => { skyNight = b.dataset.night === '1'; showSky(); };
-$('skyPreview').onchange = showSky;
+// Whether the view shows the area's light and fog (else a plain working
+// light, no fog), remembered.
+$('skyPreview').checked = localStorage.getItem('landscaper.skyPreview') !== 'off';
+$('skyPreview').onchange = () => {
+    localStorage.setItem('landscaper.skyPreview', $('skyPreview').checked ? 'on' : 'off');
+    showSky();
+};
 $('btnSky').onclick = () => { skyOpen = !skyOpen; updatePanels(); };
 $('skyClose').onclick = () => { skyOpen = false; updatePanels(); };
 
