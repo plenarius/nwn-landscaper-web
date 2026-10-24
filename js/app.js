@@ -392,20 +392,32 @@ $('btnOpen').onclick = async () => {
 /** Imports area `a` again from its kept original, then opens it. */
 async function reimport(a, button) {
     if (!confirm(`Import ${a.name} again from its original?\n\nYour changes to it here are replaced (the last copy is kept as a backup). Its next export puts the original's placeables, creatures and lighting into the module again, replacing what was changed there in the toolset.`)) return;
-    for (const b of $('openList').querySelectorAll('button')) b.disabled = true;
+    // The whole dialog waits for it: every button off, no closing it.
+    reimporting = true;
+    for (const b of $('openDialog').querySelectorAll('button')) b.disabled = true;
     button.textContent = 'Importing…';
     try {
         const res = await fetch(`/api/reimport?name=${encodeURIComponent(a.name)}`, { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
+        reimporting = false;
+        for (const b of $('openDialog').querySelectorAll('button')) b.disabled = false;
         $('openDialog').close();
         await openArea({ name: a.name });
         $('statusMsg').textContent = `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ' Notes: ' + r.notes.join('; ') : ''}`;
     } catch (err) {
         $('openDialog').close();
         showError(`Couldn't import ${a.name} again: ${err.message}`);
+    } finally {
+        reimporting = false;
+        for (const b of $('openDialog').querySelectorAll('button')) b.disabled = false;
     }
 }
+let reimporting = false;
+$('openDialog').addEventListener('cancel', e => { if (reimporting) e.preventDefault(); });
+// (Escape itself too, wherever focus is with every button off: browsers let
+// it close a dialog regardless when there was no click since the last time.)
+document.addEventListener('keydown', e => { if ((reimporting || importing) && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } }, true);
 
 /** Opens area `a`: from landscaper (its saved copy, else its last export),
  *  or from this browser if it only lives here (a save that failed). */
