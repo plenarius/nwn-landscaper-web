@@ -273,3 +273,8 @@ input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #00
 .open-list small { color: var(--muted); }
 .entrance-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid #000; font-size: 13px; }
 .entrance-row select { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 6px; padding: 4px; }
+
+.import-list { max-height: 40vh; min-width: 520px; }
+.import-list button.selected { border-color: var(--accent); background: #3d3a30; }
+.import-list button:disabled { opacity: 0.45; cursor: default; }
+#importStatus:empty { display: none; }

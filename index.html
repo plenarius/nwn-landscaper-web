@@ -155,7 +155,24 @@
         <form method="dialog">
             <h2>Open an area</h2>
             <div id="openList" class="open-list"></div>
-            <menu><button value="cancel">Cancel</button></menu>
+            <menu><button type="button" id="btnImport">Import an NWN area…</button><button value="cancel">Cancel</button></menu>
+        </form>
+    </dialog>
+
+    <dialog id="importDialog">
+        <form method="dialog">
+            <h2>Import an NWN area</h2>
+            <p class="note">Its ground, cliffs, trees and water come in on the tileset's own textures; its placeables, creatures, doors and scripts come with it on export.</p>
+            <label>Find <small>by tag, resref or tileset</small>
+                <input id="importFind" placeholder="e.g. bay, ttr01, forest" autocomplete="off"></label>
+            <div id="importList" class="open-list import-list"></div>
+            <label>Name <small>1–9 letters, digits or _ for the new area (prefixes every resref)</small>
+                <input id="importName" pattern="[a-z0-9_]{1,9}" maxlength="9"></label>
+            <p id="importStatus" class="note"></p>
+            <menu>
+                <button value="cancel" formnovalidate>Cancel</button>
+                <button type="button" id="importGo" class="primary" disabled>Import</button>
+            </menu>
         </form>
     </dialog>
 

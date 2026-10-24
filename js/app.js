@@ -278,6 +278,67 @@ async function changeSelected(change) {
     return true;
 }
 
+// --- Import an NWN area ----------------------------------------------------------------
+
+let importSources = null, importChosen = null;
+$('btnImport').onclick = async () => {
+    $('openDialog').close();
+    $('importStatus').textContent = '';
+    $('importDialog').showModal();
+    if (!importSources) {
+        $('importList').textContent = 'Reading the areas you have…';
+        try { importSources = (await (await fetch('/api/import-sources')).json()).sources; } catch { importSources = []; }
+    }
+    showImportList();
+    $('importFind').focus();
+};
+$('importFind').oninput = () => showImportList();
+$('importName').oninput = () => { $('importGo').disabled = !importChosen || !$('importName').checkValidity() || !$('importName').value; };
+
+function showImportList() {
+    const words = $('importFind').value.toLowerCase().split(/\s+/).filter(Boolean);
+    const box = $('importList');
+    box.textContent = '';
+    const found = importSources.filter(s => words.every(w => `${s.tag ?? ''} ${s.area} ${s.tileset} ${s.from}`.toLowerCase().includes(w)));
+    for (const s of found.slice(0, 150)) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        const square = s.width === s.height;
+        b.disabled = !square;
+        const kind = s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors';
+        b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind} · ${s.from}${square ? '' : ' · not square: not yet'}</small>`;
+        if (importChosen === s) b.classList.add('selected');
+        b.onclick = () => {
+            importChosen = s;
+            for (const o of box.children) o.classList.toggle('selected', o === b);
+            // A name from its tag: lower case, letters, digits and _, 9 at most.
+            $('importName').value = (s.tag || s.area).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 9) || 'imported';
+            $('importName').oninput();
+        };
+        box.appendChild(b);
+    }
+    if (!found.length) box.textContent = 'No area matches.';
+    else if (found.length > 150) box.insertAdjacentHTML('beforeend', `<p class="note">${found.length - 150} more: narrow the search.</p>`);
+}
+
+$('importGo').onclick = async () => {
+    if (!importChosen) return;
+    const name = $('importName').value;
+    $('importGo').disabled = true;
+    $('importStatus').textContent = `Importing ${importChosen.tag || importChosen.area} as ${name}… (reading its tiles and the module's haks takes a little while)`;
+    try {
+        const res = await fetch(`/api/import?source=${encodeURIComponent(importChosen.source)}&name=${encodeURIComponent(name)}`, { method: 'POST' });
+        const r = await res.json();
+        if (!res.ok) throw new Error(r.error || res.statusText);
+        $('importDialog').close();
+        await openArea({ name });
+        $('statusMsg').textContent = `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ' Notes: ' + r.notes.join('; ') : ''}`;
+    } catch (err) {
+        $('importStatus').textContent = `Couldn't import: ${err.message}`;
+        $('importGo').disabled = false;
+    }
+};
+
 // --- Open, and where entrances lead ---------------------------------------------------
 
 $('btnOpen').onclick = async () => {

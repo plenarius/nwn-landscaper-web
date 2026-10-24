@@ -412,9 +412,10 @@ export class View {
         this.scene.add(group);
         if (!this.models) return;
         const size = this.area.size;
-        for (const [i, o] of this.area.objects.entries()) {
+        // All at once, each drawn as its model arrives.
+        await Promise.all(this.area.objects.map(async o => {
             let model;
-            try { model = await this.models.group(o.model); } catch { continue; }
+            try { model = await this.models.group(o.model); } catch { return; }
             if (group !== this.objectGroup) return; // rebuilt meanwhile
             const inst = model.clone();
             inst.position.set(o.x, o.z, size - o.y);
@@ -423,7 +424,7 @@ export class View {
             inst.userData.object = o;
             group.add(inst);
             if (o === this.selected) this.showSelection(inst);
-        }
+        }));
     }
 
     /** Adds one object's model to the view (painting many at once). */
