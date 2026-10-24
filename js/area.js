@@ -127,16 +127,18 @@ export class Area {
     }
 
     /** Each body's samples: joined to its own (4-connected) through samples
-     *  lower than its level. */
+     *  lower than its level, within its bounds if it has them ([i0, j0, i1,
+     *  j1]: an imported area's water stays where its tiles drew it). */
     flood(body) {
         const n = this.nx, rows = this.ny, h = this.heights, wet = new Uint8Array(n * rows);
         if (body.i < 0 || body.j < 0 || body.i >= n || body.j >= rows) return wet;
+        const [i0, j0, i1, j1] = body.bounds ?? [0, 0, n - 1, rows - 1];
         const stack = [body.j * n + body.i];
         while (stack.length) {
             const k = stack.pop();
-            if (wet[k] || h[k] >= body.level) continue;
-            wet[k] = 1;
             const x = k % n, y = (k / n) | 0;
+            if (wet[k] || h[k] >= body.level || x < i0 || x > i1 || y < j0 || y > j1) continue;
+            wet[k] = 1;
             if (x > 0) stack.push(k - 1);
             if (x + 1 < n) stack.push(k + 1);
             if (y > 0) stack.push(k - n);
