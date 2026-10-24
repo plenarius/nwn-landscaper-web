@@ -171,10 +171,12 @@ $('placeScale').oninput = () => {
 showScale();
 
 /** Ground under an object: the lowest point under its outline, so it doesn't float on a slope. */
-/** Where object `o` sits: on the ground under it, or for an imported
- *  tile's trees and cliffs (their heights built in, from 0) where it is. */
+/** Where object `o` sits: on the ground under it; an imported thing (a
+ *  tree, a rock) on the ground at its middle, as the import stood it; an
+ *  imported tile's cliffs and blocked ground (heights built in) where it is. */
 function settle(o, flat) {
-    return o.model.startsWith('@import:') ? o.z : groundUnder(o, flat);
+    if (flat.fixed) return o.z;
+    return o.model.startsWith('@import:') ? area.heightAt(o.x, o.y) : groundUnder(o, flat);
 }
 
 function groundUnder(o, flat) {

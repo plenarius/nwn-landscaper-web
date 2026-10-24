@@ -63,6 +63,17 @@ export class ModelLibrary {
         return this.textures.get(name);
     }
 
+    /** A picture at `url` (an imported thing's ground patch), loaded once. */
+    picture(url) {
+        if (!this.textures.has(url)) {
+            const t = new THREE.TextureLoader().load(url);
+            t.colorSpace = THREE.SRGBColorSpace;
+            t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+            this.textures.set(url, t);
+        }
+        return this.textures.get(url);
+    }
+
     /** The model as a group to clone (shared geometry and materials). */
     group(model) {
         if (!this.groups.has(model)) {

@@ -429,8 +429,42 @@ export class View {
             inst.scale.setScalar(o.scale);
             inst.userData.object = o;
             group.add(inst);
+            this.addDecal(group, o, model.userData.flat);
             if (o === this.selected) this.showSelection(inst);
         }));
+    }
+
+    /** An imported thing's patch of ground, draped on the ground where it
+     *  stands (turned and scaled with it), as the export paints it. */
+    addDecal(group, o, flat) {
+        const d = flat?.decal;
+        if (!d) return;
+        const name = o.model.slice('@import:'.length).split(':')[0];
+        const [x0, y0, x1, y1] = d.rect, n = 8, c = Math.cos(o.bearing), s = Math.sin(o.bearing), area = this.area;
+        const pos = [], uv = [], index = [];
+        for (let j = 0; j <= n; j++) {
+            for (let i = 0; i <= n; i++) {
+                const u = x0 + (x1 - x0) * i / n, v = y0 + (y1 - y0) * j / n;
+                const x = o.x + (c * u - s * v) * o.scale, y = o.y + (s * u + c * v) * o.scale;
+                pos.push(x, area.heightAt(Math.min(area.sizeX, Math.max(0, x)), Math.min(area.sizeY, Math.max(0, y))) + 0.04, area.sizeY - y);
+                uv.push(i / n, j / n);
+            }
+        }
+        for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+            const a = j * (n + 1) + i;
+            index.push(a, a + n + 1, a + 1, a + 1, a + n + 1, a + n + 2);
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        geo.setIndex(index);
+        geo.computeVertexNormals();
+        const map = this.models.picture(`/api/import-file/${encodeURIComponent(name)}/${encodeURIComponent(d.file)}`);
+        const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide }));
+        mesh.renderOrder = 1;
+        mesh.userData.object = o;
+        mesh.userData.decal = true;
+        group.add(mesh);
     }
 
     /** Adds one object's model to the view (painting many at once). */
@@ -446,6 +480,7 @@ export class View {
         inst.scale.setScalar(o.scale);
         inst.userData.object = o;
         group.add(inst);
+        this.addDecal(group, o, model.userData.flat);
     }
 
     /** Takes objects (a Set) out of the view. */
@@ -470,7 +505,7 @@ export class View {
     select(o) {
         this.selected = o;
         if (this.selectionBox) { this.scene.remove(this.selectionBox); this.selectionBox.geometry.dispose(); this.selectionBox = null; }
-        const inst = this.objectGroup?.children.find(c => c.userData.object === o);
+        const inst = this.objectGroup?.children.find(c => c.userData.object === o && !c.userData.decal);
         if (inst) this.showSelection(inst);
     }
 
