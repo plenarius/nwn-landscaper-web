@@ -288,20 +288,19 @@ async function changeSelected(change) {
 
 // --- Import an NWN area ----------------------------------------------------------------
 
-let importSources = null, importChosen = null, importing = false;
+let importChosen = null, importing = false, importSeq = 0, importTimer = null;
 $('btnImport').onclick = async () => {
     if (readOnly) return;
     $('openDialog').close();
     $('importStatus').textContent = '';
     $('importDialog').showModal();
-    if (!importSources) {
-        $('importList').textContent = 'Reading the areas you have…';
-        try { importSources = (await (await fetch('/api/import-sources')).json()).sources; } catch { importSources = []; }
-    }
+    $('importFind').value = '';
+    importChosen = null;
     showImportList();
     $('importFind').focus();
 };
-$('importFind').oninput = () => showImportList();
+// The server searches (a builder can't be sent the whole module's list).
+$('importFind').oninput = () => { clearTimeout(importTimer); importTimer = setTimeout(showImportList, 250); };
 // Not closed (Escape, Cancel) while an import runs: it opens the area when done.
 $('importDialog').addEventListener('cancel', e => { if (importing) e.preventDefault(); });
 $('importDialog').querySelector('button[value=cancel]').addEventListener('click', e => { if (importing) e.preventDefault(); });
@@ -317,17 +316,25 @@ function setImporting(on) {
     $('importName').oninput();
 }
 
-function showImportList() {
-    const words = $('importFind').value.toLowerCase().split(/\s+/).filter(Boolean);
+async function showImportList() {
+    const mine = ++importSeq;
     const box = $('importList');
+    let r = { sources: [] };
+    try { r = await (await fetch(`/api/import-sources?q=${encodeURIComponent($('importFind').value.trim())}`)).json(); } catch { /* none */ }
+    if (mine !== importSeq) return; // a newer search is on its way
     box.textContent = '';
-    const found = importSources.filter(s => words.every(w => `${s.tag ?? ''} ${s.area} ${s.tileset} ${s.from}`.toLowerCase().includes(w)));
-    for (const s of found.slice(0, 150)) {
+    const found = r.sources ?? [];
+    for (const s of found) {
         const b = document.createElement('button');
         b.type = 'button';
-        const kind = s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors';
-        b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind} · ${s.from}</small>`;
-        if (importChosen === s) b.classList.add('selected');
+        // An admin's entries say what they come from; a builder's say whether it is theirs.
+        const kind = s.kind ?? (s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors');
+        const allowed = s.assigned !== false;
+        const state = s.assigned === true ? ' · assigned to you' : allowed ? '' : ' · needs an assignment';
+        b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ' · ' + s.from : ''}${state}</small>`;
+        b.disabled = !allowed;
+        if (!allowed) b.title = 'Ask an admin to assign this area to you';
+        if (importChosen?.area === s.area) b.classList.add('selected');
         b.onclick = () => {
             importChosen = s;
             for (const o of box.children) o.classList.toggle('selected', o === b);
@@ -337,8 +344,9 @@ function showImportList() {
         };
         box.appendChild(b);
     }
-    if (!found.length) box.textContent = 'No area matches.';
-    else if (found.length > 150) box.insertAdjacentHTML('beforeend', `<p class="note">${found.length - 150} more: narrow the search.</p>`);
+    if (!found.length) box.textContent = r.note || 'No area matches.';
+    else if (r.note) box.insertAdjacentHTML('afterbegin', `<p class="note">${r.note}</p>`);
+    else if (r.total > found.length) box.insertAdjacentHTML('beforeend', `<p class="note">${r.total - found.length} more: narrow the search.</p>`);
 }
 
 $('importGo').onclick = async () => {
@@ -348,7 +356,7 @@ $('importGo').onclick = async () => {
     setImporting(true);
     $('importStatus').textContent = `Importing ${importChosen.tag || importChosen.area} as ${name}… (reading its tiles and the module's haks takes a little while)`;
     try {
-        const res = await fetch(`/api/import?source=${encodeURIComponent(importChosen.source)}&name=${encodeURIComponent(name)}`, { method: 'POST' });
+        const res = await fetch(`/api/import?area=${encodeURIComponent(importChosen.area)}&name=${encodeURIComponent(name)}`, { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
         setImporting(false);
@@ -965,8 +973,7 @@ function showWho() {
         who.append(`${me.name}${me.admin ? ' (admin)' : ''}`);
     }
     for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
-    // Importing existing areas needs an assignment from an admin (not built yet).
-    $('btnImport').hidden = me.team && !me.admin;
+
 }
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
