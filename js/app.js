@@ -8,6 +8,7 @@ import { TextureLibrary } from './textures.js';
 import { PRESETS, copyPreset } from './atmosphere.js';
 import { carve, fitInTile, rockFor, at as entranceAt, nearest as nearestEntrance } from './entrance.js';
 import { ModelLibrary } from './models.js';
+import { Transformer } from './transform.js';
 
 const $ = id => document.getElementById(id);
 
@@ -121,6 +122,14 @@ library.load().then(ok => {
 // --- Placeables --------------------------------------------------------------------
 
 const models = new ModelLibrary();
+const transformer = new Transformer({
+    view,
+    area: () => area,
+    flat: o => models.flat(o.model),
+    settle: (o, flat) => settle(o, flat),
+    say: msg => { $('statusMsg').textContent = msg; },
+    changed: (o, final) => { showObjectPanel(o); if (final) { area.objects.includes(o) && saveSoon(); } },
+});
 view.models = models;
 let placeModel = null;
 const QUICK = ['rock', 'boulder', 'tree', 'bush', 'ruin', 'pillar', 'statue', 'fence'];
@@ -213,12 +222,14 @@ const appearanceOf = model => models.list?.find(p => p.model === model)?.row;
 
 function selectObject(o) {
     view.select(o);
+    transformer.show(o);
+    showObjectPanel(o);
     if (o) {
         $('placeScale').value = o.scale;
         showScale();
         showPlaceMode(o.baked !== false);
         $('placeSolid').checked = o.solid !== false;
-        $('statusMsg').textContent = `${o.model} (${o.baked === false ? `object, tag ${area.name}_p${o.id}` : 'baked'}): drag to move · Q/E to turn · size slider · Delete to remove · Esc to deselect`;
+        $('statusMsg').textContent = `${o.model} (${o.baked === false ? `object, tag ${area.name}_p${o.id}` : 'baked'}): drag to move · G move · R turn · S size (or the handles) · Q/E turn 15° · Delete removes · Esc deselects`;
     } else {
         $('statusMsg').textContent = '';
     }
@@ -285,6 +296,23 @@ async function changeSelected(change) {
     saveSoon();
     return true;
 }
+
+// --- Moving, turning and sizing the selected placeable (G / R / S, handles, numbers) -----------
+
+
+/** The selected object's numbers in the Place panel (or hides them). */
+function showObjectPanel(o) {
+    $('objPanel').hidden = !o;
+    if (!o) return;
+    $('objX').value = o.x.toFixed(2);
+    $('objY').value = o.y.toFixed(2);
+    $('objAngle').value = (((o.bearing * 180 / Math.PI) % 360 + 360) % 360).toFixed(1);
+    $('objScale').value = o.scale.toFixed(2);
+}
+$('objX').onchange = () => changeSelected(o => { o.x = Math.min(area.sizeX, Math.max(0, +$('objX').value)); }).then(() => showObjectPanel(view.selected));
+$('objY').onchange = () => changeSelected(o => { o.y = Math.min(area.sizeY, Math.max(0, +$('objY').value)); }).then(() => showObjectPanel(view.selected));
+$('objAngle').onchange = () => changeSelected(o => { o.bearing = +$('objAngle').value * Math.PI / 180; }).then(() => showObjectPanel(view.selected));
+$('objScale').onchange = () => changeSelected(o => { o.scale = Math.min(5, Math.max(0.1, +$('objScale').value || 1)); }).then(() => { showObjectPanel(view.selected); if (view.selected) { $('placeScale').value = view.selected.scale; showScale(); } });
 
 // --- Import an NWN area ----------------------------------------------------------------
 
@@ -673,7 +701,7 @@ if (debug) {
 }
 
 // ?debug: the editor's state for test scripts.
-if (debug) window.landscaper = { area: () => area, view, live: () => live };
+if (debug) window.landscaper = { area: () => area, view, live: () => live, select: o => selectObject(o), transformer };
 
 const canvas = view.renderer.domElement;
 let stroke = null; // { flattenTo, last }
@@ -792,6 +820,23 @@ function entranceDown(e, p) {
 }
 
 canvas.addEventListener('pointerdown', e => {
+    // Moving, turning or sizing the selected object: a click keeps it, a right click cancels.
+    if (transformer.active) {
+        e.preventDefault();
+        if (e.button === 0) transformer.confirm(); else if (e.button === 2) transformer.cancel();
+        return;
+    }
+    if (e.button === 0 && area && tool === 'place' && view.selected) {
+        const h = transformer.pickHandle(e.clientX, e.clientY);
+        if (h) {
+            const p = view.pick(e.clientX, e.clientY);
+            transformer.last = { clientX: e.clientX, clientY: e.clientY };
+            if (transformer.begin(h.kind, h.axis, true, p ? { x: p.x, y: p.y } : null)) {
+                try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
+            }
+            return;
+        }
+    }
     if (e.button !== 0 || !area) { dbg.note = `(ignored: button ${e.button})`; showDebug(); return; }
     mouse = { x: e.clientX, y: e.clientY };
     const p = view.pick(e.clientX, e.clientY);
@@ -867,6 +912,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
     mouse = { x: e.clientX, y: e.clientY };
+    transformer.move(e);
     if (stroke?.water) waterDrag(e);
     if (stroke?.place) placeDrag(e);
     if (stroke?.room) {
@@ -899,10 +945,11 @@ const endStroke = () => {
     stroke = null;
     saveSoon();
 };
-canvas.addEventListener('pointerup', endStroke);
-canvas.addEventListener('pointercancel', endStroke);
+canvas.addEventListener('pointerup', e => { if (transformer.active && transformer.held) { transformer.confirm(); return; } endStroke(); });
+canvas.addEventListener('pointercancel', e => { if (transformer.active && transformer.held) { transformer.cancel(); return; } endStroke(); });
 
 view.onFrame = () => {
+    if (view.selected) transformer.place(view.selected);
     if (!area || !mouse) return;
     const p = view.pick(mouse.x, mouse.y);
     const radius = +sizeIn.value;
@@ -1391,8 +1438,11 @@ window.addEventListener('keydown', e => {
     // F5 / Ctrl+R reload, as in a browser (the app's window has no such keys).
     if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) { e.preventDefault(); location.reload(); return; }
     if (e.target.closest('input, dialog')) return;
+    if (transformer.active) { if (transformer.key(e)) e.preventDefault(); return; }
     // The selected placeable (Place tool).
     if (tool === 'place' && view.selected) {
+        const start = { g: 'move', r: 'rotate', s: 'scale' }[e.key.toLowerCase()];
+        if (start && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); transformer.begin(start); return; }
         const turn = { q: Math.PI / 12, e: -Math.PI / 12 }[e.key.toLowerCase()];
         if (turn) { changeSelected(o => { o.bearing += turn; }); return; }
         if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeObject(view.selected); return; }

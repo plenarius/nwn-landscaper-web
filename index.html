@@ -80,6 +80,16 @@
         </section>
         <section id="placePanel" class="side-panel" hidden>
             <h3>Place</h3>
+            <div id="objPanel" hidden>
+                <h4>Selected</h4>
+                <div class="numgrid">
+                    <label>East <small>m</small><input type="number" id="objX" step="0.1"></label>
+                    <label>North <small>m</small><input type="number" id="objY" step="0.1"></label>
+                    <label>Turn <small>°</small><input type="number" id="objAngle" step="5"></label>
+                    <label>Size <small>×</small><input type="number" id="objScale" step="0.05" min="0.1" max="5"></label>
+                </div>
+                <p class="note"><b>G</b> move · <b>R</b> turn · <b>S</b> size, then move the mouse and click (Esc cancels). <b>X</b>/<b>Y</b> lock a move to an axis; type a number for an exact value; Shift is fine, Ctrl snaps. Or drag the handles on the object: arrows move, the ring turns, the corner box sizes.</p>
+            </div>
             <input id="placeSearch" type="search" placeholder="Search placeables…" autocomplete="off">
             <div class="chips" id="placeChips"></div>
             <label class="slider">Size <output id="placeScaleOut"></output>
