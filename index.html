@@ -206,6 +206,15 @@
         </form>
     </dialog>
 
+    <dialog id="askDialog">
+        <form method="dialog">
+            <h2 id="askTitle"></h2>
+            <div id="askText" class="note"></div>
+            <label id="askLabel" hidden><span id="askLabelText"></span><input id="askInput" maxlength="200" autocomplete="off"></label>
+            <menu><button type="submit" value="ok" id="askOk">OK</button><button type="submit" value="cancel" id="askCancel">Cancel</button></menu>
+        </form>
+    </dialog>
+
     <dialog id="importDialog">
         <form method="dialog">
             <h2>Import an NWN area</h2>

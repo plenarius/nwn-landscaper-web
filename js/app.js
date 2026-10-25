@@ -448,10 +448,36 @@ $('btnOpen').onclick = async () => {
     if (!areas.length) list.textContent = 'No areas yet: export one first.';
 };
 
+/**
+ * Asks the person something in the page's own dialog. Resolves to true (OK), or with `input` the
+ * typed text ('' allowed), or null if they cancel (Cancel, Esc). `text` paragraphs split on blank lines.
+ */
+function ask({ title, text, ok = 'OK', danger = false, input = null }) {
+    const dlg = $('askDialog');
+    $('askTitle').textContent = title;
+    $('askText').textContent = '';
+    for (const para of text.split('\n\n')) { const p = document.createElement('p'); p.textContent = para; $('askText').appendChild(p); }
+    $('askLabel').hidden = !input;
+    if (input) { $('askLabelText').textContent = input.label; $('askInput').value = input.value ?? ''; $('askInput').placeholder = input.placeholder ?? ''; }
+    $('askOk').textContent = ok;
+    $('askOk').classList.toggle('danger', danger);
+    return new Promise(resolve => {
+        dlg.returnValue = '';
+        dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok' ? (input ? $('askInput').value.trim() : true) : null), { once: true });
+        dlg.showModal();
+        (input ? $('askInput') : $('askCancel')).focus();
+    });
+}
+
 /** Imports area `a` again from its kept original, then opens it. */
 async function reimport(a, button) {
     if (readOnly) return;
-    if (!confirm(`Import ${a.name} again from its original?\n\nYour changes to it here are replaced (the last copy is kept as a backup). Its next export puts the original's placeables, creatures and lighting into the module again, replacing what was changed there in the toolset.`)) return;
+    const yes = await ask({
+        title: `Import ${a.name} again?`,
+        text: `Your changes to it here are replaced (the last copy is kept as a backup).\n\nIts next export puts the original's placeables, creatures and lighting into the module again, replacing what was changed there in the toolset.`,
+        ok: 'Re-import', danger: true,
+    });
+    if (!yes) return;
     // The whole dialog waits for it: every button off, no closing it.
     reimporting = true;
     for (const b of $('openDialog').querySelectorAll('button')) b.disabled = true;
@@ -701,7 +727,7 @@ if (debug) {
 }
 
 // ?debug: the editor's state for test scripts.
-if (debug) window.landscaper = { area: () => area, view, live: () => live, select: o => selectObject(o), transformer };
+if (debug) window.landscaper = { area: () => area, view, live: () => live, select: o => selectObject(o), transformer, ask };
 
 const canvas = view.renderer.domElement;
 let stroke = null; // { flattenTo, last }
@@ -1123,7 +1149,7 @@ $('pubGo').onclick = async () => {
 // Keeps this version of the area in the team's history (a commit in Gitea).
 $('btnVersion').onclick = async () => {
     if (readOnly || !area) return;
-    const note = window.prompt(`Save a version of ${area.name}. A short note (optional):`, '');
+    const note = await ask({ title: `Save a version of ${area.name}`, text: 'Keeps this copy in the team\'s history. Autosave never does.', ok: 'Save version', input: { label: 'A short note (optional)', placeholder: 'what changed' } });
     if (note === null) return;
     const btn = $('btnVersion');
     btn.disabled = true;
