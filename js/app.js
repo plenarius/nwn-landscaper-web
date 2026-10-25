@@ -1014,31 +1014,52 @@ async function publishCall(dry) {
     if (!res.ok) throw new Error(body.error || res.statusText);
     return body;
 }
+
+/** The dialog's text and look: 'work' shows a moving bar and the seconds so far, 'err' red, 'ok' green. */
+let pubClock = null;
+function pubShow(text, mode = '') {
+    clearInterval(pubClock);
+    $('pubText').textContent = text;
+    $('pubText').className = `note ${mode}`.trim();
+    $('pubBar').hidden = mode !== 'work';
+    $('pubTime').hidden = mode !== 'work';
+    if (mode === 'work') {
+        const t0 = Date.now();
+        const tick = () => { $('pubTime').textContent = `${Math.round((Date.now() - t0) / 1000)} s`; };
+        tick();
+        pubClock = setInterval(tick, 500);
+    }
+}
+
+$('publishDialog').addEventListener('close', () => clearInterval(pubClock));
 $('btnPublish').onclick = async () => {
     if (readOnly || !area) return;
     const dlg = $('publishDialog');
     $('pubLinks').textContent = '';
     $('pubGo').hidden = true;
     $('pubGo').disabled = false;
-    $('pubText').textContent = `Checking ${area.name}…`;
+    $('pubNote').disabled = true;
+    pubShow(`Checking ${area.name} with the publishing service…`, 'work');
     dlg.showModal();
     try {
         const { plan } = await publishCall(true);
         const what = plan.new ? 'a new area' : `a rework of ${plan.area}`;
-        $('pubText').textContent = `This sends ${area.name} as ${what}: ${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} to nwn-module and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'} to nwn-haks` +
+        pubShow(`This sends ${area.name} as ${what}: ${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} to nwn-module and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'} to nwn-haks` +
             `${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; James or Dorganath review the pull requests.` +
-            (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : '');
+            (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : ''));
         $('pubGo').hidden = false;
+        $('pubNote').disabled = false;
     } catch (err) {
-        $('pubText').textContent = `Can't publish yet: ${err.message}`;
+        pubShow(`Can't publish yet: ${err.message}`, 'err');
     }
 };
 $('pubGo').onclick = async () => {
     $('pubGo').disabled = true;
-    $('pubText').textContent = 'Opening the pull requests…';
+    $('pubNote').disabled = true;
+    pubShow('Opening the pull requests (this can take a minute: it uploads the tile files)…', 'work');
     try {
         const { pr_urls } = await publishCall(false);
-        $('pubText').textContent = 'Done. Two pull requests were opened, linked to each other:';
+        pubShow('Done. Two pull requests were opened, linked to each other:', 'ok');
         $('pubGo').hidden = true;
         for (const [label, url] of [['nwn-module', pr_urls.nwn_module], ['nwn-haks', pr_urls.nwn_haks]]) {
             const a = document.createElement('a');
@@ -1046,8 +1067,9 @@ $('pubGo').onclick = async () => {
             const p = document.createElement('p'); p.appendChild(a); $('pubLinks').appendChild(p);
         }
     } catch (err) {
-        $('pubText').textContent = `Publishing failed: ${err.message}`;
+        pubShow(`Publishing failed: ${err.message}`, 'err');
         $('pubGo').disabled = false;
+        $('pubNote').disabled = false;
     }
 };
 
