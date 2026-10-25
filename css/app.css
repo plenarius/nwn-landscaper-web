@@ -302,3 +302,15 @@ dialog button.busy:disabled { opacity: 1; color: var(--accent); }
 #who button { margin-left: 8px; padding: 1px 8px; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 6px; }
 .open-who { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .open-who select { flex: 1; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 6px; padding: 5px; }
+#activityDialog { width: min(1200px, 94vw); }
+.activity-filters { display: flex; align-items: end; gap: 14px; margin-bottom: 10px; }
+.activity-filters label { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.activity-filters input, .activity-filters select { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 6px; padding: 5px 8px; }
+.activity-filters button { padding: 6px 14px; background: var(--panel-2); border: 1px solid #000; border-radius: 8px; }
+.activity-table { max-height: 62vh; overflow: auto; border: 1px solid #000; border-radius: 8px; }
+.activity-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.activity-table th { position: sticky; top: 0; text-align: left; background: #1f252c; padding: 7px 10px; color: var(--muted); font-weight: 600; }
+.activity-table td { padding: 5px 10px; border-top: 1px solid #1d2228; vertical-align: top; }
+.activity-table td.bad { color: var(--bad); }
+.activity-table td.ok { color: var(--good); }
+.activity-table tr:hover td { background: #2b323b; }

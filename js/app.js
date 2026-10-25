@@ -973,8 +973,36 @@ function showWho() {
         who.append(`${me.name}${me.admin ? ' (admin)' : ''}`);
     }
     for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
+    $('btnActivity').hidden = !(me.team && me.admin);
 
 }
+
+// What happened, for admins on a team server (searches, imports, exports, refusals...).
+async function showActivity() {
+    $('activityDialog').showModal();
+    const rows = $('actRows');
+    rows.textContent = '';
+    const q = `limit=300&user=${encodeURIComponent($('actUser').value.trim())}&action=${encodeURIComponent($('actAction').value)}`;
+    let events = [];
+    try { events = (await (await fetch(`/api/audit?${q}`)).json()).events ?? []; } catch { /* none */ }
+    for (const e of events) {
+        const tr = document.createElement('tr');
+        const cell = (text, cls) => { const td = document.createElement('td'); td.textContent = text ?? ''; if (cls) td.className = cls; tr.appendChild(td); };
+        cell(new Date(e.t * 1000).toLocaleString());
+        cell((e.user ?? '(not signed in)') + (e.admin ? ' (admin)' : ''));
+        cell(e.action);
+        cell(e.area);
+        cell(e.ok ? '✓' : '✗', e.ok ? 'ok' : 'bad');
+        cell(e.detail);
+        cell(e.ip);
+        rows.appendChild(tr);
+    }
+    if (!events.length) rows.innerHTML = '<tr><td colspan="7">Nothing recorded yet.</td></tr>';
+}
+$('btnActivity').onclick = showActivity;
+$('actRefresh').onclick = showActivity;
+$('actUser').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); showActivity(); } };
+$('actAction').onchange = showActivity;
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
 async function viewAs(user) {

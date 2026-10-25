@@ -27,6 +27,7 @@
         <button class="top-btn" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span>Redo</button>
         <button class="top-btn" id="btnCheck" title="Check how NWN will path this area (nothing is exported)"><span class="icon" data-icon="check"></span>Check paths</button>
         <button class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
+        <button class="top-btn" id="btnActivity" hidden title="Who searched, imported and exported what (admins)">Activity</button>
         <button class="top-btn active" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on">Markers</button>
         <button class="top-btn primary" id="btnExport" title="Export to Neverwinter Nights"><span class="icon" data-icon="exportNwn"></span>Export to NWN</button>
     </header>
@@ -161,6 +162,22 @@
             <div id="openWho" class="open-who" hidden></div>
             <div id="openList" class="open-list"></div>
             <menu><button type="button" id="btnImport">Import an NWN area…</button><button value="cancel">Cancel</button></menu>
+        </form>
+    </dialog>
+
+    <dialog id="activityDialog">
+        <form method="dialog">
+            <h2>Activity</h2>
+            <div class="activity-filters">
+                <label>Who <input id="actUser" placeholder="anyone" autocomplete="off"></label>
+                <label>What <select id="actAction">
+                    <option value="">everything</option><option>search</option><option>import</option><option>reimport</option><option>export</option>
+                    <option>assign</option><option>revoke</option><option>denied</option><option>refused</option><option>view_as</option>
+                </select></label>
+                <button type="button" id="actRefresh">Refresh</button>
+            </div>
+            <div class="activity-table"><table><thead><tr><th>When</th><th>Who</th><th>What</th><th>Area</th><th></th><th>Detail</th><th>From</th></tr></thead><tbody id="actRows"></tbody></table></div>
+            <menu><button value="cancel">Close</button></menu>
         </form>
     </dialog>
 
