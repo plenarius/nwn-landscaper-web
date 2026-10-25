@@ -975,6 +975,8 @@ function showWho() {
     for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
     $('btnActivity').hidden = !(me.team && me.admin);
     $('btnVersion').hidden = !(me.team && me.versions);
+    $('btnPublish').hidden = !(me.team && me.publish);
+    $('btnPublish').disabled = readOnly;
     $('btnVersion').disabled = readOnly;
 
 }
@@ -1002,6 +1004,52 @@ async function showActivity() {
     if (!events.length) rows.innerHTML = '<tr><td colspan="7">Nothing recorded yet.</td></tr>';
 }
 $('btnActivity').onclick = showActivity;
+
+// Publish: checks the last export with the publishing service, says what the pull requests would
+// hold, and opens them when asked. Only what the last export built is sent.
+async function publishCall(dry) {
+    const note = encodeURIComponent($('pubNote').value.trim());
+    const res = await fetch(`/api/publish?name=${encodeURIComponent(area.name)}&dry=${dry ? 1 : 0}&note=${note}`, { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || res.statusText);
+    return body;
+}
+$('btnPublish').onclick = async () => {
+    if (readOnly || !area) return;
+    const dlg = $('publishDialog');
+    $('pubLinks').textContent = '';
+    $('pubGo').hidden = true;
+    $('pubGo').disabled = false;
+    $('pubText').textContent = `Checking ${area.name}…`;
+    dlg.showModal();
+    try {
+        const { plan } = await publishCall(true);
+        const what = plan.new ? 'a new area' : `a rework of ${plan.area}`;
+        $('pubText').textContent = `This sends ${area.name} as ${what}: ${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} to nwn-module and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'} to nwn-haks` +
+            `${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; James or Dorganath review the pull requests.` +
+            (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : '');
+        $('pubGo').hidden = false;
+    } catch (err) {
+        $('pubText').textContent = `Can't publish yet: ${err.message}`;
+    }
+};
+$('pubGo').onclick = async () => {
+    $('pubGo').disabled = true;
+    $('pubText').textContent = 'Opening the pull requests…';
+    try {
+        const { pr_urls } = await publishCall(false);
+        $('pubText').textContent = 'Done. Two pull requests were opened, linked to each other:';
+        $('pubGo').hidden = true;
+        for (const [label, url] of [['nwn-module', pr_urls.nwn_module], ['nwn-haks', pr_urls.nwn_haks]]) {
+            const a = document.createElement('a');
+            a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = `${label}: ${url}`;
+            const p = document.createElement('p'); p.appendChild(a); $('pubLinks').appendChild(p);
+        }
+    } catch (err) {
+        $('pubText').textContent = `Publishing failed: ${err.message}`;
+        $('pubGo').disabled = false;
+    }
+};
 
 // Keeps this version of the area in the team's history (a commit in Gitea).
 $('btnVersion').onclick = async () => {
