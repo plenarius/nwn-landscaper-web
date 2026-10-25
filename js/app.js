@@ -974,6 +974,8 @@ function showWho() {
     }
     for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
     $('btnActivity').hidden = !(me.team && me.admin);
+    $('btnVersion').hidden = !(me.team && me.versions);
+    $('btnVersion').disabled = readOnly;
 
 }
 
@@ -1000,6 +1002,28 @@ async function showActivity() {
     if (!events.length) rows.innerHTML = '<tr><td colspan="7">Nothing recorded yet.</td></tr>';
 }
 $('btnActivity').onclick = showActivity;
+
+// Keeps this version of the area in the team's history (a commit in Gitea).
+$('btnVersion').onclick = async () => {
+    if (readOnly || !area) return;
+    const note = window.prompt(`Save a version of ${area.name}. A short note (optional):`, '');
+    if (note === null) return;
+    const btn = $('btnVersion');
+    btn.disabled = true;
+    $('statusMsg').textContent = `Saving a version of ${area.name}…`;
+    try {
+        clearTimeout(saveTimer);
+        await putArea(area.name, JSON.stringify(area.toJSON()));
+        const res = await fetch(`/api/version?name=${encodeURIComponent(area.name)}&note=${encodeURIComponent(note)}`, { method: 'POST' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || res.statusText);
+        $('statusMsg').textContent = `Saved a version of ${area.name} (${String(body.commit).slice(0, 7)}).`;
+    } catch (err) {
+        $('statusMsg').textContent = `Couldn't save a version: ${err.message}`;
+    } finally {
+        btn.disabled = readOnly;
+    }
+};
 $('actRefresh').onclick = showActivity;
 $('actUser').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); showActivity(); } };
 $('actAction').onchange = showActivity;
