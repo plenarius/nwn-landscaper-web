@@ -123,6 +123,7 @@
 
     <footer id="status">
         <span id="statusPos">Left-drag to sculpt or paint · right-drag to turn · middle-drag to move · wheel to zoom</span>
+        <span id="who"></span>
         <span id="statusMsg"></span>
     </footer>
 
@@ -135,8 +136,8 @@
                 <input id="newModule" pattern="[a-z0-9_]{0,16}" maxlength="16" placeholder="same as the name"></label>
             <label>Size <small>NWN tiles of 10 m</small></label>
             <div class="size-choices" id="sizeChoices"></div>
-            <div class="size-free"><label>Across <input id="newW" type="number" min="2" max="32" step="1" value="8"></label>
-                <label>Up <input id="newH" type="number" min="2" max="32" step="1" value="8"></label><small>tiles, west to east and south to north</small></div>
+            <div class="size-free"><label>Across <input id="newW" type="number" min="3" max="32" step="1" value="8"></label>
+                <label>Up <input id="newH" type="number" min="3" max="32" step="1" value="8"></label><small>tiles, west to east and south to north</small></div>
             <label>Start from</label>
             <div class="start-choices">
                 <label><input type="radio" name="start" value="flat" checked> Flat</label>
@@ -157,6 +158,7 @@
     <dialog id="openDialog">
         <form method="dialog">
             <h2>Open an area</h2>
+            <div id="openWho" class="open-who" hidden></div>
             <div id="openList" class="open-list"></div>
             <menu><button type="button" id="btnImport">Import an NWN area…</button><button value="cancel">Cancel</button></menu>
         </form>

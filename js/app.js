@@ -290,6 +290,7 @@ async function changeSelected(change) {
 
 let importSources = null, importChosen = null, importing = false;
 $('btnImport').onclick = async () => {
+    if (readOnly) return;
     $('openDialog').close();
     $('importStatus').textContent = '';
     $('importDialog').showModal();
@@ -368,6 +369,19 @@ $('btnOpen').onclick = async () => {
     $('openDialog').showModal();
     let areas = [];
     try { areas = (await (await fetch('/api/areas')).json()).areas; } catch { /* none */ }
+    // An admin on a team server can look at anyone's workspace.
+    const who = $('openWho');
+    who.hidden = !(me.team && me.admin);
+    if (!who.hidden && !who.firstChild) {
+        let users = [];
+        try { users = (await (await fetch('/api/users')).json()).users; } catch { /* none */ }
+        const pick = document.createElement('select');
+        pick.innerHTML = `<option value="">My workspace</option>` + users.filter(u => u.user !== me.user)
+            .map(u => `<option value="${u.user}">${u.user}: ${u.areas} area${u.areas === 1 ? '' : 's'} (read-only)</option>`).join('');
+        pick.value = me.viewing ?? '';
+        pick.onchange = () => viewAs(pick.value);
+        who.append('Workspace', pick);
+    }
     // Areas only saved here (never exported) too.
     const local = Object.keys(localStorage).filter(k => k.startsWith('landscaper.area.')).map(k => k.slice(16));
     for (const name of local) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
@@ -382,7 +396,7 @@ $('btnOpen').onclick = async () => {
         b.innerHTML = `<span><b>${a.name}</b>${a.name === area.name ? ' (open)' : ''}</span><small>${what}</small>`;
         b.onclick = () => { $('openDialog').close(); openArea(a); };
         row.appendChild(b);
-        if (a.imported) {
+        if (a.imported && !readOnly) {
             // Import it again from the original it was imported from (with
             // whatever the importer now does better).
             const re = document.createElement('button');
@@ -400,6 +414,7 @@ $('btnOpen').onclick = async () => {
 
 /** Imports area `a` again from its kept original, then opens it. */
 async function reimport(a, button) {
+    if (readOnly) return;
     if (!confirm(`Import ${a.name} again from its original?\n\nYour changes to it here are replaced (the last copy is kept as a backup). Its next export puts the original's placeables, creatures and lighting into the module again, replacing what was changed there in the toolset.`)) return;
     // The whole dialog waits for it: every button off, no closing it.
     reimporting = true;
@@ -919,11 +934,54 @@ function setArea(a) {
     checkSoon();
 }
 
+// Who is signed in (on a team server) and whose workspace is shown: your own,
+// or for an admin looking, someone else's (read-only: it is never saved).
+let me = { team: false, user: 'local', name: 'You', admin: true, viewing: null };
+let readOnly = false;
+
+async function loadMe() {
+    try {
+        const res = await fetch('/api/me');
+        if (res.ok) me = await res.json();
+        else if (res.status === 401 || res.status === 403) showError((await res.json().catch(() => ({}))).error || 'You are not signed in.');
+    } catch { /* not served: a plain page */ }
+    readOnly = !!me.viewing;
+    showWho();
+}
+
+function showWho() {
+    const who = $('who');
+    who.textContent = '';
+    who.classList.toggle('viewing', readOnly);
+    if (!me.team) return;
+    if (readOnly) {
+        who.append(`Viewing ${me.viewing}'s workspace: read-only`);
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.textContent = 'Back to mine';
+        back.onclick = () => viewAs('');
+        who.append(back);
+    } else {
+        who.append(`${me.name}${me.admin ? ' (admin)' : ''}`);
+    }
+    for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
+    // Importing existing areas needs an assignment from an admin (not built yet).
+    $('btnImport').hidden = me.team && !me.admin;
+}
+
+/** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
+async function viewAs(user) {
+    await fetch(`/api/view-as?user=${encodeURIComponent(user)}`, { method: 'POST' });
+    location.reload();
+}
+
 // Autosave: each area to landscaper (areas/<name>.json on disk) a moment
 // after each change. If that fails, into this browser until it works again,
 // and the status line says so.
 let saveTimer = null;
 function saveSoon() {
+    // Looking at someone else's workspace: nothing is saved (not into yours either).
+    if (readOnly) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => saveArea(area), 800);
     checkSoon();
@@ -990,6 +1048,7 @@ function showLive(state, text, title) {
 }
 
 function checkSoon() {
+    if (readOnly) return;
     live.edits++;
     clearTimeout(live.timer);
     if (!live.on || !area) return;
@@ -1076,7 +1135,7 @@ $('newDialog').addEventListener('close', () => {
     if ($('newDialog').returnValue !== 'ok') return;
     const start = new FormData($('newDialog').querySelector('form')).get('start');
     const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
-    const tiles = v => Math.min(32, Math.max(2, Math.round(+v || 8)));
+    const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
     const created = Area.create($('newName').value.trim().toLowerCase(), tiles($('newW').value), start, base, tiles($('newH').value));
     created.module = $('newModule').value.trim().toLowerCase() || created.name;
     setArea(created);
@@ -1115,6 +1174,7 @@ async function sendArea(what) {
 }
 
 $('btnExport').onclick = async () => {
+    if (readOnly) return;
     if (!area) return;
     const btn = $('btnExport');
     btn.disabled = true;
@@ -1134,6 +1194,7 @@ $('btnExport').onclick = async () => {
 
 // Check paths: the export's planning and route simulation, nothing built.
 $('btnCheck').onclick = async () => {
+    if (readOnly) return;
     if (!area) return;
     const btn = $('btnCheck');
     btn.disabled = true;
@@ -1225,7 +1286,8 @@ window.addEventListener('keydown', e => {
 // --- Start ---------------------------------------------------------------------------
 
 // The area last open: from landscaper, or this browser if it couldn't take it.
-await moveBrowserAreas();
+await loadMe();
+if (!readOnly) await moveBrowserAreas();
 {
     const current = localStorage.getItem('landscaper.current');
     const local = current && localStorage.getItem(`landscaper.area.${current}`);
