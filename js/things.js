@@ -64,6 +64,14 @@ export class ThingsTool {
         return this.meta;
     }
 
+    /** The waypoints and doors the other areas of this area's module have. */
+    async loadLinks() {
+        const a = this.area();
+        this.moduleLinks = [];
+        if (!a) return;
+        try { const r = await fetch(`/api/links?module=${encodeURIComponent(a.module || a.name)}`); if (r.ok) this.moduleLinks = (await r.json()).links ?? []; } catch { /* none */ }
+    }
+
     /** An imported area's own objects (the server reads them from the kept original). */
     async loadOriginals() {
         const a = this.area();
@@ -89,6 +97,7 @@ export class ThingsTool {
 
     show() {
         this.loadMeta();
+        this.loadLinks();
         this.refresh();
         this.search();
     }
@@ -338,6 +347,14 @@ export class ThingsTool {
 
     // --- The selected thing's properties ---------------------------------------------------------
 
+    /** Tags of the waypoints and doors in this area (the editor's and the original's), for a link. */
+    linkTargets(self) {
+        const a = this.area(), tags = new Set(this.moduleLinks?.filter(l => l.area !== a.name).map(l => l.tag));
+        for (const t of a.things) if (t !== self && ['waypoint', 'door'].includes(t.kind) && t.tag) tags.add(t.tag);
+        for (const g of this.ghosts()) if (['waypoint', 'door'].includes(g.kind) && g.tag) tags.add(g.tag);
+        return [...tags].sort();
+    }
+
     renderOriginals() {
         const { $ } = this.ctx, box = $('thingOrigs'), a = this.area();
         const gone = this.originals.filter(g => a.originals.removed.includes(g.key));
@@ -451,7 +468,18 @@ export class ThingsTool {
             const set = v => { if (v === '' || v === false || v === undefined) delete t.fields[f.label]; else t.fields[f.label] = v; };
             if (BOOLEAN.has(f.label)) row(label(f.label), field('checkbox', !!t.fields[f.label], v => set(v ? 1 : undefined)));
             else if ('bifwd'.includes(f.type)) row(label(f.label), field('number', t.fields[f.label] ?? '', v => set(v === '' ? undefined : +v), { step: f.type === 'f' ? 0.5 : 1 }));
-            else row(label(f.label), field('text', t.fields[f.label] ?? '', v => set(v.trim()), { maxLength: f.type === 'r' ? 16 : 200 }));
+            else {
+                const input = row(label(f.label), field('text', t.fields[f.label] ?? '', v => set(v.trim()), { maxLength: f.type === 'r' ? 16 : 200 }));
+                // A transition's or door's destination: the waypoints and doors this area has to pick from
+                // (another area's: type its tag).
+                if (f.label === 'LinkedTo') {
+                    const list = document.createElement('datalist');
+                    list.id = `links${t.id}`;
+                    for (const tag of this.linkTargets(t)) list.appendChild(Object.assign(document.createElement('option'), { value: tag }));
+                    input.setAttribute('list', list.id);
+                    input.after(list);
+                }
+            }
         }
         // Local variables.
         const vh = document.createElement('h4');
