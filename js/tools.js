@@ -14,6 +14,7 @@ export const TOOLS = {
     entrance: { label: 'Entrance', key: '7', hint: 'Click a slope to carve a cave entrance (a door to link in the toolset); brush size is its width; Shift-click one to remove it' },
     place: { label: 'Place', key: '8', hint: 'Place rocks, trees and other placeables, baked into the terrain' },
     scatter: { label: 'Scatter', key: '9', hint: 'Paint rocks, trees and bushes; Shift-drag to erase' },
+    things: { label: 'Things', key: 't', hint: 'Place creatures, waypoints, triggers and transitions, sounds, encounters, stores, items, doors and placeables' },
     dig: { label: 'Dig', key: '0', hint: 'Dig cave passages and chambers out of the rock, down to the floor (or the level where you start). At least 3 m radius: narrower passages defeat NWN\'s pathfinding' },
     room: { label: 'Room', key: 'r', hint: 'Drag a rectangle to cut out a room (snapped to 1.25 m, at least 5 m a side); overlapping rooms join' },
 };

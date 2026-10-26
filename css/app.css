@@ -339,3 +339,25 @@ dialog button.busy:disabled { opacity: 1; color: var(--accent); }
 #askLabel input { padding: 8px 10px; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 8px; }
 #askOk.danger { background: #8a2f22; border-color: #000; }
 #askOk.danger:hover { background: var(--bad); }
+
+/* Things and area settings. */
+#thingsPanel { width: 330px; }
+#thingResults { max-height: 240px; overflow: auto; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 3px; }
+#thingResults .bp { display: flex; flex-direction: column; text-align: left; padding: 5px 8px; background: var(--panel-2); border: 1px solid #000; border-radius: 6px; }
+#thingResults .bp small { color: var(--muted); font-size: 11px; }
+#thingResults .bp.active { border-color: var(--accent); }
+.thingprops { margin-top: 10px; padding-top: 8px; border-top: 1px solid #000; max-height: 46vh; overflow: auto; }
+.thingprops h4 { margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
+.thingprops label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.thingprops input[type=text], .thingprops input[type=number], .thingprops select, .varrow input, .varrow select, #settingsBody input[type=text], #settingsBody input[type=number], #settingsBody select
+    { width: 100%; padding: 5px 6px; font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid #000; border-radius: 6px; }
+.thingprops label:has(input[type=checkbox]) { flex-direction: row; align-items: center; gap: 8px; }
+.varrow { display: grid; grid-template-columns: 1fr 70px 1fr 26px; gap: 4px; margin-bottom: 4px; }
+button.danger { background: #8a2f22; margin-top: 8px; }
+button.danger:hover { background: var(--bad); }
+#settingsDialog { width: min(760px, 94vw); }
+.settingsbody { max-height: 66vh; overflow: auto; padding-right: 6px; }
+.settingsbody h4 { margin: 12px 0 4px; font-size: 13px; color: var(--muted); }
+.setgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.setgrid label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+.setgrid label:has(input[type=checkbox]) { flex-direction: row; align-items: center; gap: 8px; }
