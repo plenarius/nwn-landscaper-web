@@ -51,6 +51,11 @@ export class Area {
         // solid, baked }; baked: false is a real placeable (object mode).
         this.objects = [];
         this.nextObjectId = 1;
+        // Creatures, waypoints, triggers, sounds... (things.js): { id, kind, blueprint, x, y, bearing, outline, tag, name,
+        // vars, fields }. And the area's own settings (scripts, weather, music...): null until set.
+        this.things = [];
+        this.nextThingId = 1;
+        this.settings = null;
         // 'surface', 'underground' (a cave dug out of rock up to `roof`) or
         // 'interior' (rooms cut out of a solid mass, the same way).
         this.kind = 'surface';
@@ -194,8 +199,8 @@ export class Area {
     }
 
     // Undo: a snapshot of heights and paint before each stroke.
-    snapshot() { return { h: this.heights.slice(), m: this.materials.slice(), p: this.palette.slice(), w: this.water.map(b => ({ ...b })), e: this.entrances.map(e => ({ ...e })), o: this.objects.map(o => ({ ...o })) }; }
-    restore(s) { this.heights.set(s.h); this.materials.set(s.m); this.palette = s.p.slice(); this.water = s.w.map(b => ({ ...b })); this.entrances = s.e.map(e => ({ ...e })); this.objects = s.o.map(o => ({ ...o })); this.floodWater(); }
+    snapshot() { return { h: this.heights.slice(), m: this.materials.slice(), p: this.palette.slice(), w: this.water.map(b => ({ ...b })), e: this.entrances.map(e => ({ ...e })), o: this.objects.map(o => ({ ...o })), t: structuredClone(this.things), s: structuredClone(this.settings) }; }
+    restore(s) { this.heights.set(s.h); this.materials.set(s.m); this.palette = s.p.slice(); this.water = s.w.map(b => ({ ...b })); this.entrances = s.e.map(e => ({ ...e })); this.objects = s.o.map(o => ({ ...o })); this.things = structuredClone(s.t ?? []); this.settings = structuredClone(s.s ?? null); this.floodWater(); }
 
     beginStroke() {
         this.undoStack.push(this.snapshot());
@@ -224,6 +229,7 @@ export class Area {
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
             atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId, kind: this.kind, roof: this.roof, module: this.module,
+            things: this.things, nextThingId: this.nextThingId, settings: this.settings,
         };
     }
 
@@ -237,6 +243,9 @@ export class Area {
         if (o.objects) area.objects = o.objects;
         if (o.kind) { area.kind = o.kind; area.roof = o.roof; }
         if (o.module) area.module = o.module;
+        if (Array.isArray(o.things)) area.things = o.things;
+        area.nextThingId = o.nextThingId ?? Math.max(0, ...area.things.map(x => x.id ?? 0)) + 1;
+        if (o.settings) area.settings = o.settings;
         area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;
         if (o.water) { area.water = o.water; area.floodWater(); }
         return area;
