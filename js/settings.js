@@ -1,6 +1,10 @@
 // The area's own settings: name, tag, scripts, PvP and rest, weather, music and ambient sound, load screen,
 // listen and spot modifiers, sky box, comments and local variables (what the toolset's Area Properties holds).
 // A dialog; OK keeps them in `area.settings`, which landscaper writes into the area on export.
+// An area without settings (made before this existed) is shown the standard template, but only what the
+// builder changes is kept: the rest stays what the area has.
+
+import { renderVars } from './vars.js';
 
 const PVP = [[0, 'No PvP'], [1, 'Party only'], [2, 'Full PvP'], [3, "The module's setting"]];
 const WIND = [[0, 'None'], [1, 'Light'], [2, 'Strong']];
@@ -46,6 +50,7 @@ const FIELDS = [
 /** Opens the dialog for `area`. `template`: what a new area starts with; `onSave()` after OK. */
 export function openSettings(area, template, lists, onSave) {
     const dlg = document.getElementById('settingsDialog'), body = document.getElementById('settingsBody');
+    const base = structuredClone(area.settings ?? {});
     const current = structuredClone(area.settings ?? template ?? {});
     delete current._note;
     if (!current.tag) current.tag = area.name;
@@ -89,7 +94,7 @@ export function openSettings(area, template, lists, onSave) {
         if (f.note) label.title = f.note;
         label.append(span, input);
         section.appendChild(label);
-        inputs.push([f, input]);
+        inputs.push([f, input, f.t === 'check' ? input.checked : input.value]);
     }
     // Local variables.
     const vh = document.createElement('h4');
@@ -98,38 +103,21 @@ export function openSettings(area, template, lists, onSave) {
     vbox.className = 'varbox';
     body.append(vh, vbox);
     const vars = structuredClone(current.vars ?? []);
-    const drawVars = () => {
-        vbox.textContent = '';
-        vars.forEach((v, n) => {
-            const r = document.createElement('div');
-            r.className = 'varrow';
-            const name = Object.assign(document.createElement('input'), { value: v.name, maxLength: 32, placeholder: 'name' });
-            name.onchange = () => { v.name = name.value.trim(); };
-            const type = document.createElement('select');
-            for (const o of ['int', 'float', 'string']) type.add(new Option(o, o, false, v.type === o));
-            type.onchange = () => { v.type = type.value; };
-            const val = Object.assign(document.createElement('input'), { value: v.value });
-            val.onchange = () => { v.value = v.type === 'string' ? val.value : Number(val.value); };
-            const del = Object.assign(document.createElement('button'), { type: 'button', textContent: '×' });
-            del.onclick = () => { vars.splice(n, 1); drawVars(); };
-            r.append(name, type, val, del);
-            vbox.appendChild(r);
-        });
-        const add = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Add a variable' });
-        add.onclick = () => { vars.push({ name: '', type: 'int', value: 0 }); drawVars(); };
-        vbox.appendChild(add);
-    };
+    let varsChanged = false;
+    const drawVars = () => { vbox.textContent = ''; renderVars(vbox, vars, { after: () => { varsChanged = true; }, redraw: drawVars }); };
     drawVars();
     const ok = document.getElementById('settingsOk');
     ok.onclick = () => {
-        const out = structuredClone(current);
-        for (const [f, input] of inputs) {
-            const v = f.t === 'check' ? input.checked : f.t === 'number' || f.t === 'select' ? Number(input.value) : input.value.trim();
-            put(out, f.p, v);
+        const out = structuredClone(base);
+        for (const [f, input, initial] of inputs) {
+            const now = f.t === 'check' ? input.checked : input.value;
+            // Changed, or the area already had settings (then all of them are kept together).
+            if (now === initial && area.settings === null) continue;
+            put(out, f.p, f.t === 'check' ? now : f.t === 'number' || f.t === 'select' ? Number(now) : String(now).trim());
         }
         // An empty name keeps the original's (and a new area's own).
         if (!out.name) delete out.name;
-        out.vars = vars.filter(v => v.name?.trim());
+        if (varsChanged || area.settings) out.vars = vars.filter(v => v.name?.trim());
         area.beginStroke();
         area.settings = out;
         onSave?.();

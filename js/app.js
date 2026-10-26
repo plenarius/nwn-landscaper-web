@@ -64,7 +64,7 @@ function updatePanels() {
     $('btnSky').classList.toggle('active', skyOpen);
 }
 // Creatures, waypoints, triggers, sounds...: the Things tool.
-const thingsTool = new ThingsTool({ $, area: () => area, view, saveSoon: () => saveSoon(), say: m => { $('statusMsg').textContent = m; } });
+const thingsTool = new ThingsTool({ $, area: () => area, view, readOnly: () => readOnly, saveSoon: () => saveSoon(), say: m => { $('statusMsg').textContent = m; } });
 selectTool('raise');
 
 const sizeIn = $('brushSize'), strengthIn = $('brushStrength');

@@ -3,6 +3,8 @@
 // (tag, name, scripts, variables). The area keeps them in `area.things`; landscaper writes them into the
 // area's GIT on export. Blueprints (what a creature, door or sound is) are searched on the server.
 
+import { renderVars } from './vars.js';
+
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
     { id: 'waypoint', kind: 'waypoint', label: 'Waypoint', bearing: true },
@@ -51,7 +53,7 @@ export class ThingsTool {
         $('thingSearch').oninput = () => { clearTimeout(timer); timer = setTimeout(() => this.search(), 250); };
         $('thingDelete').onclick = () => this.remove(this.selected());
         $('thingFinish').onclick = () => this.finishDraft();
-        this.arm(KINDS[0]);
+        this.arm(KINDS[0], false);
     }
 
     area() { return this.ctx.area(); }
@@ -60,8 +62,11 @@ export class ThingsTool {
 
     async loadMeta() {
         if (this.meta) return this.meta;
-        try { this.meta = await (await fetch('/api/things-meta')).json(); } catch { this.meta = { kinds: [], template: {} }; }
-        return this.meta;
+        try {
+            const r = await fetch('/api/things-meta');
+            if (r.ok) this.meta = await r.json();
+        } catch { /* try again next time */ }
+        return this.meta ?? { kinds: [], template: {} };
     }
 
     /** The waypoints and doors the other areas of this area's module have. */
@@ -69,7 +74,9 @@ export class ThingsTool {
         const a = this.area();
         this.moduleLinks = [];
         if (!a) return;
-        try { const r = await fetch(`/api/links?module=${encodeURIComponent(a.module || a.name)}`); if (r.ok) this.moduleLinks = (await r.json()).links ?? []; } catch { /* none */ }
+        let list = [];
+        try { const r = await fetch(`/api/links?module=${encodeURIComponent(a.module || a.name)}`); if (r.ok) list = (await r.json()).links ?? []; } catch { /* none */ }
+        if (this.area() === a) this.moduleLinks = list;
     }
 
     /** An imported area's own objects (the server reads them from the kept original). */
@@ -79,8 +86,11 @@ export class ThingsTool {
         this.selectedKey = null;
         if (!a) return;
         const name = a.name;
-        try { const r = await fetch(`/api/originals?name=${encodeURIComponent(name)}`); if (r.ok) this.originals = (await r.json()).originals ?? []; } catch { /* none */ }
-        if (this.area()?.name === name) this.refresh();
+        let list = [];
+        try { const r = await fetch(`/api/originals?name=${encodeURIComponent(name)}`); if (r.ok) list = (await r.json()).originals ?? []; } catch { /* none */ }
+        if (this.area() !== a) return;   // another area was opened meanwhile
+        this.originals = list;
+        this.refresh();
     }
 
     /** The originals still in the area, where the editor now has them. */
@@ -96,6 +106,7 @@ export class ThingsTool {
     }
 
     show() {
+        this.active = true;
         this.loadMeta();
         this.loadLinks();
         this.refresh();
@@ -103,13 +114,18 @@ export class ThingsTool {
     }
 
     hide() {
+        this.active = false;
         this.draft = null;
+        this.redrawing = null;
         this.drag = null;
-        this.ctx.view.setThings(this.area()?.things ?? [], null);
+        this.selectedId = null;
         this.selectedKey = null;
+        this.ctx.view.setThings(this.area()?.things ?? [], null);
+        this.ctx.$('thingProps').hidden = true;
+        this.ctx.$('thingOrigs').hidden = true;
     }
 
-    arm(k) {
+    arm(k, now = true) {
         this.armed = k;
         this.draft = null;
         this.redrawing = null;
@@ -119,8 +135,7 @@ export class ThingsTool {
         $('thingPick').hidden = !k.blueprint;
         $('thingSearch').value = '';
         $('thingHint').textContent = k.note ?? (k.blueprint ? 'Pick one below, then click the ground to place it (drag to turn it).' : 'Click the ground to place it (drag to turn it).');
-        this.search();
-        this.refresh();
+        if (now) { this.search(); this.refresh(); }
     }
 
     async search() {
@@ -157,7 +172,6 @@ export class ThingsTool {
             if (!g) return false;
             this.selectedId = null;
             this.selectedKey = hit;
-            area.beginStroke();
             this.drag = { orig: hit, from: p, x: g.x, y: g.y, bearing: g.bearing };
             this.refresh();
             this.ctx.say(`${g.name || g.tag || g.resref} (original ${g.kind}): drag to move · Q/E to turn · Delete takes it out · Esc to deselect`);
@@ -166,7 +180,6 @@ export class ThingsTool {
         if (!this.draft && hit != null) {
             const t = area.things.find(x => x.id === hit);
             this.select(hit);
-            area.beginStroke();
             this.drag = { t, from: p, x: t.x, y: t.y, outline: t.outline?.map(q => [...q]) };
             return true;
         }
@@ -191,7 +204,7 @@ export class ThingsTool {
         const t = this.make(k, { x: round(p.x), y: round(p.y) });
         area.things.push(t);
         this.select(t.id);
-        this.drag = { t, from: p, turn: true };
+        this.drag = { t, from: p, turn: true, began: true };
         this.changed();
         return true;
     }
@@ -199,10 +212,13 @@ export class ThingsTool {
     move(p) {
         const d = this.drag;
         if (!d) return;
+        // One undo step for a drag, taken when it first moves something (a click that only selects makes none).
+        if (!d.began && Math.hypot(p.x - d.from.x, p.y - d.from.y) > 0.05) { this.area().beginStroke(); d.began = true; }
+        if (!d.began) return;
         if (d.orig) {
             const a = this.area(), clamp = (v, hi) => Math.min(hi, Math.max(0, v));
             a.originals.moved[d.orig] = { x: round(clamp(d.x + p.x - d.from.x, a.sizeX)), y: round(clamp(d.y + p.y - d.from.y, a.sizeY)), bearing: d.bearing };
-            this.refresh();
+            this.refreshSoon();
             return;
         }
         if (d.turn) {
@@ -214,13 +230,24 @@ export class ThingsTool {
             d.t.y = round(clamp(d.y + dy, a.sizeY));
             if (d.outline) d.t.outline = d.outline.map(([x, y]) => [round(clamp(x + dx, a.sizeX)), round(clamp(y + dy, a.sizeY))]);
         }
-        this.refresh();
+        this.refreshSoon();
+    }
+
+    /** The markers redrawn once a frame, however many mouse events came (the panels wait for the end of the drag). */
+    refreshSoon() {
+        if (this.pending) return;
+        this.pending = requestAnimationFrame(() => {
+            this.pending = 0;
+            const a = this.area();
+            if (a && this.active) this.ctx.view.setThings(a.things, this.selectedId, this.draft, this.ghosts(), this.selectedKey);
+        });
     }
 
     up() {
-        if (!this.drag) return;
+        const d = this.drag;
+        if (!d) return;
         this.drag = null;
-        this.changed();
+        if (d.began) this.changed(); else this.refresh();
     }
 
     // --- Things ----------------------------------------------------------------------------
@@ -241,7 +268,7 @@ export class ThingsTool {
     finishDraft() {
         const a = this.area(), pts = this.draft;
         this.draft = null;
-        if (!pts || pts.length < 3) { this.ctx.say('An outline needs at least three corners.'); this.refresh(); return; }
+        if (!pts || pts.length < 3) { this.redrawing = null; this.ctx.say('An outline needs at least three corners.'); this.refresh(); return; }
         a.beginStroke();
         if (this.redrawing) {
             Object.assign(this.redrawing, { outline: pts, x: pts[0][0], y: pts[0][1] });
@@ -339,10 +366,14 @@ export class ThingsTool {
     refresh() {
         const a = this.area();
         if (!a) return;
+        // (Out of the Things tool, only the markers show: no grey originals, no selection, no panel.)
+        if (!this.active) { this.ctx.view.setThings(a.things, null); return; }
         this.ctx.view.setThings(a.things, this.selectedId, this.draft, this.ghosts(), this.selectedKey);
         this.renderProps();
         this.renderOriginals();
         this.ctx.$('thingFinish').hidden = !this.draft;
+        // A read-only session (someone else's workspace) can look but not change.
+        if (this.ctx.readOnly?.()) for (const el of document.querySelectorAll('#thingProps input, #thingProps select, #thingProps button, #thingOrigs button, #thingFinish, #thingDelete')) el.disabled = true;
     }
 
     // --- The selected thing's properties ---------------------------------------------------------
@@ -357,6 +388,7 @@ export class ThingsTool {
 
     renderOriginals() {
         const { $ } = this.ctx, box = $('thingOrigs'), a = this.area();
+        if (!this.active) { box.hidden = true; return; }
         const gone = this.originals.filter(g => a.originals.removed.includes(g.key));
         const moved = Object.keys(a.originals.moved).length;
         box.hidden = !this.originals.length;
@@ -384,8 +416,8 @@ export class ThingsTool {
     }
 
     renderProps() {
-        const { $ } = this.ctx, box = $('thingProps'), t = this.selected();
-        const g = this.selectedKey ? this.originals.find(x => x.key === this.selectedKey) : null;
+        const { $ } = this.ctx, box = $('thingProps'), t = this.active ? this.selected() : null;
+        const g = this.active && this.selectedKey ? this.originals.find(x => x.key === this.selectedKey) : null;
         if (g) {
             box.hidden = false;
             $('thingDelete').hidden = true;
@@ -442,8 +474,15 @@ export class ThingsTool {
         };
         row('Tag', field('text', t.tag ?? '', v => { t.tag = v.trim() || undefined; }, { maxLength: 32, placeholder: t.blueprint ? 'the blueprint\'s' : '' }));
         row('Name', field('text', t.name ?? '', v => { t.name = v.trim() || undefined; }, { maxLength: 60, placeholder: t.blueprint ? 'the blueprint\'s' : '' }));
-        row('East (m)', field('number', t.x, v => { t.x = round(+v); }, { step: 0.5 }));
-        row('North (m)', field('number', t.y, v => { t.y = round(+v); }, { step: 0.5 }));
+        const at = (axis, v) => {
+            const a = this.area(), hi = axis === 'x' ? a.sizeX : a.sizeY, to = round(Math.min(hi, Math.max(0, Number.isFinite(+v) ? +v : 0)));
+            const by = to - (t.outline?.length ? t.outline[0][axis === 'x' ? 0 : 1] : t[axis]);
+            // A trigger or encounter stands at its first corner: all of its outline moves with it.
+            if (t.outline?.length) t.outline = t.outline.map(([x, y]) => [round(Math.min(a.sizeX, Math.max(0, x + (axis === 'x' ? by : 0)))), round(Math.min(a.sizeY, Math.max(0, y + (axis === 'y' ? by : 0))))]);
+            t[axis] = t.outline?.length ? t.outline[0][axis === 'x' ? 0 : 1] : to;
+        };
+        row('East (m)', field('number', t.outline?.length ? t.outline[0][0] : t.x, v => at('x', v), { step: 0.5 }));
+        row('North (m)', field('number', t.outline?.length ? t.outline[0][1] : t.y, v => at('y', v), { step: 0.5 }));
         if (k.bearing) row('Facing (°)', field('number', Math.round((t.bearing ?? 0) * 180 / Math.PI), v => { t.bearing = round(+v * Math.PI / 180, 3); }, { step: 15 }));
         if (k.shape) {
             const p = document.createElement('p');
@@ -486,26 +525,7 @@ export class ThingsTool {
         vh.textContent = 'Local variables';
         box.appendChild(vh);
         t.vars ??= [];
-        t.vars.forEach((v, n) => {
-            const r = document.createElement('div');
-            r.className = 'varrow';
-            const name = field('text', v.name, x => { v.name = x.trim(); }, { maxLength: 32, placeholder: 'name' });
-            const type = document.createElement('select');
-            for (const o of ['int', 'float', 'string']) type.add(new Option(o, o, false, v.type === o));
-            type.onchange = () => { this.area().beginStroke(); v.type = type.value; this.changed(); };
-            const val = field('text', v.value, x => { v.value = v.type === 'string' ? x : Number(x); });
-            const del = document.createElement('button');
-            del.type = 'button';
-            del.textContent = '×';
-            del.onclick = () => { this.area().beginStroke(); t.vars.splice(n, 1); this.changed(); };
-            r.append(name, type, val, del);
-            box.appendChild(r);
-        });
-        const add = document.createElement('button');
-        add.type = 'button';
-        add.textContent = 'Add a variable';
-        add.onclick = () => { this.area().beginStroke(); t.vars.push({ name: '', type: 'int', value: 0 }); this.changed(); };
-        box.appendChild(add);
+        renderVars(box, t.vars, { before: () => this.area().beginStroke(), after: () => this.changed(), keep: String(t.id) });
     }
 }
 
