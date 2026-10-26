@@ -9,6 +9,8 @@ import { PRESETS, copyPreset } from './atmosphere.js';
 import { carve, fitInTile, rockFor, at as entranceAt, nearest as nearestEntrance } from './entrance.js';
 import { ModelLibrary } from './models.js';
 import { Transformer } from './transform.js';
+import { ThingsTool, thingsForExport } from './things.js';
+import { openSettings } from './settings.js';
 
 const $ = id => document.getElementById(id);
 
@@ -57,8 +59,12 @@ function updatePanels() {
     if (tool === 'scatter' && !skyOpen) showScatterables();
     if (tool !== 'place' && view.selected && typeof selectObject === 'function') selectObject(null);
     if (tool === 'place' && !skyOpen) showPlaceables();
+    $('thingsPanel').hidden = skyOpen || tool !== 'things';
+    if (tool === 'things' && !skyOpen) thingsTool.show(); else thingsTool.hide();
     $('btnSky').classList.toggle('active', skyOpen);
 }
+// Creatures, waypoints, triggers, sounds...: the Things tool.
+const thingsTool = new ThingsTool({ $, area: () => area, view, readOnly: () => readOnly, saveSoon: () => saveSoon(), say: m => { $('statusMsg').textContent = m; } });
 selectTool('raise');
 
 const sizeIn = $('brushSize'), strengthIn = $('brushStrength');
@@ -727,7 +733,7 @@ if (debug) {
 }
 
 // ?debug: the editor's state for test scripts.
-if (debug) window.landscaper = { area: () => area, view, live: () => live, select: o => selectObject(o), transformer, ask };
+if (debug) window.landscaper = { area: () => area, view, live: () => live, select: o => selectObject(o), transformer, ask, things: thingsTool };
 
 const canvas = view.renderer.domElement;
 let stroke = null; // { flattenTo, last }
@@ -867,6 +873,12 @@ canvas.addEventListener('pointerdown', e => {
     mouse = { x: e.clientX, y: e.clientY };
     const p = view.pick(e.clientX, e.clientY);
     if (!p) { dbg.note = '(down missed the terrain)'; showDebug(); return; }
+    if (tool === 'things') {
+        if (!readOnly && thingsTool.down(e, p)) {
+            try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
+        }
+        return;
+    }
     if (tool === 'entrance') {
         entranceDown(e, p);
         return;
@@ -939,6 +951,7 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => {
     mouse = { x: e.clientX, y: e.clientY };
     transformer.move(e);
+    if (thingsTool.drag) { const p = view.pick(e.clientX, e.clientY); if (p) thingsTool.move(p); }
     if (stroke?.water) waterDrag(e);
     if (stroke?.place) placeDrag(e);
     if (stroke?.room) {
@@ -955,6 +968,7 @@ canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(nul
 let placePointer = null;
 const endStroke = () => {
     placePointer = null;
+    if (thingsTool.drag) { thingsTool.up(); return; }
     if (!stroke) return;
     if (stroke.room) {
         const r = roomRect(stroke.room.from, stroke.room.to, area.sizeX, area.sizeY);
@@ -1008,6 +1022,9 @@ view.onFrame = () => {
 function setArea(a) {
     area = a;
     view.setArea(a);
+    thingsTool.selectedId = null;
+    thingsTool.loadOriginals();
+    thingsTool.refresh();
     $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
     $('report').hidden = true;
     skyNight = a.atmosphere.time === 'night';
@@ -1308,8 +1325,16 @@ function refreshAll() {
     view.updateShade();
     view.updateWater();
     view.syncPalette();
+    thingsTool.refreshAll();
     saveSoon();
 }
+let areaLists = null;
+$('btnSettings').onclick = async () => {
+    if (!area || readOnly) return;
+    const meta = await thingsTool.loadMeta();
+    areaLists ??= await fetch('/api/area-lists').then(r => r.json()).catch(() => ({}));
+    openSettings(area, meta.template, areaLists, () => { saveSoon(); $('statusMsg').textContent = 'Area settings kept.'; });
+};
 $('btnUndo').onclick = () => { if (area?.undo()) refreshAll(); };
 $('btnRedo').onclick = () => { if (area?.redo()) refreshAll(); };
 
@@ -1340,6 +1365,12 @@ $('newDialog').addEventListener('close', () => {
     const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
     const created = Area.create($('newName').value.trim().toLowerCase(), tiles($('newW').value), start, base, tiles($('newH').value));
     created.module = $('newModule').value.trim().toLowerCase() || created.name;
+    // A new area starts with the settings Layonara's areas have (the standard scripts and so on).
+    thingsTool.loadMeta().then(meta => {
+        created.settings = { ...structuredClone(meta.template ?? {}), tag: created.name };
+        delete created.settings._note;
+        saveSoon();
+    });
     setArea(created);
     saveSoon();
 });
@@ -1350,7 +1381,7 @@ $('newDialog').addEventListener('close', () => {
  *  sample's palette index (u8), then JSON too long for the query (the
  *  objects); the rest in the query. */
 function areaRequest() {
-    const extra = new TextEncoder().encode(JSON.stringify({ objects: area.objects }));
+    const extra = new TextEncoder().encode(JSON.stringify({ objects: area.objects, things: thingsForExport(area.things), settings: area.settings, originals: area.originals }));
     const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength + extra.byteLength);
     body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
     body.set(area.materials, area.heights.byteLength);
@@ -1464,6 +1495,7 @@ window.addEventListener('keydown', e => {
     // F5 / Ctrl+R reload, as in a browser (the app's window has no such keys).
     if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) { e.preventDefault(); location.reload(); return; }
     if (e.target.closest('input, dialog')) return;
+    if (tool === 'things' && !readOnly && thingsTool.key(e)) { e.preventDefault(); return; }
     if (transformer.active) { if (transformer.key(e)) e.preventDefault(); return; }
     // The selected placeable (Place tool).
     if (tool === 'place' && view.selected) {

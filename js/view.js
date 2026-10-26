@@ -195,7 +195,7 @@ export class View {
     /** Shows a new area and frames the camera on it. */
     setArea(area) {
         this.area = area;
-        for (const o of [this.mesh, this.grid, this.markers, this.water, this.skirt, this.entranceGroup, this.objectGroup]) {
+        for (const o of [this.mesh, this.grid, this.markers, this.water, this.skirt, this.entranceGroup, this.objectGroup, this.thingGroup]) {
             if (o) { this.scene.remove(o); o.traverse?.(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); }
         }
         this.markers = null;
@@ -487,6 +487,105 @@ export class View {
     removeObjects(gone) {
         if (!this.objectGroup) return;
         for (const c of [...this.objectGroup.children]) if (gone.has(c.userData.object)) this.objectGroup.remove(c);
+    }
+
+    /**
+     * The things placed in the area (creatures, waypoints, triggers, sounds...), as coloured markers standing on
+     * the ground, an arrow for the way they face and a line round a trigger's or encounter's outline; the one
+     * selected (`selectedId`) bright, and its outline's corners shown. `draft` is an outline being drawn.
+     */
+    setThings(things, selectedId = null, draft = null, ghosts = [], selectedKey = null) {
+        if (this.thingGroup) {
+            this.scene.remove(this.thingGroup);
+            this.thingGroup.traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); });
+        }
+        const group = this.thingGroup = new THREE.Group();
+        this.scene.add(group);
+        if (!this.area) return;
+        const area = this.area, size = area.sizeY;
+        const colour = { creature: 0xe0402a, waypoint: 0x4aa3ff, trigger: 0xffd34a, sound: 0xb06bff, encounter: 0xff8a2a, store: 0x55c24a, item: 0xeeeeee, door: 0xc08a5a, placeable: 0x9aa7b4 };
+        const at = (x, y, lift = 0) => new THREE.Vector3(x, area.heightAt(x, y) + lift, size - y);
+        const loop = (pts, hex, closed = true) => {
+            // Sampled every metre or so so the line follows the ground.
+            const line = [];
+            for (let i = 0; i < pts.length - (closed ? 0 : 1); i++) {
+                const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
+                const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
+                for (let k = 0; k < n; k++) line.push(at(ax + (bx - ax) * k / n, ay + (by - ay) * k / n, 0.25));
+            }
+            if (!closed) line.push(at(...pts[pts.length - 1], 0.25));
+            else line.push(line[0].clone());
+            const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(line), new THREE.LineBasicMaterial({ color: hex, depthTest: false }));
+            l.renderOrder = 5;
+            return l;
+        };
+        for (const t of things) {
+            const sel = t.id === selectedId, hex = colour[t.kind] ?? 0xffffff;
+            const mat = new THREE.MeshBasicMaterial({ color: sel ? 0xffffff : hex });
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(sel ? 0.45 : 0.32, sel ? 2.2 : 1.7, 10), mat);
+            const p = t.outline?.length ? at(t.outline[0][0], t.outline[0][1]) : at(t.x, t.y);
+            cone.position.set(p.x, p.y + (sel ? 1.1 : 0.85), p.z);
+            cone.userData.thing = t.id;
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(sel ? 0.4 : 0.28, 10, 8), new THREE.MeshBasicMaterial({ color: hex }));
+            ball.position.set(p.x, p.y + (sel ? 2.4 : 1.9), p.z);
+            ball.userData.thing = t.id;
+            group.add(cone, ball);
+            if (t.outline?.length >= 2) {
+                const l = loop(t.outline, hex);
+                l.userData.thing = t.id;
+                group.add(l);
+                if (sel) for (const [x, y] of t.outline) {
+                    const c = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+                    const q = at(x, y, 0.3);
+                    c.position.copy(q);
+                    c.renderOrder = 6;
+                    group.add(c);
+                }
+            } else if (['creature', 'door', 'placeable', 'waypoint'].includes(t.kind)) {
+                // The way it faces: a line from the marker (bearing 0 faces east, as the game's).
+                const dir = new THREE.Vector3(Math.cos(t.bearing ?? 0), 0, -Math.sin(t.bearing ?? 0));
+                const a = p.clone().add(new THREE.Vector3(0, 0.3, 0)), b = a.clone().addScaledVector(dir, 1.6);
+                const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: sel ? 0xffffff : hex, depthTest: false }));
+                l.renderOrder = 5;
+                group.add(l);
+            }
+        }
+        // An imported area's own objects: grey, so the editor's can be told from them.
+        for (const g of ghosts) {
+            const sel = g.key === selectedKey;
+            const p = g.outline?.length ? at(g.outline[0][0], g.outline[0][1]) : at(g.x, g.y);
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(sel ? 0.4 : 0.25, sel ? 2 : 1.1, 8), new THREE.MeshBasicMaterial({ color: sel ? 0xffffff : 0x8a929b }));
+            cone.position.set(p.x, p.y + (sel ? 1 : 0.55), p.z);
+            cone.userData.thing = g.key;
+            group.add(cone);
+            if (g.outline?.length >= 3) {
+                const l = loop(g.outline, sel ? 0xffffff : 0x6c747c);
+                l.userData.thing = g.key;
+                group.add(l);
+            }
+        }
+        if (draft?.length) {
+            const pts = draft.slice();
+            group.add(loop(pts, 0xffffff, false));
+            for (const [x, y] of pts) {
+                const c = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+                c.position.copy(at(x, y, 0.3));
+                c.renderOrder = 6;
+                group.add(c);
+            }
+        }
+    }
+
+    /** The id of the thing whose marker is under the pointer, or null. */
+    pickThing(clientX, clientY) {
+        if (!this.thingGroup) return null;
+        const r = this.renderer.domElement.getBoundingClientRect();
+        const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+        this.raycaster.setFromCamera(ndc, this.camera);
+        this.raycaster.params.Line.threshold = 0.6;
+        const hit = this.raycaster.intersectObject(this.thingGroup, true).find(h => h.object.userData.thing != null);
+        this.raycaster.params.Line.threshold = 1;
+        return hit?.object.userData.thing ?? null;
     }
 
     /** The placed object under the pointer, or null. */

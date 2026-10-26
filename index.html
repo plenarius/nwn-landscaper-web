@@ -22,6 +22,7 @@
         <button class="top-btn" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span>Open</button>
         <div id="areaInfo"></div>
         <button class="top-btn" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span>Sky &amp; fog</button>
+        <button class="top-btn" id="btnSettings" title="Name, tag, scripts, weather, music... of this area">Area settings</button>
         <div class="spacer"></div>
         <button class="top-btn" id="btnUndo" title="Undo (Ctrl+Z)"><span class="icon" data-icon="undo"></span>Undo</button>
         <button class="top-btn" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span>Redo</button>
@@ -118,6 +119,19 @@
             <label class="check"><input type="checkbox" id="scatterSteep" checked> Not on steep ground or water</label>
             <div class="swatches" id="scatterResults"></div>
         </section>
+        <section id="thingsPanel" class="side-panel" hidden>
+            <h3>Things</h3>
+            <div class="chips" id="thingKinds"></div>
+            <p class="note" id="thingHint"></p>
+            <div id="thingPick" hidden>
+                <input id="thingSearch" type="search" placeholder="Search by name or resref…" autocomplete="off">
+                <div id="thingResults" class="bplist"></div>
+            </div>
+            <button type="button" id="thingFinish" hidden>Finish the outline (Enter)</button>
+            <div id="thingOrigs" class="thingprops" hidden></div>
+            <div id="thingProps" class="thingprops" hidden></div>
+            <button type="button" id="thingDelete" class="danger" hidden>Delete it</button>
+        </section>
         <section id="entrancePanel" class="side-panel" hidden>
             <h3>Entrances</h3>
             <p class="note">Click a slope (or a cave wall) to carve one; Shift-click one to remove it. Each has a door: pick where it leads (an entrance door in the same module), or link it in the toolset.</p>
@@ -203,6 +217,14 @@
             </div>
             <div class="activity-table"><table><thead><tr><th>When</th><th>Who</th><th>What</th><th>Area</th><th></th><th>Detail</th><th>From</th></tr></thead><tbody id="actRows"></tbody></table></div>
             <menu><button value="cancel">Close</button></menu>
+        </form>
+    </dialog>
+
+    <dialog id="settingsDialog">
+        <form method="dialog">
+            <h2>Area settings</h2>
+            <div id="settingsBody" class="settingsbody"></div>
+            <menu><button type="submit" value="ok" id="settingsOk">OK</button><button type="submit" value="cancel">Cancel</button></menu>
         </form>
     </dialog>
 
