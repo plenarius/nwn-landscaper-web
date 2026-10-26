@@ -494,7 +494,7 @@ export class View {
      * the ground, an arrow for the way they face and a line round a trigger's or encounter's outline; the one
      * selected (`selectedId`) bright, and its outline's corners shown. `draft` is an outline being drawn.
      */
-    setThings(things, selectedId = null, draft = null) {
+    setThings(things, selectedId = null, draft = null, ghosts = [], selectedKey = null) {
         if (this.thingGroup) {
             this.scene.remove(this.thingGroup);
             this.thingGroup.traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); });
@@ -547,6 +547,20 @@ export class View {
                 const a = p.clone().add(new THREE.Vector3(0, 0.3, 0)), b = a.clone().addScaledVector(dir, 1.6);
                 const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: sel ? 0xffffff : hex, depthTest: false }));
                 l.renderOrder = 5;
+                group.add(l);
+            }
+        }
+        // An imported area's own objects: grey, so the editor's can be told from them.
+        for (const g of ghosts) {
+            const sel = g.key === selectedKey;
+            const p = g.outline?.length ? at(g.outline[0][0], g.outline[0][1]) : at(g.x, g.y);
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(sel ? 0.4 : 0.25, sel ? 2 : 1.1, 8), new THREE.MeshBasicMaterial({ color: sel ? 0xffffff : 0x8a929b }));
+            cone.position.set(p.x, p.y + (sel ? 1 : 0.55), p.z);
+            cone.userData.thing = g.key;
+            group.add(cone);
+            if (g.outline?.length >= 3) {
+                const l = loop(g.outline, sel ? 0xffffff : 0x6c747c);
+                l.userData.thing = g.key;
                 group.add(l);
             }
         }

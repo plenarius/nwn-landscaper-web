@@ -1023,6 +1023,7 @@ function setArea(a) {
     area = a;
     view.setArea(a);
     thingsTool.selectedId = null;
+    thingsTool.loadOriginals();
     thingsTool.refresh();
     $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
     $('report').hidden = true;
@@ -1380,7 +1381,7 @@ $('newDialog').addEventListener('close', () => {
  *  sample's palette index (u8), then JSON too long for the query (the
  *  objects); the rest in the query. */
 function areaRequest() {
-    const extra = new TextEncoder().encode(JSON.stringify({ objects: area.objects, things: thingsForExport(area.things), settings: area.settings }));
+    const extra = new TextEncoder().encode(JSON.stringify({ objects: area.objects, things: thingsForExport(area.things), settings: area.settings, originals: area.originals }));
     const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength + extra.byteLength);
     body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
     body.set(area.materials, area.heights.byteLength);

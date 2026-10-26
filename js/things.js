@@ -33,6 +33,8 @@ export class ThingsTool {
         this.draft = null;
         this.drag = null;
         this.meta = null;
+        this.originals = [];
+        this.selectedKey = null;
         this.results = [];
         this.seq = 0;
         const { $ } = ctx;
@@ -62,6 +64,29 @@ export class ThingsTool {
         return this.meta;
     }
 
+    /** An imported area's own objects (the server reads them from the kept original). */
+    async loadOriginals() {
+        const a = this.area();
+        this.originals = [];
+        this.selectedKey = null;
+        if (!a) return;
+        const name = a.name;
+        try { const r = await fetch(`/api/originals?name=${encodeURIComponent(name)}`); if (r.ok) this.originals = (await r.json()).originals ?? []; } catch { /* none */ }
+        if (this.area()?.name === name) this.refresh();
+    }
+
+    /** The originals still in the area, where the editor now has them. */
+    ghosts() {
+        const o = this.area()?.originals;
+        if (!o) return [];
+        return this.originals.filter(g => !o.removed.includes(g.key)).map(g => {
+            const m = o.moved[g.key];
+            if (!m) return g;
+            const dx = m.x - g.x, dy = m.y - g.y;
+            return { ...g, x: m.x, y: m.y, bearing: m.bearing ?? g.bearing, outline: g.outline?.map(([x, y]) => [x + dx, y + dy]) };
+        });
+    }
+
     show() {
         this.loadMeta();
         this.refresh();
@@ -72,6 +97,7 @@ export class ThingsTool {
         this.draft = null;
         this.drag = null;
         this.ctx.view.setThings(this.area()?.things ?? [], null);
+        this.selectedKey = null;
     }
 
     arm(k) {
@@ -116,6 +142,18 @@ export class ThingsTool {
     down(e, p) {
         const area = this.area();
         const hit = this.ctx.view.pickThing(e.clientX, e.clientY);
+        if (!this.draft && typeof hit === 'string') {
+            // One of an imported area's own objects.
+            const g = this.ghosts().find(x => x.key === hit);
+            if (!g) return false;
+            this.selectedId = null;
+            this.selectedKey = hit;
+            area.beginStroke();
+            this.drag = { orig: hit, from: p, x: g.x, y: g.y, bearing: g.bearing };
+            this.refresh();
+            this.ctx.say(`${g.name || g.tag || g.resref} (original ${g.kind}): drag to move · Q/E to turn · Delete takes it out · Esc to deselect`);
+            return true;
+        }
         if (!this.draft && hit != null) {
             const t = area.things.find(x => x.id === hit);
             this.select(hit);
@@ -152,6 +190,12 @@ export class ThingsTool {
     move(p) {
         const d = this.drag;
         if (!d) return;
+        if (d.orig) {
+            const a = this.area(), clamp = (v, hi) => Math.min(hi, Math.max(0, v));
+            a.originals.moved[d.orig] = { x: round(clamp(d.x + p.x - d.from.x, a.sizeX)), y: round(clamp(d.y + p.y - d.from.y, a.sizeY)), bearing: d.bearing };
+            this.refresh();
+            return;
+        }
         if (d.turn) {
             if (Math.hypot(p.x - d.t.x, p.y - d.t.y) > 0.5) d.t.bearing = round(Math.atan2(p.y - d.t.y, p.x - d.t.x), 3);
         } else {
@@ -221,6 +265,7 @@ export class ThingsTool {
 
     select(id) {
         this.selectedId = id;
+        this.selectedKey = null;
         this.refresh();
         const t = this.selected();
         if (t) this.ctx.say(`${t.name || t.label || t.blueprint || t.tag || t.kind}: drag to move · Q/E to turn · Delete to remove · Esc to deselect`);
@@ -229,6 +274,19 @@ export class ThingsTool {
     /** Keys: true when handled. */
     key(e) {
         const t = this.selected();
+        if (this.selectedKey && !this.draft) {
+            const g = this.ghosts().find(x => x.key === this.selectedKey);
+            if (e.key === 'Escape') { this.selectedKey = null; this.refresh(); return true; }
+            if (g && (e.key === 'Delete' || e.key === 'Backspace')) { this.takeOut(g.key); return true; }
+            const turn = { q: Math.PI / 12, e: -Math.PI / 12 }[e.key.toLowerCase()];
+            if (g && turn && !e.ctrlKey && !e.metaKey) {
+                const a = this.area();
+                a.beginStroke();
+                a.originals.moved[g.key] = { x: g.x, y: g.y, bearing: round(g.bearing + turn, 3) };
+                this.changed();
+                return true;
+            }
+        }
         if (e.key === 'Enter' && this.draft) { this.finishDraft(); return true; }
         if (e.key === 'Escape') {
             if (this.cancelDraft()) return true;
@@ -240,6 +298,22 @@ export class ThingsTool {
         const turn = { q: Math.PI / 12, e: -Math.PI / 12 }[e.key.toLowerCase()];
         if (turn && !e.ctrlKey && !e.metaKey) { this.area().beginStroke(); t.bearing = round((t.bearing ?? 0) + turn, 3); this.changed(); return true; }
         return false;
+    }
+
+    takeOut(key) {
+        const a = this.area();
+        a.beginStroke();
+        if (!a.originals.removed.includes(key)) a.originals.removed.push(key);
+        delete a.originals.moved[key];
+        this.selectedKey = null;
+        this.changed();
+    }
+
+    putBack(key) {
+        const a = this.area();
+        a.beginStroke();
+        a.originals.removed = a.originals.removed.filter(k => k !== key);
+        this.changed();
     }
 
     changed() {
@@ -256,15 +330,72 @@ export class ThingsTool {
     refresh() {
         const a = this.area();
         if (!a) return;
-        this.ctx.view.setThings(a.things, this.selectedId, this.draft);
+        this.ctx.view.setThings(a.things, this.selectedId, this.draft, this.ghosts(), this.selectedKey);
         this.renderProps();
+        this.renderOriginals();
         this.ctx.$('thingFinish').hidden = !this.draft;
     }
 
     // --- The selected thing's properties ---------------------------------------------------------
 
+    renderOriginals() {
+        const { $ } = this.ctx, box = $('thingOrigs'), a = this.area();
+        const gone = this.originals.filter(g => a.originals.removed.includes(g.key));
+        const moved = Object.keys(a.originals.moved).length;
+        box.hidden = !this.originals.length;
+        if (!this.originals.length) return;
+        box.textContent = '';
+        const h = document.createElement('h4');
+        h.textContent = `The area's own objects (grey): ${this.originals.length - gone.length} here, ${gone.length} taken out, ${moved} moved`;
+        box.appendChild(h);
+        const p = document.createElement('p');
+        p.className = 'note';
+        p.textContent = 'Click a grey marker to move it, turn it or take it out.';
+        box.appendChild(p);
+        for (const g of gone) {
+            const r = document.createElement('div');
+            r.className = 'varrow origrow';
+            const s = document.createElement('span');
+            s.textContent = `${g.name || g.tag || g.resref} (${g.kind})`;
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = 'Put back';
+            b.onclick = () => this.putBack(g.key);
+            r.append(s, b);
+            box.appendChild(r);
+        }
+    }
+
     renderProps() {
         const { $ } = this.ctx, box = $('thingProps'), t = this.selected();
+        const g = this.selectedKey ? this.originals.find(x => x.key === this.selectedKey) : null;
+        if (g) {
+            box.hidden = false;
+            $('thingDelete').hidden = true;
+            box.textContent = '';
+            const head = document.createElement('h4');
+            head.textContent = `Original ${g.kind}: ${g.name || g.tag || g.resref}`;
+            box.appendChild(head);
+            const info = document.createElement('p');
+            info.className = 'note';
+            const m = this.area().originals.moved[g.key];
+            info.textContent = `Tag ${g.tag || '-'} · ${g.resref || 'no blueprint'} · at ${round(m?.x ?? g.x, 1)}, ${round(m?.y ?? g.y, 1)}${m ? ' (moved)' : ''}. Its scripts and settings stay as the toolset has them.`;
+            box.appendChild(info);
+            const out = document.createElement('button');
+            out.type = 'button';
+            out.className = 'danger';
+            out.textContent = 'Take it out';
+            out.onclick = () => this.takeOut(g.key);
+            box.appendChild(out);
+            if (m) {
+                const back = document.createElement('button');
+                back.type = 'button';
+                back.textContent = 'Put it back where it was';
+                back.onclick = () => { const a = this.area(); a.beginStroke(); delete a.originals.moved[g.key]; this.changed(); };
+                box.appendChild(back);
+            }
+            return;
+        }
         box.hidden = !t;
         $('thingDelete').hidden = !t;
         if (!t) return;
