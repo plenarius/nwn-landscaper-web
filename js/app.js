@@ -1327,10 +1327,12 @@ function refreshAll() {
     thingsTool.refreshAll();
     saveSoon();
 }
+let areaLists = null;
 $('btnSettings').onclick = async () => {
     if (!area || readOnly) return;
     const meta = await thingsTool.loadMeta();
-    openSettings(area, meta.template, () => { saveSoon(); $('statusMsg').textContent = 'Area settings kept.'; });
+    areaLists ??= await fetch('/api/area-lists').then(r => r.json()).catch(() => ({}));
+    openSettings(area, meta.template, areaLists, () => { saveSoon(); $('statusMsg').textContent = 'Area settings kept.'; });
 };
 $('btnUndo').onclick = () => { if (area?.undo()) refreshAll(); };
 $('btnRedo').onclick = () => { if (area?.redo()) refreshAll(); };

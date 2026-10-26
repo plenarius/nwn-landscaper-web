@@ -29,22 +29,22 @@ const FIELDS = [
     { p: 'weather.lightning', t: 'number', l: 'Chance of lightning %', min: 0, max: 100 },
     { p: 'weather.wind', t: 'select', l: 'Wind', o: WIND },
     { h: 'Music and sound' },
-    { p: 'music.day', t: 'number', l: 'Music, day (ambientmusic row)', min: 0 },
-    { p: 'music.night', t: 'number', l: 'Music, night', min: 0 },
-    { p: 'music.battle', t: 'number', l: 'Music, battle', min: 0 },
+    { p: 'music.day', list: 'music', t: 'number', l: 'Music, day', min: 0 },
+    { p: 'music.night', list: 'music', t: 'number', l: 'Music, night', min: 0 },
+    { p: 'music.battle', list: 'music', t: 'number', l: 'Music, battle', min: 0 },
     { p: 'music.delay', t: 'number', l: 'Music delay (ms)', min: 0, max: 1000000 },
-    { p: 'ambient.day', t: 'number', l: 'Ambient sound, day (ambientsound row)', min: 0 },
-    { p: 'ambient.night', t: 'number', l: 'Ambient sound, night', min: 0 },
+    { p: 'ambient.day', list: 'ambient', t: 'number', l: 'Ambient sound, day', min: 0 },
+    { p: 'ambient.night', list: 'ambient', t: 'number', l: 'Ambient sound, night', min: 0 },
     { p: 'ambient.dayVol', t: 'number', l: 'Ambient volume, day (0-127)', min: 0, max: 127 },
     { p: 'ambient.nightVol', t: 'number', l: 'Ambient volume, night (0-127)', min: 0, max: 127 },
-    { p: 'ambient.env', t: 'number', l: 'Reverb (environment audio)', min: 0 },
+    { p: 'ambient.env', list: 'env', t: 'number', l: 'Reverb (environment audio)', min: 0 },
     { h: 'Look' },
-    { p: 'loadScreen', t: 'number', l: 'Load screen (loadscreens row)', min: 0, max: 65535 },
-    { p: 'skyBox', t: 'number', l: 'Sky box (skyboxes row)', min: 0, max: 255 },
+    { p: 'loadScreen', list: 'loadScreen', t: 'number', l: 'Load screen', min: 0, max: 65535 },
+    { p: 'skyBox', list: 'skyBox', t: 'number', l: 'Sky box', min: 0, max: 255 },
 ];
 
 /** Opens the dialog for `area`. `template`: what a new area starts with; `onSave()` after OK. */
-export function openSettings(area, template, onSave) {
+export function openSettings(area, template, lists, onSave) {
     const dlg = document.getElementById('settingsDialog'), body = document.getElementById('settingsBody');
     const current = structuredClone(area.settings ?? template ?? {});
     delete current._note;
@@ -65,7 +65,15 @@ export function openSettings(area, template, onSave) {
         const span = document.createElement('span');
         span.textContent = f.l;
         let input;
-        if (f.t === 'select') {
+        if (f.list && lists?.[f.list]?.length) {
+            // A choice from the game's own table, by name (the number it stores is the table's row).
+            input = document.createElement('select');
+            const rows = lists[f.list];
+            const now = Number(get(current, f.p, 0));
+            for (const r of rows) input.add(new Option(r.name, r.row));
+            if (!rows.some(r => r.row === now)) input.add(new Option(`Row ${now}`, now));
+            input.value = String(now);
+        } else if (f.t === 'select') {
             input = document.createElement('select');
             for (const [v, n] of f.o) input.add(new Option(n, v));
             input.value = String(get(current, f.p, f.o[0][0]));
