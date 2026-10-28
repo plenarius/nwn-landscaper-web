@@ -1347,6 +1347,22 @@ function testCanGo() {
     $('testGo').textContent = claim && claim.user !== testState?.me ? 'Take over and load' : 'Load on the dev server';
 }
 
+/** Chooses the existing area you walk in from, and lists its waypoints (`waypoint` picked when it has it). */
+async function testPickArea(name, waypoint = '') {
+    testPicked = name;
+    const sel = $('testWp');
+    sel.textContent = '';
+    let wp = [];
+    try { wp = (await (await fetch(`/api/dev-test/waypoints?area=${encodeURIComponent(name)}`)).json()).waypoints ?? []; } catch { /* none */ }
+    for (const w of wp) sel.add(new Option(`${w.tag}  (${Math.round(w.x)}, ${Math.round(w.y)})`, w.tag));
+    if (!wp.length) sel.add(new Option('this area has no waypoints: pick another', ''));
+    if (waypoint && wp.some(w => w.tag === waypoint)) sel.value = waypoint;
+    testCanGo();
+}
+
+/** The way in last used for a module, kept in this browser. */
+const testWayKey = () => `landscaper.testway.${area?.module || area?.name}`;
+
 async function testAreas() {
     const mine = ++testSeq, box = $('testAreas'), q = $('testFind').value.trim();
     box.textContent = '';
@@ -1360,15 +1376,8 @@ async function testAreas() {
         b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height}</small>`;
         if (testPicked === s.area) b.classList.add('selected');
         b.onclick = async () => {
-            testPicked = s.area;
             for (const o of box.children) o.classList.toggle('selected', o === b);
-            const sel = $('testWp');
-            sel.textContent = '';
-            let wp = [];
-            try { wp = (await (await fetch(`/api/dev-test/waypoints?area=${encodeURIComponent(s.area)}`)).json()).waypoints ?? []; } catch { /* none */ }
-            for (const w of wp) sel.add(new Option(`${w.tag}  (${Math.round(w.x)}, ${Math.round(w.y)})`, w.tag));
-            if (!wp.length) sel.add(new Option('this area has no waypoints: pick another', ''));
-            testCanGo();
+            await testPickArea(s.area);
         };
         box.appendChild(b);
     }
@@ -1393,6 +1402,20 @@ $('btnTest').onclick = async () => {
     } catch { /* just the first */ }
     $('testStatus').textContent = 'Checking the dev server…';
     $('testDialog').showModal();
+    // The way in used last time for this module, ready to go.
+    try {
+        const last = JSON.parse(localStorage.getItem(testWayKey()) ?? 'null');
+        if (last?.area) {
+            if (last.entry && [...entry.options].some(o => o.value === last.entry)) entry.value = last.entry;
+            $('testFind').value = last.area;
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'selected';
+            b.innerHTML = `<span><b>${last.area}</b> <small>used last time</small></span>`;
+            $('testAreas').appendChild(b);
+            await testPickArea(last.area, last.waypoint);
+        }
+    } catch { /* nothing remembered */ }
     await testRefresh(false);
     clearInterval(testPoll);
     testPoll = setInterval(() => testRefresh(true), 10000);
@@ -1409,6 +1432,7 @@ $('testGo').onclick = async () => {
         const res = await fetch(`/api/dev-test?${q}`, { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
+        localStorage.setItem(testWayKey(), JSON.stringify({ area: testPicked, waypoint: $('testWp').value, entry: $('testEntry').value }));
     } catch (err) {
         $('testStatus').textContent = `Couldn't start: ${err.message}`;
         $('testStatus').className = 'note err';
