@@ -733,6 +733,27 @@ $('skyPreview').onchange = () => {
     localStorage.setItem('landscaper.skyPreview', $('skyPreview').checked ? 'on' : 'off');
     showSky();
 };
+// The top bar's menus (File, Area, Share): one open at a time, closed by a pick, a click elsewhere or Escape.
+function closeMenus() {
+    for (const m of document.querySelectorAll('.menu')) {
+        m.querySelector('.menu-list').hidden = true;
+        m.querySelector('.menu-btn').classList.remove('active');
+    }
+}
+for (const m of document.querySelectorAll('.menu')) {
+    const btn = m.querySelector('.menu-btn'), list = m.querySelector('.menu-list');
+    btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const open = list.hidden;
+        closeMenus();
+        list.hidden = !open;
+        btn.classList.toggle('active', open);
+    });
+    list.addEventListener('click', () => closeMenus());
+}
+document.addEventListener('click', closeMenus);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
+
 $('btnSky').onclick = () => { skyOpen = !skyOpen; updatePanels(); };
 $('skyClose').onclick = () => { skyOpen = false; updatePanels(); };
 
@@ -1087,6 +1108,7 @@ function showWho() {
     }
     for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
     $('btnActivity').hidden = !(me.team && me.admin);
+    $('sepFile').hidden = $('btnActivity').hidden;
     $('btnVersion').hidden = !(me.team && me.versions);
     $('btnPublish').hidden = !(me.team && me.publish);
     $('btnTest').hidden = !(me.team && me.publish);

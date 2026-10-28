@@ -18,22 +18,40 @@
 <body>
     <header id="topbar">
         <div class="brand">NWN <b>Landscaper</b></div>
-        <button class="top-btn" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span>New area</button>
-        <button class="top-btn" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span>Open</button>
+        <div class="menu" id="menuFile">
+            <button class="top-btn menu-btn" type="button" aria-haspopup="true">File</button>
+            <div class="menu-list" hidden>
+                <button class="menu-item" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span><span>New area</span><kbd>N</kbd></button>
+                <button class="menu-item" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span><span>Open…</span><kbd>O</kbd></button>
+                <button class="menu-item" id="btnVersion" hidden title="Keep this version of the area in the team's history (autosave doesn't)"><span>Save version</span></button>
+                <hr class="menu-sep" id="sepFile" hidden>
+                <button class="menu-item" id="btnActivity" hidden title="Who searched, imported and exported what (admins)"><span>Activity (admins)</span></button>
+            </div>
+        </div>
         <div id="areaInfo"></div>
-        <button class="top-btn" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span>Sky &amp; fog</button>
-        <button class="top-btn" id="btnSettings" title="Name, tag, scripts, weather, music... of this area">Area settings</button>
+        <div class="menu" id="menuArea">
+            <button class="top-btn menu-btn" type="button" aria-haspopup="true">Area</button>
+            <div class="menu-list" hidden>
+                <button class="menu-item" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span><span>Sky &amp; fog</span><kbd>L</kbd></button>
+                <button class="menu-item" id="btnSettings" title="Name, tag, scripts, weather, music... of this area"><span>Area settings…</span></button>
+            </div>
+        </div>
         <div class="spacer"></div>
-        <button class="top-btn" id="btnUndo" title="Undo (Ctrl+Z)"><span class="icon" data-icon="undo"></span>Undo</button>
-        <button class="top-btn" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span>Redo</button>
+        <button class="top-btn icon-only" id="btnUndo" title="Undo (Ctrl+Z)"><span class="icon" data-icon="undo"></span><span class="lbl">Undo</span></button>
+        <button class="top-btn icon-only" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span><span class="lbl">Redo</span></button>
+        <span class="group-sep"></span>
         <button class="top-btn" id="btnCheck" title="Check how NWN will path this area (nothing is exported)"><span class="icon" data-icon="check"></span>Check paths</button>
         <button class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
-        <button class="top-btn" id="btnVersion" hidden title="Keep this version of the area in the team's history (autosave doesn't)">Save version</button>
-        <button class="top-btn" id="btnPublish" hidden title="Send your last export to the team as pull requests on Layonara's repositories">Publish</button>
-        <button class="top-btn" id="btnTest" hidden title="Put your exported module on the dev server and walk it in the game">Test</button>
-        <button class="top-btn" id="btnActivity" hidden title="Who searched, imported and exported what (admins)">Activity</button>
         <button class="top-btn active" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on">Markers</button>
+        <span class="group-sep"></span>
         <button class="top-btn primary" id="btnExport" title="Export to Neverwinter Nights"><span class="icon" data-icon="exportNwn"></span>Export to NWN</button>
+        <div class="menu menu-right" id="menuShare">
+            <button class="top-btn menu-btn" type="button" aria-haspopup="true">Share</button>
+            <div class="menu-list" hidden>
+                <button class="menu-item" id="btnTest" hidden title="Put your exported module on the dev server and walk it in the game"><span>Test on the dev server…</span></button>
+                <button class="menu-item" id="btnPublish" hidden title="Send your last export to the team as pull requests on Layonara's repositories"><span>Publish to the team…</span></button>
+            </div>
+        </div>
     </header>
 
     <nav id="tools">
