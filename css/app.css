@@ -317,8 +317,9 @@ dialog button.busy:disabled { opacity: 1; color: var(--accent); }
 
 /* Publish dialog: a moving bar while it works, errors in red, done in green. */
 #publishDialog { width: min(640px, 92vw); }
-#pubText.err { color: var(--bad); font-weight: 600; }
-#pubText.ok { color: #5cc46a; }
+#pubText.err, #testStatus.err { color: var(--bad); font-weight: 600; }
+#pubText.ok, #testStatus.ok { color: #5cc46a; }
+#testStatus.work { color: #8fb3e0; }
 .progress { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; margin: 10px 0 4px; }
 .progress span { display: block; height: 100%; width: 35%; border-radius: 3px; background: var(--accent); animation: progressSlide 1.2s ease-in-out infinite; }
 @keyframes progressSlide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
