@@ -5,6 +5,7 @@
 
 import { renderVars } from './vars.js';
 import { THING_COLOURS, css } from './thingcolours.js';
+import { creaturePreview } from './preview.js';
 
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
@@ -153,13 +154,37 @@ export class ThingsTool {
             const e = document.createElement('button');
             e.type = 'button';
             e.className = 'bp' + (this.blueprint?.resref === b.resref ? ' active' : '');
-            e.innerHTML = `<b></b><small></small>`;
-            e.firstChild.textContent = b.name;
-            e.lastChild.textContent = `${b.resref}${b.source === 'game' ? ' · stock' : ''}`;
+            e.innerHTML = `<span class="thumb"></span><span class="txt"><b></b><small></small></span>`;
+            e.querySelector('b').textContent = b.name;
+            e.querySelector('small').textContent = `${b.resref}${b.source === 'game' ? ' · stock' : ''}`;
+            // What a creature looks like, drawn when its entry scrolls into view.
+            if (k.kind === 'creature' && b.source !== 'game') {
+                e.classList.add('has-thumb');
+                this.previews().observe(e.querySelector('.thumb'), b.resref);
+            }
             e.onclick = () => { this.blueprint = b; for (const x of box.children) x.classList.remove('active'); e.classList.add('active'); this.ctx.say(`${k.label}: ${b.name}. Click the ground to place it.`); };
             box.appendChild(e);
         }
         if (!list.length) box.textContent = q ? 'Nothing matches.' : 'Nothing found.';
+    }
+
+    /** Watches the thumbnail boxes and fills each in once, as it comes into view. */
+    previews() {
+        if (this._previews) return this._previews;
+        const refs = new WeakMap();
+        const io = new IntersectionObserver(entries => {
+            for (const en of entries) {
+                if (!en.isIntersecting) continue;
+                io.unobserve(en.target);
+                creaturePreview(refs.get(en.target)).then(url => {
+                    if (!url || !en.target.isConnected) return;
+                    en.target.style.backgroundImage = `url(${url})`;
+                    en.target.classList.add('ready');
+                });
+            }
+        }, { root: this.ctx.$('thingResults'), rootMargin: '40px' });
+        this._previews = { observe: (el, resref) => { refs.set(el, resref); io.observe(el); } };
+        return this._previews;
     }
 
     // --- The mouse -------------------------------------------------------------------------
