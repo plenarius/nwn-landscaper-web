@@ -345,7 +345,7 @@ function setImporting(on) {
     importing = on;
     $('importGo').textContent = on ? 'Importing…' : 'Import';
     $('importGo').classList.toggle('busy', on);
-    for (const id of ['importFind', 'importName']) $(id).disabled = on;
+    for (const id of ['importFind', 'importName', 'importFile']) $(id).disabled = on;
     for (const b of $('importList').querySelectorAll('button')) b.disabled = on;
     $('importName').oninput();
 }
@@ -355,9 +355,13 @@ async function showImportList() {
     const box = $('importList');
     let r = { sources: [] };
     try { r = await (await fetch(`/api/import-sources?q=${encodeURIComponent($('importFind').value.trim())}`)).json(); } catch { /* none */ }
+    // Their own uploaded files come first (not while searching the module).
+    let uploads = [];
+    if (!$('importFind').value.trim()) try { uploads = (await (await fetch('/api/uploads')).json()).uploads ?? []; } catch { /* none */ }
     if (mine !== importSeq) return; // a newer search is on its way
     box.textContent = '';
-    const found = r.sources ?? [];
+    const own = uploads.flatMap(u => (u.areas ?? []).map(a => ({ ...a, upload: u.file, from: `your file ${u.file}` })));
+    const found = [...own, ...(r.sources ?? [])];
     for (const s of found) {
         const b = document.createElement('button');
         b.type = 'button';
@@ -368,7 +372,7 @@ async function showImportList() {
         b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ' · ' + s.from : ''}${state}</small>`;
         b.disabled = !allowed;
         if (!allowed) b.title = 'Ask an admin to assign this area to you';
-        if (importChosen?.area === s.area) b.classList.add('selected');
+        if (importChosen?.area === s.area && importChosen?.upload === s.upload) b.classList.add('selected');
         b.onclick = () => {
             importChosen = s;
             for (const o of box.children) o.classList.toggle('selected', o === b);
@@ -383,6 +387,25 @@ async function showImportList() {
     else if (r.total > found.length) box.insertAdjacentHTML('beforeend', `<p class="note">${r.total - found.length} more: narrow the search.</p>`);
 }
 
+// Their own file goes up as it is (the server checks it reads as a module); its areas then show in the list.
+$('importFile').onchange = async () => {
+    const file = $('importFile').files[0];
+    if (!file || importing) return;
+    $('importStatus').textContent = `Uploading ${file.name}…`;
+    try {
+        const res = await fetch(`/api/upload?file=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
+        const r = await res.json();
+        if (!res.ok) throw new Error(r.error || res.statusText);
+        $('importStatus').textContent = `${file.name}: ${r.areas.length} area${r.areas.length === 1 ? '' : 's'}. Pick one below.`;
+        $('importFind').value = '';
+        importChosen = null;
+        await showImportList();
+    } catch (err) {
+        $('importStatus').textContent = `Couldn't use ${file.name}: ${err.message}`;
+    }
+    $('importFile').value = '';
+};
+
 $('importGo').onclick = async () => {
     if (!importChosen) return;
     if (importing) return;
@@ -390,7 +413,7 @@ $('importGo').onclick = async () => {
     setImporting(true);
     $('importStatus').textContent = `Importing ${importChosen.tag || importChosen.area} as ${name}… (reading its tiles and the module's haks takes a little while)`;
     try {
-        const res = await fetch(`/api/import?area=${encodeURIComponent(importChosen.area)}&name=${encodeURIComponent(name)}`, { method: 'POST' });
+        const res = await fetch(`/api/import?area=${encodeURIComponent(importChosen.area)}&name=${encodeURIComponent(name)}${importChosen.upload ? `&upload=${encodeURIComponent(importChosen.upload)}` : ''}`, { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
         setImporting(false);
