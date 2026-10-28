@@ -5,6 +5,7 @@
 // Frames: NWN x = three x; NWN y (north) = size - three z, so north is -Z,
 // away from the default camera; height is three y.
 
+import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE } from './area.js';
@@ -490,9 +491,10 @@ export class View {
     }
 
     /**
-     * The things placed in the area (creatures, waypoints, triggers, sounds...), as coloured markers standing on
-     * the ground, an arrow for the way they face and a line round a trigger's or encounter's outline; the one
-     * selected (`selectedId`) bright, and its outline's corners shown. `draft` is an outline being drawn.
+     * The things placed in the area (creatures, waypoints, triggers, sounds...) and, greyed, the imported area's
+     * own objects (`ghosts`): each kind has its own colour and shape, standing on the ground with an arrow for the
+     * way it faces; a trigger's or encounter's outline is a filled, draped polygon with a ribbon round it and a post
+     * at each corner. The one selected (`selectedId`/`selectedKey`) is white. `draft` is an outline being drawn.
      */
     setThings(things, selectedId = null, draft = null, ghosts = [], selectedKey = null) {
         if (this.thingGroup) {
@@ -503,71 +505,131 @@ export class View {
         this.scene.add(group);
         if (!this.area) return;
         const area = this.area, size = area.sizeY;
-        const colour = { creature: 0xe0402a, waypoint: 0x4aa3ff, trigger: 0xffd34a, sound: 0xb06bff, encounter: 0xff8a2a, store: 0x55c24a, item: 0xeeeeee, door: 0xc08a5a, placeable: 0x9aa7b4 };
         const at = (x, y, lift = 0) => new THREE.Vector3(x, area.heightAt(x, y) + lift, size - y);
-        const loop = (pts, hex, closed = true) => {
-            // Sampled every metre or so so the line follows the ground.
-            const line = [];
-            for (let i = 0; i < pts.length - (closed ? 0 : 1); i++) {
-                const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
-                const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
-                for (let k = 0; k < n; k++) line.push(at(ax + (bx - ax) * k / n, ay + (by - ay) * k / n, 0.25));
-            }
-            if (!closed) line.push(at(...pts[pts.length - 1], 0.25));
-            else line.push(line[0].clone());
-            const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(line), new THREE.LineBasicMaterial({ color: hex, depthTest: false }));
-            l.renderOrder = 5;
-            return l;
+        const GREY = new THREE.Color(0x8a929b);
+        // The colour a thing is drawn in: its kind's, or white when selected; an original's is the kind's washed toward grey.
+        const tone = (kind, sel, ghost) => {
+            if (sel) return new THREE.Color(0xffffff);
+            const c = new THREE.Color(THING_COLOURS[kind] ?? 0xffffff);
+            return ghost ? c.lerp(GREY, 0.2) : c;
         };
-        for (const t of things) {
-            const sel = t.id === selectedId, hex = colour[t.kind] ?? 0xffffff;
-            const mat = new THREE.MeshBasicMaterial({ color: sel ? 0xffffff : hex });
-            const cone = new THREE.Mesh(new THREE.ConeGeometry(sel ? 0.45 : 0.32, sel ? 2.2 : 1.7, 10), mat);
-            const p = t.outline?.length ? at(t.outline[0][0], t.outline[0][1]) : at(t.x, t.y);
-            cone.position.set(p.x, p.y + (sel ? 1.1 : 0.85), p.z);
-            cone.userData.thing = t.id;
-            const ball = new THREE.Mesh(new THREE.SphereGeometry(sel ? 0.4 : 0.28, 10, 8), new THREE.MeshBasicMaterial({ color: hex }));
-            ball.position.set(p.x, p.y + (sel ? 2.4 : 1.9), p.z);
-            ball.userData.thing = t.id;
-            group.add(cone, ball);
-            if (t.outline?.length >= 2) {
-                const l = loop(t.outline, hex);
-                l.userData.thing = t.id;
-                group.add(l);
-                if (sel) for (const [x, y] of t.outline) {
-                    const c = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
-                    const q = at(x, y, 0.3);
-                    c.position.copy(q);
-                    c.renderOrder = 6;
-                    group.add(c);
+        const solid = (c, ghost) => new THREE.MeshBasicMaterial({ color: c, transparent: ghost, opacity: ghost ? 0.8 : 1 });
+        const tag = (m, id) => { m.userData.thing = id; return m; };
+
+        /** A ribbon of `width` metres along the outline, draped on the ground (thin GL lines vanish at a distance). */
+        const ribbon = (pts, width, c, closed = true, ghost = false) => {
+            const n = pts.length, samples = [];
+            for (let i = 0; i < (closed ? n : n - 1); i++) {
+                const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % n];
+                const k = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
+                for (let j = 0; j < k; j++) samples.push([ax + (bx - ax) * j / k, ay + (by - ay) * j / k]);
+            }
+            if (!closed) samples.push(pts[n - 1]);
+            const m = samples.length, pos = [], idx = [];
+            for (let i = 0; i < m; i++) {
+                const prev = samples[(i - 1 + m) % m], next = samples[(i + 1) % m];
+                const lo = closed || i > 0 ? prev : samples[i], hi = closed || i < m - 1 ? next : samples[i];
+                let tx = hi[0] - lo[0], ty = hi[1] - lo[1];
+                const len = Math.hypot(tx, ty) || 1;
+                tx /= len; ty /= len;
+                const [x, y] = samples[i], nx = -ty * width / 2, ny = tx * width / 2;
+                for (const sgn of [1, -1]) {
+                    const v = at(x + nx * sgn, y + ny * sgn, 0.2);
+                    pos.push(v.x, v.y, v.z);
                 }
-            } else if (['creature', 'door', 'placeable', 'waypoint'].includes(t.kind)) {
-                // The way it faces: a line from the marker (bearing 0 faces east, as the game's).
-                const dir = new THREE.Vector3(Math.cos(t.bearing ?? 0), 0, -Math.sin(t.bearing ?? 0));
-                const a = p.clone().add(new THREE.Vector3(0, 0.3, 0)), b = a.clone().addScaledVector(dir, 1.6);
-                const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: sel ? 0xffffff : hex, depthTest: false }));
-                l.renderOrder = 5;
-                group.add(l);
+                if (i < m - 1 || closed) {
+                    const a = i * 2, b = ((i + 1) % m) * 2;
+                    idx.push(a, a + 1, b, a + 1, b + 1, b);
+                }
             }
-        }
-        // An imported area's own objects: grey, so the editor's can be told from them.
-        for (const g of ghosts) {
-            const sel = g.key === selectedKey;
-            const p = g.outline?.length ? at(g.outline[0][0], g.outline[0][1]) : at(g.x, g.y);
-            const cone = new THREE.Mesh(new THREE.ConeGeometry(sel ? 0.4 : 0.25, sel ? 2 : 1.1, 8), new THREE.MeshBasicMaterial({ color: sel ? 0xffffff : 0x8a929b }));
-            cone.position.set(p.x, p.y + (sel ? 1 : 0.55), p.z);
-            cone.userData.thing = g.key;
-            group.add(cone);
-            if (g.outline?.length >= 3) {
-                const l = loop(g.outline, sel ? 0xffffff : 0x6c747c);
-                l.userData.thing = g.key;
-                group.add(l);
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            g.setIndex(idx);
+            const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide, depthTest: false, transparent: ghost, opacity: ghost ? 0.9 : 1 }));
+            mesh.renderOrder = 5;
+            return mesh;
+        };
+
+        /** The polygon filled, draped: triangulated, then cut small enough to follow the ground. */
+        const fill = (pts, c, opacity) => {
+            const tris = THREE.ShapeUtils.triangulateShape(pts.map(([x, y]) => new THREE.Vector2(x, y)), []);
+            const pos = [];
+            const put = p => { const v = at(p[0], p[1], 0.12); pos.push(v.x, v.y, v.z); };
+            const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+            const cut = (a, b, d, depth) => {
+                if (depth >= 5 || Math.max(Math.hypot(a[0] - b[0], a[1] - b[1]), Math.hypot(b[0] - d[0], b[1] - d[1]), Math.hypot(d[0] - a[0], d[1] - a[1])) <= 2) { put(a); put(b); put(d); return; }
+                const ab = mid(a, b), bd = mid(b, d), da = mid(d, a);
+                cut(a, ab, da, depth + 1); cut(ab, b, bd, depth + 1); cut(da, bd, d, depth + 1); cut(ab, bd, da, depth + 1);
+            };
+            for (const [i, j, k] of tris) cut(pts[i], pts[j], pts[k], 0);
+            if (!pos.length) return null;
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+            mesh.renderOrder = 4;
+            return mesh;
+        };
+
+        /** A marker of the kind's own shape standing at `p`; every part picks as `id`. */
+        const marker = (kind, p, c, sel, ghost, id) => {
+            const m = () => solid(c, ghost), k = (sel ? 1.25 : 1) * 1.35;
+            const add = (geo, y, rot) => {
+                const mesh = tag(new THREE.Mesh(geo, m()), id);
+                mesh.position.set(p.x, p.y + y, p.z);
+                if (rot) mesh.rotation.set(...rot);
+                group.add(mesh);
+                return mesh;
+            };
+            switch (kind) {
+                case 'creature': add(new THREE.ConeGeometry(0.32 * k, 1.5 * k, 10), 0.75 * k); add(new THREE.SphereGeometry(0.27 * k, 10, 8), 1.75 * k); break;
+                case 'waypoint': add(new THREE.CylinderGeometry(0.05 * k, 0.05 * k, 2 * k, 6), k); add(new THREE.OctahedronGeometry(0.35 * k), 2.2 * k); break;
+                case 'trigger': case 'encounter': add(new THREE.CylinderGeometry(0.12 * k, 0.12 * k, 1.6 * k, 6), 0.8 * k); add(new THREE.OctahedronGeometry(0.3 * k), 1.8 * k); break;
+                case 'sound': add(new THREE.TorusGeometry(0.7 * k, 0.07 * k, 6, 20), 1.2 * k, [Math.PI / 2, 0, 0]); add(new THREE.SphereGeometry(0.22 * k, 8, 6), 1.2 * k); break;
+                case 'store': add(new THREE.BoxGeometry(0.9 * k, 0.9 * k, 0.9 * k), 0.45 * k); add(new THREE.ConeGeometry(0.55 * k, 0.5 * k, 4), 1.15 * k); break;
+                case 'item': add(new THREE.OctahedronGeometry(0.28 * k), 0.45 * k); break;
+                case 'door': add(new THREE.BoxGeometry(0.15 * k, 2 * k, 1.1 * k), k); break;
+                case 'placeable': add(new THREE.BoxGeometry(0.55 * k, 0.55 * k, 0.55 * k), 0.28 * k); break;
+                default: add(new THREE.SphereGeometry(0.3 * k, 8, 6), 0.5);
             }
-        }
+        };
+
+        /** The way a creature, door, placeable or waypoint faces: a line from the marker (bearing 0 faces east, as the game's). */
+        const facing = (p, bearing, c, ghost) => {
+            const dir = new THREE.Vector3(Math.cos(bearing ?? 0), 0, -Math.sin(bearing ?? 0));
+            const a = p.clone().add(new THREE.Vector3(0, 0.3, 0)), b = a.clone().addScaledVector(dir, 1.6);
+            const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: c, depthTest: false, transparent: ghost, opacity: ghost ? 0.6 : 1 }));
+            l.renderOrder = 5;
+            group.add(l);
+        };
+
+        /** The whole of one thing, the editor's or an original's. */
+        const draw = (t, id, sel, ghost) => {
+            const c = tone(t.kind, sel, ghost);
+            const hasOutline = t.outline?.length >= 3;
+            const p = hasOutline ? at(t.outline[0][0], t.outline[0][1]) : at(t.x, t.y);
+            marker(t.kind, p, c, sel, ghost, id);
+            if (hasOutline) {
+                const f = fill(t.outline, c, sel ? 0.42 : ghost ? 0.26 : 0.34);
+                if (f) group.add(f);
+                group.add(tag(ribbon(t.outline, sel ? 0.6 : 0.42, c, true, ghost), id));
+                // A post at every corner, so the shape reads from far away; the selected one's are the handles.
+                for (const [x, y] of t.outline) {
+                    const post = new THREE.Mesh(new THREE.CylinderGeometry(sel ? 0.18 : 0.1, sel ? 0.18 : 0.1, sel ? 1.2 : 0.8, 6), solid(c, ghost));
+                    const q = at(x, y);
+                    post.position.set(q.x, q.y + (sel ? 0.6 : 0.4), q.z);
+                    group.add(post);
+                }
+            } else if (['creature', 'door', 'placeable', 'waypoint', 'store'].includes(t.kind)) {
+                facing(p, t.bearing, c, ghost);
+            }
+        };
+        for (const g of ghosts) draw(g, g.key, g.key === selectedKey, true);
+        for (const t of things) draw(t, t.id, t.id === selectedId, false);
         if (draft?.length) {
-            const pts = draft.slice();
-            group.add(loop(pts, 0xffffff, false));
-            for (const [x, y] of pts) {
+            const white = new THREE.Color(0xffffff);
+            if (draft.length >= 3) { const f = fill(draft, white, 0.2); if (f) group.add(f); }
+            if (draft.length >= 2) group.add(ribbon(draft, 0.35, white, false));
+            for (const [x, y] of draft) {
                 const c = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
                 c.position.copy(at(x, y, 0.3));
                 c.renderOrder = 6;

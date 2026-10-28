@@ -4,6 +4,7 @@
 // area's GIT on export. Blueprints (what a creature, door or sound is) are searched on the server.
 
 import { renderVars } from './vars.js';
+import { THING_COLOURS, css } from './thingcolours.js';
 
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
@@ -46,6 +47,7 @@ export class ThingsTool {
             b.type = 'button';
             b.dataset.kind = k.id;
             b.textContent = k.label;
+            b.style.setProperty('--kind', css(THING_COLOURS[k.kind] ?? 0xffffff));
             b.onclick = () => this.arm(k);
             chips.appendChild(b);
         }

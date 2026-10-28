@@ -386,3 +386,6 @@ dialog label.check input { width: auto; }
 .group-sep { width: 1px; height: 28px; background: #000; margin: 0 2px; }
 .top-btn.icon-only { padding: 0 8px; }
 .top-btn.icon-only .lbl { display: none; }
+
+/* The Things panel's kind chips carry the colour that kind has in the view. */
+#thingKinds button::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: var(--kind, #fff); vertical-align: baseline; }
