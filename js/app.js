@@ -994,6 +994,39 @@ canvas.addEventListener('pointerdown', e => {
     showDebug();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { dbg.note = `(capture failed: ${err.message})`; showDebug(); }
 });
+// A right-click that doesn't move (a drag turns the view) on a marker: its menu, from any tool.
+let rmb = null;
+canvas.addEventListener('pointerdown', e => { if (e.button === 2) rmb = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+canvas.addEventListener('pointerup', e => {
+    if (e.button !== 2 || !rmb) return;
+    const moved = Math.hypot(e.clientX - rmb.x, e.clientY - rmb.y), quick = performance.now() - rmb.t < 600;
+    rmb = null;
+    if (moved > 4 || !quick || !area || readOnly) return;
+    const hit = view.pickThing(e.clientX, e.clientY, true);
+    if (hit == null) { closeCtx(); return; }
+    openCtx(e.clientX, e.clientY, hit);
+});
+function closeCtx() { const m = $('ctxMenu'); if (m) m.hidden = true; }
+function openCtx(x, y, hit) {
+    const items = thingsTool.menuFor(hit);
+    if (!items.length) return;
+    const m = $('ctxMenu');
+    m.textContent = '';
+    for (const it of items) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'menu-item';
+        b.textContent = it.label;
+        b.onclick = () => { closeCtx(); selectTool('things'); thingsTool.pick(hit); it.run(); };
+        m.appendChild(b);
+    }
+    m.style.left = `${Math.min(x, window.innerWidth - 190)}px`;
+    m.style.top = `${Math.min(y, window.innerHeight - items.length * 44 - 12)}px`;
+    m.hidden = false;
+}
+document.addEventListener('pointerdown', e => { if (!e.target.closest('#ctxMenu')) closeCtx(); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtx(); });
+
 canvas.addEventListener('pointermove', e => {
     mouse = { x: e.clientX, y: e.clientY };
     transformer.move(e);

@@ -425,3 +425,7 @@ dialog label.check input { width: auto; }
 .menu-note { margin: 2px 6px 6px; max-width: 240px; font-size: 12px; color: var(--muted); }
 .menu-row { display: flex; gap: 6px; padding: 0 4px 2px; }
 .menu-row button { flex: 1; padding: 4px 0; }
+
+/* The right-click menu on a marker. */
+.ctx { position: fixed; z-index: 60; min-width: 170px; }
+.ctx[hidden] { display: none; }

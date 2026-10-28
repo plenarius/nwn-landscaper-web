@@ -558,7 +558,8 @@ export class View {
         };
         const solid = (c, ghost) => new THREE.MeshBasicMaterial({ color: c, transparent: ghost, opacity: ghost ? 0.8 : 1 });
         // (Out of the Things tool the markers are only to look at: nothing to pick.)
-        const tag = (m, id) => { if (!inert) m.userData.thing = id; return m; };
+        this.thingsInert = inert;
+        const tag = (m, id) => { m.userData.thing = id; return m; };
 
         /** A ribbon of `width` metres along the outline, draped on the ground (thin GL lines vanish at a distance). */
         const ribbon = (pts, width, c, closed = true, ghost = false) => {
@@ -692,9 +693,10 @@ export class View {
         }
     }
 
-    /** The id of the thing whose marker is under the pointer, or null. */
-    pickThing(clientX, clientY) {
-        if (!this.thingGroup) return null;
+    /** The id of the thing whose marker is under the pointer, or null. Markers out of the Things tool are to look at, so
+     *  they are only found with `any` (the right-click menu). */
+    pickThing(clientX, clientY, any = false) {
+        if (!this.thingGroup || (this.thingsInert && !any)) return null;
         const r = this.renderer.domElement.getBoundingClientRect();
         const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
         this.raycaster.setFromCamera(ndc, this.camera);
