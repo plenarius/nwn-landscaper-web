@@ -429,3 +429,8 @@ dialog label.check input { width: auto; }
 /* The right-click menu on a marker. */
 .ctx { position: fixed; z-index: 60; min-width: 170px; }
 .ctx[hidden] { display: none; }
+
+/* The inspector: the selected thing's properties, on the right of the view. */
+.side-panel.right { left: auto; right: 12px; width: 360px; }
+#inspector .thingprops { max-height: none; overflow: visible; border-top: none; margin-top: 0; padding-top: 0; }
+#inspector .panel-close { position: absolute; top: 8px; right: 10px; }

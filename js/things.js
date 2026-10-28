@@ -83,6 +83,7 @@ export class ThingsTool {
         $('thingSearch').oninput = () => { clearTimeout(timer); timer = setTimeout(() => this.search(), 250); };
         $('thingDelete').onclick = () => this.remove(this.selected());
         $('thingFinish').onclick = () => this.finishDraft();
+        $('inspectorClose').onclick = () => this.deselect();
         this.arm(KINDS[0], false);
     }
 
@@ -150,6 +151,20 @@ export class ThingsTool {
         this.search();
     }
 
+    /** The properties panel on the right is there while something is selected in the tool. */
+    syncInspector() {
+        const el = this.ctx.$('inspector');
+        if (el) el.hidden = !this.active || this.ctx.$('thingProps').hidden;
+    }
+
+    /** Closes the inspector: nothing selected. */
+    deselect() {
+        this.selectedId = null;
+        this.selectedKey = null;
+        this.workOrig = null;
+        this.refresh();
+    }
+
     hide() {
         this.active = false;
         this.workOrig = null;
@@ -161,6 +176,7 @@ export class ThingsTool {
         this.refresh();
         this.ctx.$('thingProps').hidden = true;
         this.ctx.$('thingOrigs').hidden = true;
+        this.syncInspector();
     }
 
     arm(k, now = true) {
@@ -571,6 +587,7 @@ export class ThingsTool {
         this.renderProps();
         this.renderOriginals();
         this.ctx.$('thingFinish').hidden = !this.draft;
+        this.syncInspector();
         // A read-only session (someone else's workspace) can look but not change.
         if (this.ctx.readOnly?.()) for (const el of document.querySelectorAll('#thingProps input, #thingProps select, #thingProps button, #thingOrigs button, #thingFinish, #thingDelete')) el.disabled = true;
     }

@@ -165,6 +165,11 @@
             </div>
             <button type="button" id="thingFinish" hidden>Finish the outline (Enter)</button>
             <div id="thingOrigs" class="thingprops" hidden></div>
+        </section>
+        <!-- The selected thing's properties, on the right so the list on the left and the form don't share one scroll. -->
+        <section id="inspector" class="side-panel right" hidden>
+            <button class="panel-close" id="inspectorClose" title="Close (Esc)">×</button>
+            <h3>Properties</h3>
             <div id="thingProps" class="thingprops" hidden></div>
             <button type="button" id="thingDelete" class="danger" hidden>Delete it</button>
         </section>
