@@ -1,0 +1,26 @@
+name: Rebuild the forge image
+
+# The forge's image (plenarius/landscaper's image.yml) carries this editor. A merge here starts that build at once,
+# instead of waiting for its scheduled check (which GitHub runs unreliably). Needs the secret LANDSCAPER_DISPATCH_TOKEN:
+# a fine-grained token for plenarius/landscaper with "Actions: Read and write" and nothing else.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: dispatch-image
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Start the image build
+        env:
+          GH_TOKEN: ${{ secrets.LANDSCAPER_DISPATCH_TOKEN }}
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "the secret LANDSCAPER_DISPATCH_TOKEN isn't set on plenarius/landscaper-web"; exit 1; }
+          gh workflow run image.yml -R plenarius/landscaper --ref master
+          echo "started the image build; it is at https://github.com/plenarius/landscaper/actions/workflows/image.yml" >> "$GITHUB_STEP_SUMMARY"
