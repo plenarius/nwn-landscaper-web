@@ -1804,12 +1804,29 @@ window.addEventListener('keydown', e => {
 
 // The area last open: from landscaper, or this browser if it couldn't take it.
 await loadMe();
+// A reviewer's link (?review=<builder>/<area>, in a pull request): an admin looks at that builder's area, read-only.
+let reviewArea = null;
+{
+    const review = new URLSearchParams(location.search).get('review');
+    const [who, name] = (review ?? '').split('/');
+    if (review && me.team && me.admin && who && name) {
+        if (me.viewing !== who && !sessionStorage.getItem('landscaper.review')) {
+            sessionStorage.setItem('landscaper.review', '1');
+            await fetch(`/api/view-as?user=${encodeURIComponent(who)}`, { method: 'POST' });
+            location.reload();
+            await new Promise(() => {});   // (the page is reloading)
+        }
+        sessionStorage.removeItem('landscaper.review');
+        if (me.viewing === who) reviewArea = name;
+        history.replaceState(null, '', location.pathname);
+    }
+}
 if (!readOnly) await moveBrowserAreas();
 {
-    const current = localStorage.getItem('landscaper.current');
-    const local = current && localStorage.getItem(`landscaper.area.${current}`);
+    const current = reviewArea ?? localStorage.getItem('landscaper.current');
+    const local = !reviewArea && current && localStorage.getItem(`landscaper.area.${current}`);
     let opened = null;
-    if (current && !local) {
+    if (current && (!local || reviewArea)) {
         try {
             const res = await fetch(`/api/area?name=${encodeURIComponent(current)}`);
             if (res.ok) opened = Area.fromJSON(await res.json());
