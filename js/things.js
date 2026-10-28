@@ -152,6 +152,7 @@ export class ThingsTool {
 
     hide() {
         this.active = false;
+        this.workOrig = null;
         this.draft = null;
         this.redrawing = null;
         this.drag = null;
@@ -390,6 +391,32 @@ export class ThingsTool {
 
     // --- Things ----------------------------------------------------------------------------
 
+    /** Selects what `hit` names (a thing's id, or an original's key) for editing: its properties open in the panel. */
+    pick(hit) {
+        if (typeof hit === 'string') {
+            this.selectedId = null;
+            this.selectedKey = hit;
+            this.workOrig = null;
+            this.refresh();
+            const g = this.ghosts().find(x => x.key === hit);
+            if (g) this.ctx.say(`${g.name || g.tag || g.resref} (original ${g.kind}): edit its properties on the left`);
+        } else {
+            this.select(hit);
+        }
+    }
+
+    /** What a right-click on `hit` can do: [{ label, run }]. */
+    menuFor(hit) {
+        if (typeof hit === 'string') {
+            const g = this.ghosts().find(x => x.key === hit);
+            if (!g) return [];
+            return [{ label: 'Edit properties', run: () => this.pick(hit) }, { label: 'Take it out', run: () => this.takeOut(hit) }];
+        }
+        const t = this.area()?.things.find(x => x.id === hit);
+        if (!t) return [];
+        return [{ label: 'Edit properties', run: () => this.pick(hit) }, { label: 'Delete', run: () => this.remove(t) }];
+    }
+
     make(k, at) {
         const a = this.area(), id = a.nextThingId++;
         const t = { id, kind: k.kind, blueprint: this.blueprint?.resref ?? '', x: at.x, y: at.y, bearing: 0, ...(at.outline ? { outline: at.outline } : {}) };
@@ -440,6 +467,7 @@ export class ThingsTool {
     select(id) {
         this.selectedId = id;
         this.selectedKey = null;
+        this.workOrig = null;
         this.refresh();
         const t = this.selected();
         if (t) this.ctx.say(`${t.name || t.label || t.blueprint || t.tag || t.kind}: drag to move · Q/E to turn · Delete to remove${t.outline?.length ? ' · drag a corner, Alt+click an edge to add one, Shift+click a corner to remove it' : ''} · Esc to deselect`);
@@ -491,8 +519,33 @@ export class ThingsTool {
     }
 
     changed() {
+        if (this.workOrig) this.syncOriginal();
         this.refresh();
         this.ctx.saveSoon();
+    }
+
+    /** An original's properties as the form edits them: what it has, with the editor's changes on top. */
+    workingCopy(g) {
+        const e = this.area().originals.edited?.[g.key];
+        const t = { id: g.key, kind: g.kind, blueprint: g.resref, tag: e?.tag ?? g.tag, name: e?.name ?? g.name, fields: { ...(g.fields ?? {}) }, vars: structuredClone(e?.vars ?? g.vars ?? []) };
+        for (const [label, v] of Object.entries(e?.fields ?? {})) { if (v === null) delete t.fields[label]; else t.fields[label] = v; }
+        return t;
+    }
+
+    /** Keeps, for the original being edited, only what differs from what it had. */
+    syncOriginal() {
+        const { g, t } = this.workOrig, a = this.area();
+        a.originals.edited ??= {};
+        const e = {};
+        if ((t.tag ?? '') !== (g.tag ?? '')) e.tag = t.tag ?? '';
+        if ((t.name ?? '') !== (g.name ?? '')) e.name = t.name ?? '';
+        const before = g.fields ?? {}, f = {};
+        for (const label of new Set([...Object.keys(before), ...Object.keys(t.fields ?? {})])) {
+            if (JSON.stringify(before[label]) !== JSON.stringify(t.fields?.[label])) f[label] = t.fields?.[label] ?? null;
+        }
+        if (Object.keys(f).length) e.fields = f;
+        if (JSON.stringify(g.vars ?? []) !== JSON.stringify(t.vars ?? [])) e.vars = t.vars ?? [];
+        if (Object.keys(e).length) a.originals.edited[g.key] = e; else delete a.originals.edited[g.key];
     }
 
     /** After undo, redo or opening an area. */
@@ -564,46 +617,13 @@ export class ThingsTool {
         if (this.active) this.renderProps();
     }
 
-    renderProps() {
-        const { $ } = this.ctx, box = $('thingProps'), t = this.active ? this.selected() : null;
-        const g = this.active && this.selectedKey ? this.originals.find(x => x.key === this.selectedKey) : null;
-        if (g) {
-            box.hidden = false;
-            $('thingDelete').hidden = true;
-            box.textContent = '';
+    /** The form of a thing's (or, `original`, an imported object's) properties into `box`. */
+    propsForm(box, t, k, original) {
+        if (!original) {
             const head = document.createElement('h4');
-            head.textContent = `Original ${g.kind}: ${g.name || g.tag || g.resref}`;
+            head.textContent = `${k.label}${t.blueprint ? `: ${t.label ?? t.blueprint}` : ''}`;
             box.appendChild(head);
-            const info = document.createElement('p');
-            info.className = 'note';
-            const m = this.area().originals.moved[g.key];
-            info.textContent = `Tag ${g.tag || '-'} · ${g.resref || 'no blueprint'} · at ${round(m?.x ?? g.x, 1)}, ${round(m?.y ?? g.y, 1)}${m ? ' (moved)' : ''}. Its scripts and settings stay as the toolset has them.`;
-            box.appendChild(info);
-            const out = document.createElement('button');
-            out.type = 'button';
-            out.className = 'danger';
-            out.textContent = 'Take it out';
-            out.onclick = () => this.takeOut(g.key);
-            box.appendChild(out);
-            if (m) {
-                const back = document.createElement('button');
-                back.type = 'button';
-                back.textContent = 'Put it back where it was';
-                back.onclick = () => { const a = this.area(); a.beginStroke(); delete a.originals.moved[g.key]; this.changed(); };
-                box.appendChild(back);
-            }
-            return;
         }
-        box.hidden = !t;
-        $('thingDelete').hidden = !t;
-        if (!t) return;
-        // Typing in a field must not be torn down by the redraw its own change causes.
-        if (box.contains(document.activeElement) && document.activeElement.dataset.keep === String(t.id)) return;
-        box.textContent = '';
-        const k = this.kindOf(t);
-        const head = document.createElement('h4');
-        head.textContent = `${k.label}${t.blueprint ? `: ${t.label ?? t.blueprint}` : ''}`;
-        box.appendChild(head);
         const row = (text, input) => {
             const l = document.createElement('label');
             const s = document.createElement('span');
@@ -630,10 +650,11 @@ export class ThingsTool {
             if (t.outline?.length) t.outline = t.outline.map(([x, y]) => [round(Math.min(a.sizeX, Math.max(0, x + (axis === 'x' ? by : 0)))), round(Math.min(a.sizeY, Math.max(0, y + (axis === 'y' ? by : 0))))]);
             t[axis] = t.outline?.length ? t.outline[0][axis === 'x' ? 0 : 1] : to;
         };
-        row('East (m)', field('number', t.outline?.length ? t.outline[0][0] : t.x, v => at('x', v), { step: 0.5 }));
-        row('North (m)', field('number', t.outline?.length ? t.outline[0][1] : t.y, v => at('y', v), { step: 0.5 }));
-        if (k.bearing) row('Facing (°)', field('number', Math.round((t.bearing ?? 0) * 180 / Math.PI), v => { t.bearing = round(+v * Math.PI / 180, 3); }, { step: 15 }));
-        if (k.shape) {
+        // (An original is moved and turned by dragging it; its outline is reshaped by its corners.)
+        if (!original) row('East (m)', field('number', t.outline?.length ? t.outline[0][0] : t.x, v => at('x', v), { step: 0.5 }));
+        if (!original) row('North (m)', field('number', t.outline?.length ? t.outline[0][1] : t.y, v => at('y', v), { step: 0.5 }));
+        if (k.bearing && !original) row('Facing (°)', field('number', Math.round((t.bearing ?? 0) * 180 / Math.PI), v => { t.bearing = round(+v * Math.PI / 180, 3); }, { step: 15 }));
+        if (k.shape && !original) {
             const p = document.createElement('p');
             p.className = 'note';
             p.textContent = `${t.outline?.length ?? 0} corners. `;
@@ -702,13 +723,69 @@ export class ThingsTool {
                 }
             }
         }
-        this.contentsSection(box, t);
+        if (!original) this.contentsSection(box, t);
         // Local variables.
         const vh = document.createElement('h4');
         vh.textContent = 'Local variables';
         box.appendChild(vh);
         t.vars ??= [];
         renderVars(box, t.vars, { before: () => this.area().beginStroke(), after: () => this.changed(), keep: String(t.id) });
+    }
+
+    renderProps() {
+        const { $ } = this.ctx, box = $('thingProps'), t = this.active ? this.selected() : null;
+        const g = this.active && this.selectedKey ? this.originals.find(x => x.key === this.selectedKey) : null;
+        if (g) {
+            box.hidden = false;
+            $('thingDelete').hidden = true;
+            // Typing in a field must not be torn down by the redraw its own change causes.
+            if (box.contains(document.activeElement) && document.activeElement.dataset.keep === String(g.key)) return;
+            box.textContent = '';
+            const head = document.createElement('h4');
+            head.textContent = `Original ${g.kind}: ${g.name || g.tag || g.resref}`;
+            box.appendChild(head);
+            const info = document.createElement('p');
+            info.className = 'note';
+            const m = this.area().originals.moved[g.key];
+            info.textContent = `Tag ${g.tag || '-'} · ${g.resref || 'no blueprint'} · at ${round(m?.x ?? g.x, 1)}, ${round(m?.y ?? g.y, 1)}${m ? ' (moved)' : ''}.`;
+            box.appendChild(info);
+            const out = document.createElement('button');
+            out.type = 'button';
+            out.className = 'danger';
+            out.textContent = 'Take it out';
+            out.onclick = () => this.takeOut(g.key);
+            box.appendChild(out);
+            if (m) {
+                const back = document.createElement('button');
+                back.type = 'button';
+                back.textContent = 'Put it back where it was';
+                back.onclick = () => { const a = this.area(); a.beginStroke(); delete a.originals.moved[g.key]; this.changed(); };
+                box.appendChild(back);
+            }
+            // Its properties: edited on a copy of what it has, and what differs from the original is what is kept.
+            const edited = this.area().originals.edited?.[g.key];
+            const k = this.kindOf({ kind: g.kind });
+            const t = this.workingCopy(g);
+            this.workOrig = { g, t };
+            this.propsForm(box, t, k, true);
+            if (edited) {
+                const reset = document.createElement('button');
+                reset.type = 'button';
+                reset.textContent = 'Put its properties back';
+                reset.onclick = () => { const a = this.area(); a.beginStroke(); this.workOrig = null; delete a.originals.edited[g.key]; this.changed(); };
+                box.appendChild(reset);
+            }
+            return;
+        }
+        box.hidden = !t;
+        $('thingDelete').hidden = !t;
+        if (!t) return;
+        // Typing in a field must not be torn down by the redraw its own change causes.
+        if (box.contains(document.activeElement) && document.activeElement.dataset.keep === String(t.id)) return;
+        box.textContent = '';
+        this.workOrig = null;
+        const k = this.kindOf(t);
+        this.propsForm(box, t, k, false);
     }
 }
 
