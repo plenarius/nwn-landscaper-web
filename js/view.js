@@ -536,9 +536,10 @@ export class View {
      * The things placed in the area (creatures, waypoints, triggers, sounds...) and, greyed, the imported area's
      * own objects (`ghosts`): each kind has its own colour and shape, standing on the ground with an arrow for the
      * way it faces; a trigger's or encounter's outline is a filled, draped polygon with a ribbon round it and a post
-     * at each corner. The one selected (`selectedId`/`selectedKey`) is white. `draft` is an outline being drawn.
+     * at each corner. The one selected (`selectedId`/`selectedKey`) is white. `draft` is an outline being drawn. `inert`:
+     * to look at only, nothing can be picked.
      */
-    setThings(things, selectedId = null, draft = null, ghosts = [], selectedKey = null) {
+    setThings(things, selectedId = null, draft = null, ghosts = [], selectedKey = null, inert = false) {
         if (this.thingGroup) {
             this.scene.remove(this.thingGroup);
             this.thingGroup.traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); });
@@ -556,7 +557,8 @@ export class View {
             return ghost ? c.lerp(GREY, 0.2) : c;
         };
         const solid = (c, ghost) => new THREE.MeshBasicMaterial({ color: c, transparent: ghost, opacity: ghost ? 0.8 : 1 });
-        const tag = (m, id) => { m.userData.thing = id; return m; };
+        // (Out of the Things tool the markers are only to look at: nothing to pick.)
+        const tag = (m, id) => { if (!inert) m.userData.thing = id; return m; };
 
         /** A ribbon of `width` metres along the outline, draped on the ground (thin GL lines vanish at a distance). */
         const ribbon = (pts, width, c, closed = true, ghost = false) => {

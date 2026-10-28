@@ -10,6 +10,7 @@ import { carve, fitInTile, rockFor, at as entranceAt, nearest as nearestEntrance
 import { ModelLibrary } from './models.js';
 import { Transformer } from './transform.js';
 import { ThingsTool, thingsForExport } from './things.js';
+import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
 
 const $ = id => document.getElementById(id);
@@ -749,7 +750,8 @@ for (const m of document.querySelectorAll('.menu')) {
         list.hidden = !open;
         btn.classList.toggle('active', open);
     });
-    list.addEventListener('click', () => closeMenus());
+    // (A menu whose items are ticked stays open: its items say `data-stay`.)
+    list.addEventListener('click', e => { if (e.target.closest('[data-stay]')) e.stopPropagation(); else closeMenus(); });
 }
 document.addEventListener('click', closeMenus);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
@@ -1060,6 +1062,21 @@ view.onFrame = () => {
         if (dbg.stamps % 10 === 0) showDebug();
     }
 };
+
+// The Show menu: which kinds of thing are on the map out of the Things tool.
+{
+    const boxes = [...document.querySelectorAll('#menuShow input[data-kind]')];
+    const label = () => { $('btnShow').textContent = `Show (${thingsTool.shown.size})`; };
+    for (const cb of boxes) {
+        cb.checked = thingsTool.shown.has(cb.dataset.kind);
+        cb.closest('label').style.setProperty('--kind', css(THING_COLOURS[cb.dataset.kind] ?? 0xffffff));
+        cb.onchange = () => { thingsTool.setShown(cb.dataset.kind, cb.checked); label(); };
+    }
+    const all = on => { for (const cb of boxes) { cb.checked = on; thingsTool.setShown(cb.dataset.kind, on); } label(); };
+    $('showAll').onclick = () => all(true);
+    $('showNone').onclick = () => all(false);
+    label();
+}
 
 // --- Area: new, undo, autosave ------------------------------------------------
 

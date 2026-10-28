@@ -43,6 +43,23 @@
         <button class="top-btn" id="btnCheck" title="Check how NWN will path this area (nothing is exported)"><span class="icon" data-icon="check"></span>Check paths</button>
         <button class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
         <button class="top-btn active" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on">Markers</button>
+        <div class="menu" id="menuShow">
+            <button class="top-btn menu-btn" type="button" id="btnShow" title="Which things show on the map when the Things tool isn't selected">Show</button>
+            <div class="menu-list" hidden>
+                <p class="menu-note" data-stay>On the map out of the Things tool (in it, everything shows). The area's own objects as well as yours.</p>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="creature"><span class="dot"></span><span>Creatures</span></label>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="waypoint"><span class="dot"></span><span>Waypoints</span></label>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="trigger"><span class="dot"></span><span>Triggers and transitions</span></label>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="sound"><span class="dot"></span><span>Sounds</span></label>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="encounter"><span class="dot"></span><span>Encounters</span></label>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="store"><span class="dot"></span><span>Stores</span></label>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="item"><span class="dot"></span><span>Items</span></label>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="door"><span class="dot"></span><span>Doors</span></label>
+                <label class="menu-item" data-stay><input type="checkbox" data-kind="placeable"><span class="dot"></span><span>Placeables</span></label>
+                <hr class="menu-sep">
+                <div class="menu-row" data-stay><button type="button" id="showAll">All</button><button type="button" id="showNone">None</button></div>
+            </div>
+        </div>
         <span class="group-sep"></span>
         <button class="top-btn primary" id="btnExport" title="Export to Neverwinter Nights"><span class="icon" data-icon="exportNwn"></span>Export to NWN</button>
         <div class="menu menu-right" id="menuShare">

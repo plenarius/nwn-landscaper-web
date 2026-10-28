@@ -418,3 +418,10 @@ dialog label.check input { width: auto; }
 .stock-row button { padding: 0 8px; line-height: 22px; }
 .stock-row label.check { margin: 0; }
 .contents input[type=search] { width: 100%; box-sizing: border-box; margin: 4px 0; }
+
+/* The Show menu: a tick and the kind's colour for each kind of thing. */
+.menu-item .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--kind, #fff); flex: none; }
+.menu-item input[type=checkbox] { margin: 0; }
+.menu-note { margin: 2px 6px 6px; max-width: 240px; font-size: 12px; color: var(--muted); }
+.menu-row { display: flex; gap: 6px; padding: 0 4px 2px; }
+.menu-row button { flex: 1; padding: 4px 0; }
