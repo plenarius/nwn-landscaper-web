@@ -5,7 +5,7 @@
 
 import { renderVars } from './vars.js';
 import { THING_COLOURS, css } from './thingcolours.js';
-import { creaturePreview } from './preview.js';
+import { creaturePreview, itemPreview, modelPreview } from './preview.js';
 
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
@@ -158,9 +158,10 @@ export class ThingsTool {
             e.querySelector('b').textContent = b.name;
             e.querySelector('small').textContent = `${b.resref}${b.source === 'game' ? ' · stock' : ''}`;
             // What a creature looks like, drawn when its entry scrolls into view.
-            if (k.kind === 'creature' && b.source !== 'game') {
+            // The module's creatures and items come from the ops API; a placeable's or door's model from the game's data.
+            if ((['creature', 'item'].includes(k.kind) && b.source !== 'game') || ['placeable', 'door'].includes(k.kind)) {
                 e.classList.add('has-thumb');
-                this.previews().observe(e.querySelector('.thumb'), b.resref);
+                this.previews().observe(e.querySelector('.thumb'), k.kind, b.resref);
             }
             e.onclick = () => { this.blueprint = b; for (const x of box.children) x.classList.remove('active'); e.classList.add('active'); this.ctx.say(`${k.label}: ${b.name}. Click the ground to place it.`); };
             box.appendChild(e);
@@ -171,19 +172,21 @@ export class ThingsTool {
     /** Watches the thumbnail boxes and fills each in once, as it comes into view. */
     previews() {
         if (this._previews) return this._previews;
-        const refs = new WeakMap();
+        const what = new WeakMap();
+        const make = (kind, resref) => kind === 'creature' ? creaturePreview(resref) : kind === 'item' ? itemPreview(resref) : modelPreview(this.ctx.view.models, kind, resref);
         const io = new IntersectionObserver(entries => {
             for (const en of entries) {
                 if (!en.isIntersecting) continue;
                 io.unobserve(en.target);
-                creaturePreview(refs.get(en.target)).then(url => {
+                const [kind, resref] = what.get(en.target);
+                make(kind, resref).then(url => {
                     if (!url || !en.target.isConnected) return;
                     en.target.style.backgroundImage = `url(${url})`;
                     en.target.classList.add('ready');
                 });
             }
         }, { root: this.ctx.$('thingResults'), rootMargin: '40px' });
-        this._previews = { observe: (el, resref) => { refs.set(el, resref); io.observe(el); } };
+        this._previews = { observe: (el, kind, resref) => { what.set(el, [kind, resref]); io.observe(el); } };
         return this._previews;
     }
 
