@@ -312,6 +312,48 @@ export class View {
         this.controls.update();
     }
 
+    // --- The camera from the keyboard (the mouse's: right-drag turns, middle-drag moves, wheel zooms) ---------------
+
+    /** Moves the view along the ground: `right` and `forward` in steps of a tenth of the distance to what it looks at. */
+    panBy(right, forward) {
+        const off = this.camera.position.clone().sub(this.controls.target);
+        const away = new THREE.Vector3(-off.x, 0, -off.z);
+        if (away.lengthSq() < 1e-6) away.set(0, 0, -1);
+        away.normalize();
+        const side = new THREE.Vector3().crossVectors(away, new THREE.Vector3(0, 1, 0)).normalize();
+        const move = side.multiplyScalar(right * off.length() * 0.1).add(away.multiplyScalar(forward * off.length() * 0.1));
+        this.camera.position.add(move);
+        this.controls.target.add(move);
+        this.controls.update();
+    }
+
+    /** Turns the view round what it looks at: `dTheta` about the vertical, `dPhi` up or down (radians). */
+    orbitBy(dTheta, dPhi) {
+        const off = this.camera.position.clone().sub(this.controls.target);
+        const sph = new THREE.Spherical().setFromVector3(off);
+        sph.theta += dTheta;
+        sph.phi = Math.min(this.controls.maxPolarAngle, Math.max(0.02, sph.phi + dPhi));
+        this.camera.position.copy(this.controls.target).add(off.setFromSpherical(sph));
+        this.controls.update();
+    }
+
+    /** Moves in (factor < 1) or out, within the limits the wheel has. */
+    zoomBy(factor) {
+        const off = this.camera.position.clone().sub(this.controls.target);
+        const d = Math.min(this.controls.maxDistance, Math.max(this.controls.minDistance, off.length() * factor));
+        this.camera.position.copy(this.controls.target).add(off.setLength(d));
+        this.controls.update();
+    }
+
+    /** Straight down on what it looks at, from where it is now. */
+    topDown() {
+        const off = this.camera.position.clone().sub(this.controls.target);
+        const sph = new THREE.Spherical().setFromVector3(off);
+        sph.phi = 0.02;
+        this.camera.position.copy(this.controls.target).add(off.setFromSpherical(sph));
+        this.controls.update();
+    }
+
     /** The whole area, as a dirty range. */
     everything() {
         return { i0: 0, i1: this.area.nx - 1, j0: 0, j1: this.area.ny - 1 };
