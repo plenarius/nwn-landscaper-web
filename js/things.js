@@ -527,7 +527,7 @@ export class ThingsTool {
     /** An original's properties as the form edits them: what it has, with the editor's changes on top. */
     workingCopy(g) {
         const e = this.area().originals.edited?.[g.key];
-        const t = { id: g.key, kind: g.kind, blueprint: g.resref, tag: e?.tag ?? g.tag, name: e?.name ?? g.name, fields: { ...(g.fields ?? {}) }, vars: structuredClone(e?.vars ?? g.vars ?? []) };
+        const t = { id: g.key, kind: g.kind, blueprint: g.resref, tag: e?.tag ?? g.tag, name: e?.name ?? g.name, fields: { ...(g.fields ?? {}) }, vars: structuredClone(e?.vars ?? g.vars ?? []), contents: g.contents, inventory: structuredClone(e?.inventory), creatures: structuredClone(e?.creatures) };
         for (const [label, v] of Object.entries(e?.fields ?? {})) { if (v === null) delete t.fields[label]; else t.fields[label] = v; }
         return t;
     }
@@ -545,6 +545,10 @@ export class ThingsTool {
         }
         if (Object.keys(f).length) e.fields = f;
         if (JSON.stringify(g.vars ?? []) !== JSON.stringify(t.vars ?? [])) e.vars = t.vars ?? [];
+        // What it holds: the list as edited, when it differs from the original's (item, whether it never runs out).
+        const same = (x, y) => JSON.stringify((x ?? []).map(i => [i.resref, !!i.infinite])) === JSON.stringify((y ?? []).map(i => [i.resref, !!i.infinite]));
+        if (t.inventory !== undefined && !same(t.inventory, g.contents?.items)) e.inventory = t.inventory;
+        if (t.creatures !== undefined && !same(t.creatures, g.contents?.creatures)) e.creatures = t.creatures;
         if (Object.keys(e).length) a.originals.edited[g.key] = e; else delete a.originals.edited[g.key];
     }
 
@@ -723,7 +727,7 @@ export class ThingsTool {
                 }
             }
         }
-        if (!original) this.contentsSection(box, t);
+        this.contentsSection(box, t, original);
         // Local variables.
         const vh = document.createElement('h4');
         vh.textContent = 'Local variables';
@@ -794,8 +798,8 @@ const json = r => r.json().catch(() => ({}));
 
 /** What a container, creature or store holds, or what an encounter spawns: the list the blueprint has to start from, changed
  *  here (the change replaces the blueprint's whole list; "Use the blueprint's" takes it back). */
-ThingsTool.prototype.contentsSection = function (box, t) {
-    if (!['placeable', 'creature', 'store', 'encounter'].includes(t.kind) || !t.blueprint) return;
+ThingsTool.prototype.contentsSection = function (box, t, original = false) {
+    if (!['placeable', 'creature', 'store', 'encounter'].includes(t.kind) || (!t.blueprint && !original)) return;
     const encounter = t.kind === 'encounter', stock = t.kind === 'store';
     const field = encounter ? 'creatures' : 'inventory';
     const title = encounter ? 'Creatures it spawns' : stock ? 'Stock' : t.kind === 'creature' ? 'Items it carries' : 'Contents';
@@ -808,12 +812,12 @@ ThingsTool.prototype.contentsSection = function (box, t) {
     box.appendChild(d);
     d.open = t[field] !== undefined || this.openSections?.has(`${t.id}:contents`);
     d.addEventListener('toggle', () => { (this.openSections ??= new Set())[d.open ? 'add' : 'delete'](`${t.id}:contents`); });
-    // The blueprint's own list, fetched once.
-    if (!this.contentsCache.has(key)) {
+    // The blueprint's own list, fetched once (an original's is what it holds, sent with it).
+    if (!original && !this.contentsCache.has(key)) {
         this.contentsCache.set(key, null);
         fetch(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`).then(json).then(v => { this.contentsCache.set(key, v); if (this.active) this.renderProps(); }).catch(() => this.contentsCache.set(key, { items: [], creatures: [], container: true }));
     }
-    const base = this.contentsCache.get(key);
+    const base = original ? t.contents : this.contentsCache.get(key);
     const mine = t[field];
     const list = mine ?? (encounter ? base?.creatures : base?.items) ?? [];
     sum.textContent = `${title} (${base || mine ? list.length : '…'})${mine ? ' · changed' : ''}`;
@@ -889,7 +893,7 @@ ThingsTool.prototype.contentsSection = function (box, t) {
     };
     d.append(find, found);
     if (mine) {
-        const back = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Use the blueprint\'s' });
+        const back = Object.assign(document.createElement('button'), { type: 'button', textContent: original ? 'Put its contents back' : 'Use the blueprint\'s' });
         back.onclick = () => { this.area().beginStroke(); delete t[field]; this.changed(); };
         d.appendChild(back);
     }
