@@ -1705,10 +1705,26 @@ $('reportClose').onclick = () => { $('report').hidden = true; };
 
 // --- Keys -------------------------------------------------------------------------
 
+const STEP = Math.PI / 36;   // 5 degrees
+function cameraKey(e) {
+    const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
+    if (arrow) {
+        if (e.shiftKey) view.orbitBy(-arrow[0] * STEP, -arrow[1] * STEP);
+        else view.panBy(arrow[0], arrow[1]);
+        return true;
+    }
+    if (e.key === '+' || e.key === '=') { view.zoomBy(0.88); return true; }
+    if (e.key === '-' || e.key === '_') { view.zoomBy(1 / 0.88); return true; }
+    if (e.key === 'Home') { view.topDown(); return true; }
+    return false;
+}
+
 window.addEventListener('keydown', e => {
     // F5 / Ctrl+R reload, as in a browser (the app's window has no such keys).
     if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) { e.preventDefault(); location.reload(); return; }
     if (e.target.closest('input, dialog')) return;
+    // The camera: arrows move along the ground, Shift+arrows turn the view, + and - zoom, Home looks straight down (F frames).
+    if (!transformer.active && !e.ctrlKey && !e.metaKey && !e.altKey && cameraKey(e)) { e.preventDefault(); return; }
     if (tool === 'things' && !readOnly && thingsTool.key(e)) { e.preventDefault(); return; }
     if (transformer.active) { if (transformer.key(e)) e.preventDefault(); return; }
     // The selected placeable (Place tool).
