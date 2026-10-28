@@ -543,7 +543,7 @@ export class ThingsTool {
     /** An original's properties as the form edits them: what it has, with the editor's changes on top. */
     workingCopy(g) {
         const e = this.area().originals.edited?.[g.key];
-        const t = { id: g.key, kind: g.kind, blueprint: g.resref, tag: e?.tag ?? g.tag, name: e?.name ?? g.name, fields: { ...(g.fields ?? {}) }, vars: structuredClone(e?.vars ?? g.vars ?? []), contents: g.contents, inventory: structuredClone(e?.inventory), creatures: structuredClone(e?.creatures) };
+        const t = { id: g.key, kind: g.kind, blueprint: g.resref, tag: e?.tag ?? g.tag, name: e?.name ?? g.name, fields: { ...(g.fields ?? {}) }, vars: structuredClone(e?.vars ?? g.vars ?? []), contents: g.contents, inventory: structuredClone(e?.inventory), creatures: structuredClone(e?.creatures), equipment: structuredClone(e?.equipment) };
         for (const [label, v] of Object.entries(e?.fields ?? {})) { if (v === null) delete t.fields[label]; else t.fields[label] = v; }
         return t;
     }
@@ -565,6 +565,8 @@ export class ThingsTool {
         const same = (x, y) => JSON.stringify((x ?? []).map(i => [i.resref, !!i.infinite])) === JSON.stringify((y ?? []).map(i => [i.resref, !!i.infinite]));
         if (t.inventory !== undefined && !same(t.inventory, g.contents?.items)) e.inventory = t.inventory;
         if (t.creatures !== undefined && !same(t.creatures, g.contents?.creatures)) e.creatures = t.creatures;
+        const worn = x => JSON.stringify((x ?? []).map(i => [i.slot, i.resref]).sort());
+        if (t.equipment !== undefined && worn(t.equipment) !== worn(g.contents?.equipment)) e.equipment = t.equipment;
         if (Object.keys(e).length) a.originals.edited[g.key] = e; else delete a.originals.edited[g.key];
     }
 
@@ -745,6 +747,7 @@ export class ThingsTool {
             }
         }
         this.contentsSection(box, t, original);
+        this.equipmentSection(box, t, original);
         // Local variables.
         const vh = document.createElement('h4');
         vh.textContent = 'Local variables';
@@ -912,6 +915,91 @@ ThingsTool.prototype.contentsSection = function (box, t, original = false) {
     if (mine) {
         const back = Object.assign(document.createElement('button'), { type: 'button', textContent: original ? 'Put its contents back' : 'Use the blueprint\'s' });
         back.onclick = () => { this.area().beginStroke(); delete t[field]; this.changed(); };
+        d.appendChild(back);
+    }
+};
+
+/** What a creature wears and wields, slot by slot: the blueprint's own list to start from, changed here (the change replaces the
+ *  blueprint's whole list). */
+const SLOTS = ['head', 'chest', 'boots', 'arms', 'right hand', 'left hand', 'cloak', 'left ring', 'right ring', 'neck', 'belt', 'arrows', 'bullets', 'bolts', 'claw left', 'claw right', 'bite', 'skin'];
+ThingsTool.prototype.equipmentSection = function (box, t, original = false) {
+    if (t.kind !== 'creature' || (!t.blueprint && !original)) return;
+    const key = `${t.kind}:${t.blueprint}`;
+    this.contentsCache ??= new Map();
+    const d = document.createElement('details');
+    d.className = 'fsec contents';
+    const sum = document.createElement('summary');
+    d.appendChild(sum);
+    box.appendChild(d);
+    d.open = t.equipment !== undefined || this.openSections?.has(`${t.id}:equipment`);
+    d.addEventListener('toggle', () => { (this.openSections ??= new Set())[d.open ? 'add' : 'delete'](`${t.id}:equipment`); });
+    if (!original && !this.contentsCache.has(key)) {
+        this.contentsCache.set(key, null);
+        fetch(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`).then(json).then(v => { this.contentsCache.set(key, v); if (this.active) this.renderProps(); }).catch(() => this.contentsCache.set(key, { items: [], equipment: [], container: true }));
+    }
+    const base = original ? t.contents : this.contentsCache.get(key);
+    const mine = t.equipment;
+    const list = mine ?? base?.equipment ?? [];
+    sum.textContent = `Worn and wielded (${base || mine ? list.length : '…'})${mine ? ' · changed' : ''}`;
+    const edit = fn => {
+        this.area().beginStroke();
+        const next = (mine ?? base?.equipment ?? []).map(i => ({ ...i }));
+        fn(next);
+        t.equipment = next;
+        this.changed();
+    };
+    const rows = document.createElement('div');
+    rows.className = 'stock';
+    list.forEach((it, i) => {
+        const r = document.createElement('div');
+        r.className = 'stock-row';
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = `${it.slot}: ${it.name || it.resref}`;
+        const small = document.createElement('small');
+        small.textContent = it.resref;
+        name.appendChild(small);
+        const rm = Object.assign(document.createElement('button'), { type: 'button', textContent: '×', title: 'Take it off' });
+        rm.onclick = () => edit(l => { l.splice(i, 1); });
+        r.append(name, rm);
+        rows.appendChild(r);
+    });
+    if (!list.length) rows.textContent = base || mine ? 'Nothing.' : 'Loading…';
+    d.appendChild(rows);
+    // Add: pick a free slot, then search the item blueprints (an item put in a slot that's taken replaces what was there).
+    const slot = document.createElement('select');
+    slot.dataset.keep = String(t.id);
+    for (const n of SLOTS) slot.add(new Option(n, n));
+    const find = Object.assign(document.createElement('input'), { type: 'search', placeholder: 'Put on or in hand: type the item\'s name', autocomplete: 'off' });
+    find.dataset.keep = String(t.id);
+    const found = document.createElement('div');
+    found.className = 'bplist';
+    let timer = null, seq = 0;
+    find.oninput = () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const me = ++seq, q = find.value.trim();
+            found.textContent = '';
+            if (q.length < 2) return;
+            const r = await fetch(`/api/blueprints?kind=item&q=${encodeURIComponent(q)}&limit=8`).then(json).catch(() => ({}));
+            if (me !== seq) return;
+            for (const b of r.blueprints ?? []) {
+                const e = document.createElement('button');
+                e.type = 'button';
+                e.className = 'bp';
+                e.innerHTML = '<span class="txt"><b></b><small></small></span>';
+                e.querySelector('b').textContent = b.name;
+                e.querySelector('small').textContent = b.resref;
+                e.onclick = () => { const at = slot.value; find.value = ''; found.textContent = ''; edit(l => { const i = l.findIndex(x => x.slot === at); if (i >= 0) l.splice(i, 1); l.push({ slot: at, resref: b.resref, name: b.name }); }); };
+                found.appendChild(e);
+            }
+            if (!found.children.length) found.textContent = 'Nothing matches.';
+        }, 250);
+    };
+    d.append(slot, find, found);
+    if (mine) {
+        const back = Object.assign(document.createElement('button'), { type: 'button', textContent: original ? 'Put its gear back' : 'Use the blueprint\'s' });
+        back.onclick = () => { this.area().beginStroke(); delete t.equipment; this.changed(); };
         d.appendChild(back);
     }
 };
