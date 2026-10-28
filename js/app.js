@@ -1122,7 +1122,9 @@ $('btnActivity').onclick = showActivity;
 // hold, and opens them when asked. Only what the last export built is sent.
 async function publishCall(dry) {
     const note = encodeURIComponent($('pubNote').value.trim());
-    const res = await fetch(`/api/publish?name=${encodeURIComponent(area.name)}&dry=${dry ? 1 : 0}&note=${note}`, { method: 'POST' });
+    const whole = $('pubWhole').checked;
+    const url = whole ? `/api/publish-module?module=${encodeURIComponent(area.module || area.name)}` : `/api/publish?name=${encodeURIComponent(area.name)}`;
+    const res = await fetch(`${url}&dry=${dry ? 1 : 0}&note=${note}`, { method: 'POST' });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || res.statusText);
     return body;
@@ -1145,19 +1147,17 @@ function pubShow(text, mode = '') {
 }
 
 $('publishDialog').addEventListener('close', () => clearInterval(pubClock));
-$('btnPublish').onclick = async () => {
-    if (readOnly || !area) return;
-    const dlg = $('publishDialog');
-    $('pubLinks').textContent = '';
+/** Says what the pull requests would hold (the area, or with the box ticked its whole module). */
+async function pubCheck() {
+    const whole = $('pubWhole').checked;
     $('pubGo').hidden = true;
-    $('pubGo').disabled = false;
     $('pubNote').disabled = true;
-    pubShow(`Checking ${area.name} with the publishing service…`, 'work');
-    dlg.showModal();
+    pubShow(`Checking ${whole ? `module ${area.module}` : area.name} with the publishing service…`, 'work');
     try {
         const { plan } = await publishCall(true);
-        const what = plan.new ? 'a new area' : `a rework of ${plan.area}`;
-        pubShow(`This sends ${area.name} as ${what}: ${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} to nwn-module and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'} to nwn-haks` +
+        const files = `${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} to nwn-module and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'} to nwn-haks`;
+        const what = whole ? `the ${plan.areas.length} areas ${plan.areas.join(', ')}` : `${area.name} as ${plan.new ? 'a new area' : `a rework of ${plan.area}`}`;
+        pubShow(`This sends ${what}: ${files}` +
             `${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; James or Dorganath review the pull requests.` +
             (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : ''));
         $('pubGo').hidden = false;
@@ -1165,6 +1165,26 @@ $('btnPublish').onclick = async () => {
     } catch (err) {
         pubShow(`Can't publish yet: ${err.message}`, 'err');
     }
+}
+$('pubWhole').onchange = pubCheck;
+$('btnPublish').onclick = async () => {
+    if (readOnly || !area) return;
+    const dlg = $('publishDialog');
+    $('pubLinks').textContent = '';
+    $('pubGo').disabled = false;
+    // A module of several exported areas can go as one set.
+    $('pubWhole').checked = false;
+    $('pubWholeRow').hidden = true;
+    try {
+        const mine = (await (await fetch('/api/areas')).json()).areas ?? [];
+        const same = mine.filter(a => a.exported && (a.module || a.name) === (area.module || area.name));
+        if (same.length > 1) {
+            $('pubWholeRow').hidden = false;
+            $('pubWholeNames').textContent = `(${same.map(a => a.name).join(', ')})`;
+        }
+    } catch { /* just the one area */ }
+    dlg.showModal();
+    await pubCheck();
 };
 $('pubGo').onclick = async () => {
     $('pubGo').disabled = true;
