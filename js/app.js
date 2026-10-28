@@ -1178,16 +1178,34 @@ async function pubCheck() {
     $('pubNote').disabled = true;
     pubShow(`Checking ${whole ? `module ${area.module}` : area.name} with the publishing service…`, 'work');
     try {
-        const { plan } = await publishCall(true);
+        const { plan, findings = [] } = await publishCall(true);
+        const errors = findings.filter(f => f.level === 'error').length;
+        showFindings(findings);
         const files = `${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} to nwn-module and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'} to nwn-haks`;
         const what = whole ? `the ${plan.areas.length} areas ${plan.areas.join(', ')}` : `${area.name} as ${plan.new ? 'a new area' : `a rework of ${plan.area}`}`;
         pubShow(`This sends ${what}: ${files}` +
             `${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; James or Dorganath review the pull requests.` +
             (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : ''));
-        $('pubGo').hidden = false;
-        $('pubNote').disabled = false;
+        $('pubGo').hidden = errors > 0;
+        $('pubNote').disabled = errors > 0;
+        if (errors) pubShow(`${errors} problem${errors === 1 ? '' : 's'} to fix before this can be published (listed below). Fix them, export again, and check again.`, 'err');
     } catch (err) {
+        showFindings([]);
         pubShow(`Can't publish yet: ${err.message}`, 'err');
+    }
+}
+
+/** What the check found: errors stop a publish; warnings are for a look; each says which object. */
+function showFindings(findings) {
+    const box = $('pubFindings');
+    box.textContent = '';
+    box.hidden = !findings.length;
+    for (const f of findings) {
+        const li = document.createElement('li');
+        li.className = `finding ${f.level}`;
+        if (f.what) { const b = document.createElement('b'); b.textContent = `${f.what} `; li.appendChild(b); }
+        li.appendChild(document.createTextNode(f.msg));
+        box.appendChild(li);
     }
 }
 $('pubWhole').onchange = pubCheck;
