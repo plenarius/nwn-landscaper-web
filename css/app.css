@@ -404,3 +404,8 @@ dialog label.check input { width: auto; }
 .dest-picker summary { cursor: pointer; color: var(--muted); }
 .dest-picker input[type=search] { width: 100%; margin: 6px 0; box-sizing: border-box; }
 .dest-picker select { width: 100%; margin-top: 6px; }
+
+/* The Things form's groups (lock, trap, hit points...). */
+.fsec { margin: 6px 0; }
+.fsec > summary { cursor: pointer; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 0; }
+.fsec[open] > summary { color: var(--text); }

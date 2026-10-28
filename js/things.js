@@ -19,8 +19,30 @@ const KINDS = [
     { id: 'door', kind: 'door', label: 'Door', blueprint: true, bearing: true },
     { id: 'placeable', kind: 'placeable', label: 'Placeable', blueprint: true, bearing: true },
 ];
-const BOOLEAN = new Set(['HasMapNote', 'MapNoteEnabled', 'Locked', 'Plot', 'Active', 'Reset', 'Looping', 'Positional']);
+const BOOLEAN = new Set([
+    'HasMapNote', 'MapNoteEnabled', 'Locked', 'Plot', 'Active', 'Reset', 'Looping', 'Positional',
+    'Lockable', 'KeyRequired', 'AutoRemoveKey', 'TrapFlag', 'TrapOneShot', 'TrapDetectable', 'TrapDisarmable', 'Static', 'Useable',
+    'Random', 'RandomPosition', 'BlackMarket', 'PlayerOnly', 'Identified', 'Cursed', 'Stolen', 'IsImmortal', 'NoPermDeath', 'Interruptable', 'Lootable',
+]);
+/** Which group of the form a setting is in; the rest are scripts (resrefs) or plain settings. */
+const SECTIONS = {
+    Lock: ['Lockable', 'Locked', 'KeyRequired', 'KeyName', 'AutoRemoveKey', 'OpenLockDC', 'CloseLockDC'],
+    Trap: ['TrapFlag', 'TrapType', 'TrapOneShot', 'TrapDetectable', 'TrapDetectDC', 'TrapDisarmable', 'DisarmDC'],
+    'Hit points and saves': ['HP', 'CurrentHP', 'Hardness', 'Fort', 'Ref', 'Will'],
+    'Sound timing': ['Random', 'RandomPosition', 'RandomRangeX', 'RandomRangeY', 'Interval', 'IntervalVrtn', 'PitchVariation', 'VolumeVrtn', 'Times'],
+    Prices: ['MarkUp', 'MarkDown', 'BlackMarket', 'BM_MarkDown', 'IdentifyPrice', 'MaxBuyPrice'],
+};
+const SECTION_ORDER = ['Settings', 'Lock', 'Trap', 'Hit points and saves', 'Sound timing', 'Prices', 'Scripts'];
+const sectionOf = f => Object.entries(SECTIONS).find(([, labels]) => labels.includes(f.label))?.[0] ?? (f.type === 'r' ? 'Scripts' : 'Settings');
 const FRIENDLY = {
+    Lockable: 'Can be locked', KeyRequired: 'Needs its key to open', KeyName: 'Key tag', AutoRemoveKey: 'The key is used up', OpenLockDC: 'Pick-lock DC', CloseLockDC: 'Lock DC',
+    TrapFlag: 'Is trapped', TrapType: 'Trap', TrapOneShot: 'One shot', TrapDetectable: 'Can be detected', TrapDetectDC: 'Detect DC', TrapDisarmable: 'Can be disarmed', DisarmDC: 'Disarm DC',
+    HP: 'Hit points', CurrentHP: 'Hit points now', Hardness: 'Hardness', Fort: 'Fortitude save', Ref: 'Reflex save', Will: 'Will save', Static: 'Static (only scenery)', Useable: 'Can be used',
+    Cursor: 'Cursor over it', HighlightHeight: 'Highlight height', DifficultyIndex: 'Difficulty (0 very easy to 4 impossible)', SpawnOption: 'Spawns (0 again and again, 1 once)', PlayerOnly: 'Only when a player sets it off',
+    Random: 'Plays at random', RandomPosition: 'At a random spot', RandomRangeX: 'Spread east-west (m)', RandomRangeY: 'Spread north-south (m)', Interval: 'Every (ms)', IntervalVrtn: 'Varying by (ms)',
+    PitchVariation: 'Pitch varies by', VolumeVrtn: 'Volume varies by', Times: 'Plays at (1 day, 2 night, 3 always)',
+    BlackMarket: 'A black market', BM_MarkDown: 'Black-market mark-down %', IdentifyPrice: 'Identify price (-1 none)', MaxBuyPrice: 'Most it pays (-1 no limit)',
+    Charges: 'Charges', StackSize: 'Stack size', Identified: 'Identified', Cursed: 'Cursed', Stolen: 'Stolen', IsImmortal: 'Immortal', NoPermDeath: 'No permanent death (can be raised)', Interruptable: 'Can be interrupted', Lootable: 'Can be looted',
     HasMapNote: 'Shows a map note', MapNote: 'Map note text', MapNoteEnabled: 'Map note enabled', LinkedTo: 'Leads to (tag)', LinkedToFlags: 'Leads to a (1 door, 2 waypoint)',
     TransitionDestin: 'Destination name', Type: 'Type (0 generic, 1 transition, 2 trap)', MaxCreatures: 'Most creatures', RecCreatures: 'Recommended creatures',
     ResetTime: 'Reset time (s)', MarkUp: 'Mark-up %', MarkDown: 'Mark-down %', MaxDistance: 'Hearing range (m)', MinDistance: 'Full volume range (m)',
@@ -445,6 +467,13 @@ export class ThingsTool {
         }
     }
 
+    /** The game's lists a setting is picked from (the traps), once. */
+    async loadLists() {
+        this.lists = {};
+        try { this.lists = await (await fetch('/api/area-lists')).json(); } catch { /* the setting is a plain number then */ }
+        if (this.active) this.renderProps();
+    }
+
     renderProps() {
         const { $ } = this.ctx, box = $('thingProps'), t = this.active ? this.selected() : null;
         const g = this.active && this.selectedKey ? this.originals.find(x => x.key === this.selectedKey) : null;
@@ -527,27 +556,59 @@ export class ThingsTool {
         }
         const kinds = this.meta?.kinds?.find(m => m.kind === t.kind)?.fields ?? [];
         t.fields ??= {};
-        if (kinds.length) {
-            const h = document.createElement('h4');
-            h.textContent = 'Scripts and settings';
-            box.appendChild(h);
-        }
+        // The settings in groups: the plain ones open, then lock, trap, hit points, sound timing, prices and scripts, each
+        // folded unless something in it is set.
+        const groups = new Map();
         for (const f of kinds) {
             if (f.label in (k.preset?.fields ?? {}) && f.label === 'Type') continue;   // the chosen kind sets it
-            const set = v => { if (v === '' || v === false || v === undefined) delete t.fields[f.label]; else t.fields[f.label] = v; };
-            if (BOOLEAN.has(f.label)) row(label(f.label), field('checkbox', !!t.fields[f.label], v => set(v ? 1 : undefined)));
-            else if ('bifwd'.includes(f.type)) row(label(f.label), field('number', t.fields[f.label] ?? '', v => set(v === '' ? undefined : +v), { step: f.type === 'f' ? 0.5 : 1 }));
-            else {
-                const input = row(label(f.label), field('text', t.fields[f.label] ?? '', v => set(v.trim()), { maxLength: f.type === 'r' ? 16 : 200 }));
-                // A transition's or door's destination: the waypoints and doors this area has to pick from
-                // (another area's: type its tag).
-                if (f.label === 'LinkedTo') {
-                    const list = document.createElement('datalist');
-                    list.id = `links${t.id}`;
-                    for (const tag of this.linkTargets(t)) list.appendChild(Object.assign(document.createElement('option'), { value: tag }));
-                    input.setAttribute('list', list.id);
-                    input.after(list);
-                    list.after(this.destinationPicker(t, input));
+            const name = sectionOf(f);
+            if (!groups.has(name)) groups.set(name, []);
+            groups.get(name).push(f);
+        }
+        if (!this.lists) this.loadLists();
+        for (const name of SECTION_ORDER.filter(n => groups.has(n))) {
+            const fs = groups.get(name);
+            const details = document.createElement('details');
+            details.className = 'fsec';
+            const set = fs.filter(f => t.fields[f.label] !== undefined && t.fields[f.label] !== '').length;
+            details.open = name === 'Settings' || set > 0 || this.openSections?.has(`${t.id}:${name}`);
+            const sum = document.createElement('summary');
+            sum.textContent = set ? `${name} (${set} set)` : name;
+            details.appendChild(sum);
+            details.addEventListener('toggle', () => { (this.openSections ??= new Set())[details.open ? 'add' : 'delete'](`${t.id}:${name}`); });
+            box.appendChild(details);
+            const into = (text, input) => {
+                const l = document.createElement('label');
+                const sp = document.createElement('span');
+                sp.textContent = text;
+                l.append(sp, input);
+                details.appendChild(l);
+                return input;
+            };
+            for (const f of fs) {
+                const setv = v => { if (v === '' || v === false || v === undefined) delete t.fields[f.label]; else t.fields[f.label] = v; };
+                if (f.label === 'TrapType' && this.lists?.traps?.length) {
+                    const sel = document.createElement('select');
+                    sel.dataset.keep = String(t.id);
+                    sel.add(new Option('(none)', ''));
+                    for (const tr of this.lists.traps) sel.add(new Option(`${tr.name}`, String(tr.row)));
+                    sel.value = t.fields.TrapType !== undefined ? String(t.fields.TrapType) : '';
+                    sel.onchange = () => { this.area().beginStroke(); setv(sel.value === '' ? undefined : +sel.value); this.changed(); };
+                    into(label(f.label), sel);
+                } else if (BOOLEAN.has(f.label)) into(label(f.label), field('checkbox', !!t.fields[f.label], v => setv(v ? 1 : undefined)));
+                else if ('bifwdh'.includes(f.type)) into(label(f.label), field('number', t.fields[f.label] ?? '', v => setv(v === '' ? undefined : +v), { step: f.type === 'f' ? 0.5 : 1 }));
+                else {
+                    const input = into(label(f.label), field('text', t.fields[f.label] ?? '', v => setv(v.trim()), { maxLength: f.type === 'r' ? 16 : 200 }));
+                    // A transition's or door's destination: the waypoints and doors this area has to pick from
+                    // (another area's: type its tag, or pick it below).
+                    if (f.label === 'LinkedTo') {
+                        const list = document.createElement('datalist');
+                        list.id = `links${t.id}`;
+                        for (const tag of this.linkTargets(t)) list.appendChild(Object.assign(document.createElement('option'), { value: tag }));
+                        input.setAttribute('list', list.id);
+                        input.after(list);
+                        list.after(this.destinationPicker(t, input));
+                    }
                 }
             }
         }
