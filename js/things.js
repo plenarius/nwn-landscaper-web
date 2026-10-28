@@ -49,6 +49,10 @@ const FRIENDLY = {
 };
 const label = l => FRIENDLY[l] ?? l.replace(/^(Script|On)/, m => m + ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
 
+/** Which kinds of thing show on the map out of the Things tool (the Show menu), kept in this browser. In the tool, all do. */
+const SHOW_KEY = 'landscaper.showThings';
+const SHOW_DEFAULT = ['creature', 'waypoint', 'trigger', 'sound', 'encounter', 'store', 'item', 'door'];
+
 export class ThingsTool {
     /** `ctx`: { $, area(), view, saveSoon(), say(text) }. */
     constructor(ctx) {
@@ -63,6 +67,7 @@ export class ThingsTool {
         this.selectedKey = null;
         this.results = [];
         this.seq = 0;
+        try { this.shown = new Set(JSON.parse(localStorage.getItem(SHOW_KEY)) ?? SHOW_DEFAULT); } catch { this.shown = new Set(SHOW_DEFAULT); }
         const { $ } = ctx;
         const chips = $('thingKinds');
         for (const k of KINDS) {
@@ -130,6 +135,13 @@ export class ThingsTool {
         });
     }
 
+    /** Ticks or unticks a kind of thing in the Show menu. */
+    setShown(kind, on) {
+        this.shown[on ? 'add' : 'delete'](kind);
+        try { localStorage.setItem(SHOW_KEY, JSON.stringify([...this.shown])); } catch { /* not kept */ }
+        this.refresh();
+    }
+
     show() {
         this.active = true;
         this.loadMeta();
@@ -145,7 +157,7 @@ export class ThingsTool {
         this.drag = null;
         this.selectedId = null;
         this.selectedKey = null;
-        this.ctx.view.setThings(this.area()?.things ?? [], null);
+        this.refresh();
         this.ctx.$('thingProps').hidden = true;
         this.ctx.$('thingOrigs').hidden = true;
     }
@@ -492,8 +504,12 @@ export class ThingsTool {
     refresh() {
         const a = this.area();
         if (!a) return;
-        // (Out of the Things tool, only the markers show: no grey originals, no selection, no panel.)
-        if (!this.active) { this.ctx.view.setThings(a.things, null); return; }
+        // Out of the Things tool, the kinds ticked in the Show menu: the editor's own and the original's, as plain markers
+        // (nothing to grab, no selection, no panel).
+        if (!this.active) {
+            this.ctx.view.setThings(a.things.filter(t => this.shown.has(t.kind)), null, null, this.ghosts().filter(g => this.shown.has(g.kind)), null, true);
+            return;
+        }
         this.ctx.view.setThings(a.things, this.selectedId, this.draft, this.ghosts(), this.selectedKey);
         this.renderProps();
         this.renderOriginals();
