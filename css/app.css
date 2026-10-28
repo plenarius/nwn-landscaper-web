@@ -366,3 +366,23 @@ button.danger:hover { background: var(--bad); }
 
 dialog label.check { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
 dialog label.check input { width: auto; }
+
+/* Top bar menus: File, Area and Share hold what is used less often; a menu with nothing visible in it is hidden. */
+.menu { position: relative; }
+.menu:not(:has(.menu-item:not([hidden]))) { display: none; }
+.menu-btn::after { content: "▾"; margin-left: 2px; color: var(--muted); font-size: 12px; }
+.menu-btn.active { border-color: var(--accent); background: #3d3a30; }
+.menu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 230px; padding: 6px; background: var(--panel); border: 1px solid #000; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
+.menu-right .menu-list { left: auto; right: 0; }
+.menu-list[hidden] { display: none; }
+.menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; text-align: left; background: transparent; border: none; border-radius: 6px; }
+.menu-item:hover { background: #3a4452; }
+.menu-item:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+.menu-item.active { color: var(--accent); }
+.menu-item .icon { width: 22px; height: 22px; flex: none; }
+.menu-item kbd { margin-left: auto; padding-left: 16px; font: inherit; font-size: 12px; color: var(--muted); }
+.menu-item[hidden], .menu-sep[hidden] { display: none; }
+.menu-sep { margin: 6px 4px; border: none; border-top: 1px solid #000; }
+.group-sep { width: 1px; height: 28px; background: #000; margin: 0 2px; }
+.top-btn.icon-only { padding: 0 8px; }
+.top-btn.icon-only .lbl { display: none; }
