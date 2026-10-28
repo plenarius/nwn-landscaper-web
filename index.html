@@ -30,6 +30,7 @@
         <button class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
         <button class="top-btn" id="btnVersion" hidden title="Keep this version of the area in the team's history (autosave doesn't)">Save version</button>
         <button class="top-btn" id="btnPublish" hidden title="Send your last export to the team as pull requests on Layonara's repositories">Publish</button>
+        <button class="top-btn" id="btnTest" hidden title="Put your exported module on the dev server and walk it in the game">Test</button>
         <button class="top-btn" id="btnActivity" hidden title="Who searched, imported and exported what (admins)">Activity</button>
         <button class="top-btn active" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on">Markers</button>
         <button class="top-btn primary" id="btnExport" title="Export to Neverwinter Nights"><span class="icon" data-icon="exportNwn"></span>Export to NWN</button>
@@ -202,6 +203,27 @@
                 <input id="pubNote" maxlength="300" autocomplete="off"></label>
             <div id="pubLinks"></div>
             <menu><button type="button" id="pubGo">Open the pull requests</button><button value="cancel" id="pubClose">Close</button></menu>
+        </form>
+    </dialog>
+
+    <dialog id="testDialog">
+        <form method="dialog">
+            <h2>Test on the dev server</h2>
+            <p class="note" id="testStatus"></p>
+            <div id="testForm">
+                <p class="note">Puts your last export of this module on the dev server, with a temporary way in from an existing area. One person tests at a time; it frees itself after an hour of nothing.</p>
+                <label>Enter from an existing area <small>3 letters of its name or tag</small>
+                    <input id="testFind" autocomplete="off" placeholder="e.g. bay"></label>
+                <div id="testAreas" class="open-list import-list"></div>
+                <label>At its waypoint <select id="testWp"><option value="">Pick an area first</option></select></label>
+                <label>Leads to <select id="testEntry"></select></label>
+                <label class="check" id="testTakeRow" hidden><input type="checkbox" id="testTake"> Take it from the person testing now</label>
+            </div>
+            <menu>
+                <button type="button" id="testGo" class="primary" disabled>Load on the dev server</button>
+                <button type="button" id="testRelease" hidden>Give it back</button>
+                <button value="cancel">Close</button>
+            </menu>
         </form>
     </dialog>
 
