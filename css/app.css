@@ -396,3 +396,8 @@ dialog label.check input { width: auto; }
 .finding.error { border-left-color: var(--bad); }
 .finding.warn { border-left-color: #e0a040; }
 .finding b { color: var(--text); }
+
+.dest-picker { margin: 4px 0 8px; font-size: 13px; }
+.dest-picker summary { cursor: pointer; color: var(--muted); }
+.dest-picker input[type=search] { width: 100%; margin: 6px 0; box-sizing: border-box; }
+.dest-picker select { width: 100%; margin-top: 6px; }
