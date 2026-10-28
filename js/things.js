@@ -612,6 +612,7 @@ export class ThingsTool {
                 }
             }
         }
+        this.contentsSection(box, t);
         // Local variables.
         const vh = document.createElement('h4');
         vh.textContent = 'Local variables';
@@ -623,6 +624,109 @@ export class ThingsTool {
 
 /** Reads a response body as JSON, or {} when it isn't. */
 const json = r => r.json().catch(() => ({}));
+
+/** What a container, creature or store holds, or what an encounter spawns: the list the blueprint has to start from, changed
+ *  here (the change replaces the blueprint's whole list; "Use the blueprint's" takes it back). */
+ThingsTool.prototype.contentsSection = function (box, t) {
+    if (!['placeable', 'creature', 'store', 'encounter'].includes(t.kind) || !t.blueprint) return;
+    const encounter = t.kind === 'encounter', stock = t.kind === 'store';
+    const field = encounter ? 'creatures' : 'inventory';
+    const title = encounter ? 'Creatures it spawns' : stock ? 'Stock' : t.kind === 'creature' ? 'Items it carries' : 'Contents';
+    const key = `${t.kind}:${t.blueprint}`;
+    this.contentsCache ??= new Map();
+    const d = document.createElement('details');
+    d.className = 'fsec contents';
+    const sum = document.createElement('summary');
+    d.appendChild(sum);
+    box.appendChild(d);
+    d.open = t[field] !== undefined || this.openSections?.has(`${t.id}:contents`);
+    d.addEventListener('toggle', () => { (this.openSections ??= new Set())[d.open ? 'add' : 'delete'](`${t.id}:contents`); });
+    // The blueprint's own list, fetched once.
+    if (!this.contentsCache.has(key)) {
+        this.contentsCache.set(key, null);
+        fetch(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`).then(json).then(v => { this.contentsCache.set(key, v); if (this.active) this.renderProps(); }).catch(() => this.contentsCache.set(key, { items: [], creatures: [], container: true }));
+    }
+    const base = this.contentsCache.get(key);
+    const mine = t[field];
+    const list = mine ?? (encounter ? base?.creatures : base?.items) ?? [];
+    sum.textContent = `${title} (${base || mine ? list.length : '…'})${mine ? ' · changed' : ''}`;
+    if (base && base.container === false) {
+        const p = document.createElement('p');
+        p.className = 'note';
+        p.textContent = 'This one isn\'t a container: it holds nothing.';
+        d.appendChild(p);
+        return;
+    }
+    const edit = fn => {
+        this.area().beginStroke();
+        const next = (mine ?? (encounter ? base?.creatures : base?.items) ?? []).map(i => ({ ...i }));
+        fn(next);
+        t[field] = next;
+        this.changed();
+    };
+    const rows = document.createElement('div');
+    rows.className = 'stock';
+    list.forEach((it, i) => {
+        const r = document.createElement('div');
+        r.className = 'stock-row';
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = it.name || it.resref;
+        const small = document.createElement('small');
+        small.textContent = it.resref;
+        name.appendChild(small);
+        r.appendChild(name);
+        if (stock) {
+            const inf = document.createElement('label');
+            inf.className = 'check';
+            inf.title = 'Never runs out';
+            const cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !!it.infinite });
+            cb.dataset.keep = String(t.id);
+            cb.onchange = () => edit(l => { l[i].infinite = cb.checked; });
+            inf.append(cb, document.createTextNode('∞'));
+            r.appendChild(inf);
+        }
+        const rm = Object.assign(document.createElement('button'), { type: 'button', textContent: '×', title: 'Take it out' });
+        rm.onclick = () => edit(l => { l.splice(i, 1); });
+        r.appendChild(rm);
+        rows.appendChild(r);
+    });
+    if (!list.length) rows.textContent = base || mine ? 'Nothing.' : 'Loading…';
+    d.appendChild(rows);
+    // Add: search the item (or creature) blueprints.
+    const find = Object.assign(document.createElement('input'), { type: 'search', placeholder: encounter ? 'Add a creature: type its name' : 'Add an item: type its name', autocomplete: 'off' });
+    find.dataset.keep = String(t.id);
+    const found = document.createElement('div');
+    found.className = 'bplist';
+    let timer = null, seq = 0;
+    find.oninput = () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const me = ++seq, q = find.value.trim();
+            found.textContent = '';
+            if (q.length < 2) return;
+            const r = await fetch(`/api/blueprints?kind=${encounter ? 'creature' : 'item'}&q=${encodeURIComponent(q)}&limit=8`).then(json).catch(() => ({}));
+            if (me !== seq) return;
+            for (const b of r.blueprints ?? []) {
+                const e = document.createElement('button');
+                e.type = 'button';
+                e.className = 'bp';
+                e.innerHTML = '<span class="txt"><b></b><small></small></span>';
+                e.querySelector('b').textContent = b.name;
+                e.querySelector('small').textContent = b.resref;
+                e.onclick = () => { find.value = ''; found.textContent = ''; edit(l => { l.push(encounter ? { resref: b.resref, name: b.name } : { resref: b.resref, name: b.name, infinite: false }); }); };
+                found.appendChild(e);
+            }
+            if (!found.children.length) found.textContent = 'Nothing matches.';
+        }, 250);
+    };
+    d.append(find, found);
+    if (mine) {
+        const back = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Use the blueprint\'s' });
+        back.onclick = () => { this.area().beginStroke(); delete t[field]; this.changed(); };
+        d.appendChild(back);
+    }
+};
 
 ThingsTool.prototype.destinationPicker = function (t, input) {
     // Leads to a waypoint of an existing area: search it, then pick one of its waypoints.
