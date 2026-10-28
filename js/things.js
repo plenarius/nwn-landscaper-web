@@ -519,6 +519,7 @@ export class ThingsTool {
                     for (const tag of this.linkTargets(t)) list.appendChild(Object.assign(document.createElement('option'), { value: tag }));
                     input.setAttribute('list', list.id);
                     input.after(list);
+                    list.after(this.destinationPicker(t, input));
                 }
             }
         }
@@ -530,6 +531,64 @@ export class ThingsTool {
         renderVars(box, t.vars, { before: () => this.area().beginStroke(), after: () => this.changed(), keep: String(t.id) });
     }
 }
+
+/** Reads a response body as JSON, or {} when it isn't. */
+const json = r => r.json().catch(() => ({}));
+
+ThingsTool.prototype.destinationPicker = function (t, input) {
+    // Leads to a waypoint of an existing area: search it, then pick one of its waypoints.
+    const d = document.createElement('details');
+    d.className = 'dest-picker';
+    const sum = document.createElement('summary');
+    sum.textContent = 'Pick a waypoint of an existing area';
+    d.appendChild(sum);
+    const find = Object.assign(document.createElement('input'), { type: 'search', placeholder: '3 letters of the area\'s name or tag', autocomplete: 'off' });
+    const areas = document.createElement('div');
+    areas.className = 'bplist';
+    const wps = document.createElement('select');
+    wps.hidden = true;
+    const note = document.createElement('p');
+    note.className = 'note';
+    d.append(find, areas, wps, note);
+    let seq = 0, timer = null;
+    find.oninput = () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const mine = ++seq, q = find.value.trim();
+            areas.textContent = '';
+            wps.hidden = true;
+            if (q.length < 3) return;
+            const r = await fetch(`/api/import-sources?q=${encodeURIComponent(q)}`).then(json).catch(() => ({}));
+            if (mine !== seq) return;
+            for (const s of (r.sources ?? []).slice(0, 8)) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.innerHTML = `<b>${s.tag || s.area}</b> <small>${s.area}</small>`;
+                b.onclick = async () => {
+                    note.textContent = `Waypoints of ${s.area}…`;
+                    const w = await fetch(`/api/dev-test/waypoints?area=${encodeURIComponent(s.area)}`).then(json).catch(() => ({}));
+                    wps.textContent = '';
+                    wps.add(new Option(w.waypoints?.length ? 'Pick a waypoint' : 'this area has no waypoints', ''));
+                    for (const p of w.waypoints ?? []) wps.add(new Option(`${p.tag}  (${Math.round(p.x)}, ${Math.round(p.y)})`, p.tag));
+                    wps.hidden = !w.waypoints?.length;
+                    note.textContent = w.error ? `Couldn't read its waypoints: ${w.error}` : '';
+                };
+                areas.appendChild(b);
+            }
+            if (!areas.children.length) areas.textContent = r.error || r.note || 'No area matches.';
+        }, 300);
+    };
+    wps.onchange = () => {
+        if (!wps.value) return;
+        this.area().beginStroke();
+        t.fields ??= {};
+        t.fields.LinkedTo = wps.value;
+        t.fields.LinkedToFlags = 2;
+        this.changed();
+        this.renderProps();
+    };
+    return d;
+};
 
 const round = (v, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
 
