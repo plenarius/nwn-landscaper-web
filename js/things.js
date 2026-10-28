@@ -126,7 +126,7 @@ export class ThingsTool {
             const m = o.moved[g.key];
             if (!m) return g;
             const dx = m.x - g.x, dy = m.y - g.y;
-            return { ...g, x: m.x, y: m.y, bearing: m.bearing ?? g.bearing, outline: g.outline?.map(([x, y]) => [x + dx, y + dy]) };
+            return { ...g, x: m.x, y: m.y, bearing: m.bearing ?? g.bearing, outline: m.outline ?? g.outline?.map(([x, y]) => [x + dx, y + dy]) };
         });
     }
 
@@ -217,6 +217,19 @@ export class ThingsTool {
     /** A press on the terrain at `p` ({x, y}); true if it started something that follows the mouse. */
     down(e, p) {
         const area = this.area();
+        // The corners of the selected outline: drag one, Shift+click takes it out; Alt+click on an edge adds one.
+        if (!this.draft) {
+            const c = this.outlineOf();
+            if (c) {
+                const corner = this.ctx.view.pickCorner(e.clientX, e.clientY);
+                if (corner && String(corner.id) === String(c.id)) {
+                    if (e.shiftKey) { this.removeCorner(c, corner.index); return false; }
+                    this.drag = { corner: corner.index, c, from: p };
+                    return true;
+                }
+                if (e.altKey && this.addCorner(c, p)) return false;
+            }
+        }
         const hit = this.ctx.view.pickThing(e.clientX, e.clientY);
         if (!this.draft && typeof hit === 'string') {
             // One of an imported area's own objects.
@@ -226,7 +239,7 @@ export class ThingsTool {
             this.selectedKey = hit;
             this.drag = { orig: hit, from: p, x: g.x, y: g.y, bearing: g.bearing };
             this.refresh();
-            this.ctx.say(`${g.name || g.tag || g.resref} (original ${g.kind}): drag to move · Q/E to turn · Delete takes it out · Esc to deselect`);
+            this.ctx.say(`${g.name || g.tag || g.resref} (original ${g.kind}): drag to move · Q/E to turn · Delete takes it out${g.outline?.length ? ' · drag a corner, Alt+click an edge to add one, Shift+click a corner to remove it' : ''} · Esc to deselect`);
             return true;
         }
         if (!this.draft && hit != null) {
@@ -267,6 +280,12 @@ export class ThingsTool {
         // One undo step for a drag, taken when it first moves something (a click that only selects makes none).
         if (!d.began && Math.hypot(p.x - d.from.x, p.y - d.from.y) > 0.05) { this.area().beginStroke(); d.began = true; }
         if (!d.began) return;
+        if (d.corner !== undefined) {
+            const a = this.area(), clamp = (v, hi) => Math.min(hi, Math.max(0, v));
+            this.setCorner(d.c, d.corner, [round(clamp(p.x, a.sizeX)), round(clamp(p.y, a.sizeY))]);
+            this.refreshSoon();
+            return;
+        }
         if (d.orig) {
             const a = this.area(), clamp = (v, hi) => Math.min(hi, Math.max(0, v));
             a.originals.moved[d.orig] = { x: round(clamp(d.x + p.x - d.from.x, a.sizeX)), y: round(clamp(d.y + p.y - d.from.y, a.sizeY)), bearing: d.bearing };
@@ -283,6 +302,61 @@ export class ThingsTool {
             if (d.outline) d.t.outline = d.outline.map(([x, y]) => [round(clamp(x + dx, a.sizeX)), round(clamp(y + dy, a.sizeY))]);
         }
         this.refreshSoon();
+    }
+
+    /** The outline being edited: the selected thing's (`{ id, thing }`), or the selected original's (`{ id: key, ghost }`). */
+    outlineOf() {
+        const t = this.selected();
+        if (t?.outline?.length >= 3) return { id: t.id, thing: t };
+        const g = this.selectedKey && this.ghosts().find(x => x.key === this.selectedKey);
+        return g?.outline?.length >= 3 ? { id: g.key, ghost: g } : null;
+    }
+
+    /** Writes `outline` back: onto the thing (its first corner is where it stands), or as the original's new shape. */
+    putOutline(c, outline) {
+        if (c.thing) {
+            c.thing.outline = outline;
+            [c.thing.x, c.thing.y] = outline[0];
+        } else {
+            const o = this.area().originals, g = c.ghost, m = o.moved[g.key];
+            o.moved[g.key] = { x: m?.x ?? g.x, y: m?.y ?? g.y, bearing: m?.bearing ?? g.bearing, outline };
+        }
+    }
+
+    setCorner(c, index, point) {
+        const outline = (c.thing ?? c.ghost).outline.map(q => [...q]);
+        outline[index] = point;
+        this.putOutline(c, outline);
+        // (the original's next move reads the new shape)
+        if (c.ghost) c.ghost = this.ghosts().find(x => x.key === c.ghost.key) ?? c.ghost;
+    }
+
+    removeCorner(c, index) {
+        const outline = (c.thing ?? c.ghost).outline;
+        if (outline.length <= 3) { this.ctx.say('An outline needs at least three corners.'); return; }
+        this.area().beginStroke();
+        this.putOutline(c, outline.filter((_, i) => i !== index).map(q => [...q]));
+        this.changed();
+    }
+
+    /** Alt+click: a new corner on the edge nearest to `p` (within 2 m); false if no edge is near. */
+    addCorner(c, p) {
+        const o = (c.thing ?? c.ghost).outline;
+        let best = null;
+        for (let i = 0; i < o.length; i++) {
+            const [ax, ay] = o[i], [bx, by] = o[(i + 1) % o.length];
+            const len2 = (bx - ax) ** 2 + (by - ay) ** 2 || 1;
+            const t = Math.min(1, Math.max(0, ((p.x - ax) * (bx - ax) + (p.y - ay) * (by - ay)) / len2));
+            const q = [ax + (bx - ax) * t, ay + (by - ay) * t], d = Math.hypot(p.x - q[0], p.y - q[1]);
+            if (d < 2 && (!best || d < best.d)) best = { i, q, d };
+        }
+        if (!best) return false;
+        this.area().beginStroke();
+        const next = o.map(q => [...q]);
+        next.splice(best.i + 1, 0, [round(best.q[0]), round(best.q[1])]);
+        this.putOutline(c, next);
+        this.changed();
+        return true;
     }
 
     /** The markers redrawn once a frame, however many mouse events came (the panels wait for the end of the drag). */
@@ -356,7 +430,7 @@ export class ThingsTool {
         this.selectedKey = null;
         this.refresh();
         const t = this.selected();
-        if (t) this.ctx.say(`${t.name || t.label || t.blueprint || t.tag || t.kind}: drag to move · Q/E to turn · Delete to remove · Esc to deselect`);
+        if (t) this.ctx.say(`${t.name || t.label || t.blueprint || t.tag || t.kind}: drag to move · Q/E to turn · Delete to remove${t.outline?.length ? ' · drag a corner, Alt+click an edge to add one, Shift+click a corner to remove it' : ''} · Esc to deselect`);
     }
 
     /** Keys: true when handled. */

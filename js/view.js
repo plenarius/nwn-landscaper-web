@@ -655,7 +655,17 @@ export class View {
                 if (f) group.add(f);
                 group.add(tag(ribbon(t.outline, sel ? 0.6 : 0.42, c, true, ghost), id));
                 // A post at every corner, so the shape reads from far away; the selected one's are the handles.
+                let corner = 0;
                 for (const [x, y] of t.outline) {
+                    if (sel) {
+                        // A big invisible ball over the post: what a press on a corner grabs.
+                        const grab = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 6), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+                        const gq = at(x, y, 0.5);
+                        grab.position.copy(gq);
+                        grab.userData.corner = { id, index: corner };
+                        group.add(grab);
+                    }
+                    corner++;
                     const post = new THREE.Mesh(new THREE.CylinderGeometry(sel ? 0.18 : 0.1, sel ? 0.18 : 0.1, sel ? 1.2 : 0.8, 6), solid(c, ghost));
                     const q = at(x, y);
                     post.position.set(q.x, q.y + (sel ? 0.6 : 0.4), q.z);
@@ -690,6 +700,16 @@ export class View {
         const hit = this.raycaster.intersectObject(this.thingGroup, true).find(h => h.object.userData.thing != null);
         this.raycaster.params.Line.threshold = 1;
         return hit?.object.userData.thing ?? null;
+    }
+
+    /** The corner of the selected outline under the pointer: { id, index }, or null. */
+    pickCorner(clientX, clientY) {
+        if (!this.thingGroup) return null;
+        const r = this.renderer.domElement.getBoundingClientRect();
+        const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+        this.raycaster.setFromCamera(ndc, this.camera);
+        const hit = this.raycaster.intersectObject(this.thingGroup, true).find(h => h.object.userData.corner);
+        return hit?.object.userData.corner ?? null;
     }
 
     /** The placed object under the pointer, or null. */
