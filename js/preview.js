@@ -87,3 +87,22 @@ export function creaturePreview(resref) {
     }
     return cache.get(resref);
 }
+
+/** What a placeable's or door's blueprint looks like: the model its appearance names, drawn by the model cache (the
+ *  same small picture the Place tool's list has). `models` is the view's ModelCache. Null if it names none. */
+export async function modelPreview(models, kind, resref) {
+    try {
+        const { model } = await fetch(`/api/blueprint-model?kind=${kind}&resref=${encodeURIComponent(resref)}`).then(json);
+        return model ? (await models.thumbnail(model)) || null : null;
+    } catch { return null; }
+}
+
+/** An item blueprint's inventory icon (the ops API says which one it is and draws it): a URL, or null. */
+const icons = new Map();
+export function itemPreview(resref) {
+    if (!icons.has(resref)) {
+        icons.set(resref, fetch(`/api/preview/item?resref=${encodeURIComponent(resref)}`).then(json)
+            .then(({ key }) => (key ? `/api/preview-icon/${encodeURIComponent(key)}.png` : null)).catch(() => null));
+    }
+    return icons.get(resref);
+}
