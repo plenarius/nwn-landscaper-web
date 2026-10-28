@@ -1229,6 +1229,9 @@ async function pubCheck() {
     pubShow(`Checking ${whole ? `module ${area.module}` : area.name} with the publishing service…`, 'work');
     try {
         const { plan, findings = [] } = await publishCall(true);
+        // What the pull request will say about it (the ops API writes it: what is new, or what changed against production).
+        $('pubReview').textContent = (plan.review ?? '').replace(/^### /gm, '').replace(/[*`]/g, '');
+        $('pubReviewBox').hidden = !plan.review;
         const errors = findings.filter(f => f.level === 'error').length;
         showFindings(findings);
         const files = `${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} to nwn-module and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'} to nwn-haks`;
@@ -1241,6 +1244,7 @@ async function pubCheck() {
         if (errors) pubShow(`${errors} problem${errors === 1 ? '' : 's'} to fix before this can be published (listed below). Fix them, export again, and check again.`, 'err');
     } catch (err) {
         showFindings([]);
+        $('pubReviewBox').hidden = true;
         pubShow(`Can't publish yet: ${err.message}`, 'err');
     }
 }
