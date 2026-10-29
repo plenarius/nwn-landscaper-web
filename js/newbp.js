@@ -2,6 +2,7 @@
 // The engine keeps them in the builder's workspace and Publish sends the ones an area uses.
 
 import { ThingsTool } from './things.js';
+import { openConversation } from './dialogs.js';
 
 const json = r => r.json().catch(() => ({}));
 
@@ -133,6 +134,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         };
         row.append(span, input);
         section.appendChild(row);
+        if (label === 'Conversation') this.bpConversationRow(ext, resref, input, section);
     }
     document.getElementById('bpDelete').onclick = async () => {
         if (!confirm(`Delete ${resref}? Placed copies of it stay in your areas, but it won't be published.`)) return;
@@ -143,3 +145,31 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         this.bpFinder();
     };
 };
+
+/** Beside a creature's Conversation: write a conversation (new, or a copy of the one named), or change one of your own. */
+ThingsTool.prototype.bpConversationRow = function (ext, resref, input, section) {
+    const bar = el('div', { className: 'dlgbar' });
+    const mine = async () => ((await json(await fetch('/api/dialogs'))).dialogs ?? []).includes(input.value.trim().toLowerCase());
+    const write = el('button', { type: 'button' });
+    const sync = async () => { write.textContent = (await mine()) ? 'Change this conversation' : input.value.trim() ? 'Write my own from this one' : 'Write a conversation'; };
+    sync();
+    input.addEventListener('change', sync);
+    write.onclick = async () => {
+        const name = input.value.trim().toLowerCase();
+        if (await mine()) { await openConversation(name); return; }
+        const pick = prompt('A name for your conversation (16 letters, digits or _):', resref.slice(0, 16));
+        if (!pick) return;
+        const q = `resref=${encodeURIComponent(pick.trim().toLowerCase())}&from=${encodeURIComponent(name)}`;
+        const res = await fetch(`/api/dialog?${q}`, { method: 'POST' });
+        const r = await json(res);
+        if (!res.ok) { alert(r.error || res.statusText); return; }
+        input.value = r.resref;
+        input.dispatchEvent(new Event('change'));
+        await openConversation(r.resref);
+        sync();
+    };
+    bar.appendChild(write);
+    section.appendChild(bar);
+};
+
+function el(tag, props = {}, ...kids) { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; }
