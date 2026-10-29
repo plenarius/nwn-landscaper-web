@@ -1147,7 +1147,24 @@ async function loadMe() {
     showWho();
 }
 
+/** Which of the file menu's buttons show, and which are off while looking at someone else's workspace. */
+function showButtons() {
+    for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
+    $('btnActivity').hidden = !(me.team && me.admin);
+    $('sepFile').hidden = $('btnActivity').hidden;
+    $('btnVersion').hidden = !(me.team && me.versions);
+    // Publish opens pull requests through a review service when there is one; without it, it makes a package to download.
+    $('btnPublish').hidden = !((me.team && me.publish) || me.package);
+    $('btnPublish').querySelector('span').textContent = me.package ? 'Package for your module…' : 'Publish to the team…';
+    $('btnTest').hidden = !(me.team && me.publish);
+    $('btnPublish').disabled = readOnly;
+    $('btnTest').disabled = readOnly;
+    $('btnVersion').disabled = readOnly;
+
+}
+
 function showWho() {
+    showButtons();
     const who = $('who');
     who.textContent = '';
     who.classList.toggle('viewing', readOnly);
@@ -1162,16 +1179,6 @@ function showWho() {
     } else {
         who.append(`${me.name}${me.admin ? ' (admin)' : ''}`);
     }
-    for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
-    $('btnActivity').hidden = !(me.team && me.admin);
-    $('sepFile').hidden = $('btnActivity').hidden;
-    $('btnVersion').hidden = !(me.team && me.versions);
-    $('btnPublish').hidden = !(me.team && me.publish);
-    $('btnTest').hidden = !(me.team && me.publish);
-    $('btnPublish').disabled = readOnly;
-    $('btnTest').disabled = readOnly;
-    $('btnVersion').disabled = readOnly;
-
 }
 
 // What happened, for admins on a team server (searches, imports, exports, refusals...).
@@ -1204,6 +1211,13 @@ async function publishCall(dry) {
     const note = encodeURIComponent($('pubNote').value.trim());
     const whole = $('pubWhole').checked;
     const url = whole ? `/api/publish-module?module=${encodeURIComponent(area.module || area.name)}` : `/api/publish?name=${encodeURIComponent(area.name)}`;
+    // (No review service: a package to download. Its check is the same call with `dry`; the download is a separate one.)
+    if (me.package) {
+        const res = await fetch(`/api/package?name=${encodeURIComponent(area.name)}&whole=${whole ? 1 : 0}`, { method: 'POST' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || res.statusText);
+        return body;
+    }
     const res = await fetch(`${url}&dry=${dry ? 1 : 0}&note=${note}`, { method: 'POST' });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || res.statusText);
@@ -1232,7 +1246,7 @@ async function pubCheck() {
     const whole = $('pubWhole').checked;
     $('pubGo').hidden = true;
     $('pubNote').disabled = true;
-    pubShow(`Checking ${whole ? `module ${area.module}` : area.name} with the publishing service…`, 'work');
+    pubShow(`Checking ${whole ? `module ${area.module}` : area.name}${me.package ? '' : ' with the publishing service'}…`, 'work');
     try {
         const { plan, findings = [] } = await publishCall(true);
         // What the pull request will say about it (the ops API writes it: what is new, or what changed against production).
@@ -1240,11 +1254,16 @@ async function pubCheck() {
         $('pubReviewBox').hidden = !plan.review;
         const errors = findings.filter(f => f.level === 'error').length;
         showFindings(findings);
-        const files = `${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} to nwn-module and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'} to nwn-haks`;
+        const files = `${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'}`;
         const what = whole ? `the ${plan.areas.length} areas ${plan.areas.join(', ')}` : `${area.name} as ${plan.new ? 'a new area' : `a rework of ${plan.area}`}`;
-        pubShow(`This sends ${what}: ${files}` +
-            `${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; James or Dorganath review the pull requests.` +
-            (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : ''));
+        const reviewers = me.reviewers || 'your reviewers';
+        pubShow(me.package
+            ? `This packages ${what}: ${files}${plan.library ? ' (including the shared texture library)' : ''}, in the layout of your module's source, with a MANIFEST.md saying where each goes. It is what your last export built, so export first if you have changed anything.`
+                + (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : '')
+            : `This sends ${what}: ${files}${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; ${reviewers} review the pull requests.`
+                + (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : ''));
+        $('pubGo').textContent = me.package ? 'Download the package' : 'Open the pull requests';
+        $('pubNoteRow').hidden = !!me.package;
         $('pubGo').hidden = errors > 0;
         $('pubNote').disabled = errors > 0;
         if (errors) pubShow(`${errors} problem${errors === 1 ? '' : 's'} to fix before this can be published (listed below). Fix them, export again, and check again.`, 'err');
@@ -1289,6 +1308,23 @@ $('btnPublish').onclick = async () => {
     await pubCheck();
 };
 $('pubGo').onclick = async () => {
+    if (me.package) {
+        // A package: fetched (so an error shows here), then saved by the browser.
+        $('pubGo').disabled = true;
+        pubShow('Building the package…', 'work');
+        try {
+            const res = await fetch(`/api/package-download?name=${encodeURIComponent(area.name)}&whole=${$('pubWhole').checked ? 1 : 0}`);
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+            const file = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `${area.name}-package.zip`;
+            const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: file });
+            document.body.appendChild(a); a.click(); a.remove();
+            pubShow(`Downloaded ${file}. Unzip it into your module's repository (MANIFEST.md says what goes where), build the haks, and commit.`, 'ok');
+        } catch (err) {
+            pubShow(`Couldn't build the package: ${err.message}`, 'err');
+        }
+        $('pubGo').disabled = false;
+        return;
+    }
     $('pubGo').disabled = true;
     $('pubNote').disabled = true;
     pubShow('Opening the pull requests (this can take a minute: it uploads the tile files)…', 'work');
