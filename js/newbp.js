@@ -136,6 +136,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         section.appendChild(row);
         if (label === 'Conversation') this.bpConversationRow(ext, resref, input, section);
     }
+    if (ext === 'uti') await this.bpProperties(resref, body);
     document.getElementById('bpDelete').onclick = async () => {
         if (!confirm(`Delete ${resref}? Placed copies of it stay in your areas, but it won't be published.`)) return;
         await fetch(`/api/new-blueprint-delete?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST' });
@@ -173,3 +174,62 @@ ThingsTool.prototype.bpConversationRow = function (ext, resref, input, section) 
 };
 
 function el(tag, props = {}, ...kids) { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; }
+
+/** An item's properties: the list (each can be taken off), its value, and a form to add one (type, then what the type offers). */
+ThingsTool.prototype.bpProperties = async function (resref, body) {
+    const q = `resref=${encodeURIComponent(resref)}`;
+    const box = el('fieldset', {}, el('legend', { textContent: 'Properties' }));
+    body.appendChild(box);
+    const list = el('div', { className: 'stock' });
+    const cost = el('p', { className: 'note' });
+    const form = el('div', { className: 'propform' });
+    box.append(list, cost, form);
+    const types = (await json(await fetch(`/api/itemprops-types?${q}`))).types ?? [];
+    const show = d => {
+        list.textContent = '';
+        (d.properties ?? []).forEach((p, i) => {
+            const rm = el('button', { type: 'button', textContent: '×', title: 'Take it off the item' });
+            rm.onclick = async () => show(await json(await fetch(`/api/itemprops-remove?${q}&index=${i}`, { method: 'POST' })));
+            list.appendChild(el('div', { className: 'stock-row' }, el('span', { className: 'name', textContent: p.text }), rm));
+        });
+        if (!(d.properties ?? []).length) list.textContent = 'None.';
+        cost.textContent = `Worth ${(d.cost ?? 0).toLocaleString()} gold (worked out as the game does).`;
+        const t = document.getElementById('bpStatus');
+        if (d.error) { t.className = 'note err'; t.textContent = d.error; }
+    };
+    show(await json(await fetch(`/api/itemprops?${q}`)));
+    const select = (options, label) => { const s = el('select', {}); for (const o of options) s.add(new Option(o.text ?? o.name, String(o.row))); s.title = label; return s; };
+    const type = select(types, 'Property');
+    type.insertBefore(new Option('Add a property…', ''), type.firstChild);
+    type.value = '';
+    const more = el('div', { className: 'propmore' });
+    const add = el('button', { type: 'button', textContent: 'Add it', hidden: true });
+    form.append(type, more, add);
+    let sub = null, val = null, par = null;
+    const choose = async () => {
+        more.textContent = '';
+        sub = val = par = null;
+        add.hidden = type.value === '';
+        if (type.value === '') return;
+        const c = await json(await fetch(`/api/itemprops-choices?${q}&property=${type.value}&subtype=${sub?.value ?? 0}`));
+        if (c.subtypes?.length) { sub = select(c.subtypes, 'Which'); sub.onchange = reparam; more.appendChild(sub); }
+        if (c.costs?.length) { val = select(c.costs, 'Value'); more.appendChild(val); }
+        if (c.params?.length) { par = select(c.params, 'Parameter'); more.appendChild(par); }
+    };
+    // (A subtype can bring its own parameter table.)
+    const reparam = async () => {
+        const c = await json(await fetch(`/api/itemprops-choices?${q}&property=${type.value}&subtype=${sub.value}`));
+        par?.remove(); par = null;
+        if (c.params?.length) { par = select(c.params, 'Parameter'); more.appendChild(par); }
+    };
+    type.onchange = choose;
+    add.onclick = async () => {
+        const req = { property: Number(type.value) };
+        if (sub) req.subtype = Number(sub.value);
+        if (val) req.costValue = Number(val.value);
+        if (par) req.param1Value = Number(par.value);
+        show(await json(await fetch(`/api/itemprops-add?${q}`, { method: 'POST', body: JSON.stringify(req) })));
+        type.value = '';
+        choose();
+    };
+};
