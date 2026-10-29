@@ -207,17 +207,18 @@ export class ThingsTool {
             e.className = 'bp' + (this.blueprint?.resref === b.resref ? ' active' : '');
             e.innerHTML = `<span class="thumb"></span><span class="txt"><b></b><small></small></span>`;
             e.querySelector('b').textContent = b.name;
-            e.querySelector('small').textContent = `${b.resref}${b.source === 'game' ? ' · stock' : ''}`;
+            e.querySelector('small').textContent = `${b.resref}${b.source === 'game' ? ' · stock' : b.source === 'mine' ? ' · mine' : ''}`;
             // What a creature looks like, drawn when its entry scrolls into view.
             // The module's creatures and items come from the ops API; a placeable's or door's model from the game's data.
-            if ((['creature', 'item'].includes(k.kind) && b.source !== 'game') || ['placeable', 'door'].includes(k.kind)) {
+            if ((['creature', 'item'].includes(k.kind) && b.source === 'module') || ['placeable', 'door'].includes(k.kind)) {
                 e.classList.add('has-thumb');
                 this.previews().observe(e.querySelector('.thumb'), k.kind, b.resref);
             }
-            e.onclick = () => { this.blueprint = b; for (const x of box.children) x.classList.remove('active'); e.classList.add('active'); this.ctx.say(`${k.label}: ${b.name}. Click the ground to place it.`); };
+            e.onclick = () => { this.blueprint = b; for (const x of box.children) x.classList.remove('active'); e.classList.add('active'); this.ctx.say(`${k.label}: ${b.name}. Click the ground to place it.`); this.bpFinder?.(); };
             box.appendChild(e);
         }
         if (!list.length) box.textContent = q ? 'Nothing matches.' : 'Nothing found.';
+        this.bpFinder?.();
     }
 
     /** Watches the thumbnail boxes and fills each in once, as it comes into view. */

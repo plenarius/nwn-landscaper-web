@@ -10,6 +10,7 @@ import { carve, fitInTile, rockFor, at as entranceAt, nearest as nearestEntrance
 import { ModelLibrary } from './models.js';
 import { Transformer } from './transform.js';
 import { ThingsTool, thingsForExport } from './things.js';
+import './newbp.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
 
