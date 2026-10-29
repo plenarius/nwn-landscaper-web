@@ -2,6 +2,8 @@
 // player's replies ("You"), which lead to more NPC lines. A line reached from more than one place is shown once in full and
 // as a link elsewhere. Every change is saved as it is made (lines keep their places); closing tidies the numbering.
 
+import { scriptPicker } from './scripts.js';
+
 const json = r => r.json().catch(() => ({}));
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const excerpt = (t, n = 48) => (t || '(empty)').replace(/\s+/g, ' ').slice(0, n) + ((t || '').length > n ? '…' : '');
@@ -52,13 +54,15 @@ export async function openConversation(resref) {
         text.oninput = () => { n.text = text.value; later(); };
         box.appendChild(text);
         const small = el('details', { className: 'dlgmore' }, el('summary', { textContent: 'Conditions and actions' }));
-        const field = (label, get, set, ph = '', max = 32) => {
+        const field = (label, get, set, ph = '', max = 32, kind = null) => {
             const inp = el('input', { type: 'text', value: get() ?? '', placeholder: ph, maxLength: max });
             inp.onchange = () => { set(inp.value); later(); };
-            small.appendChild(el('label', {}, el('span', { textContent: label }), inp));
+            const row = el('label', {}, el('span', { textContent: label }), inp);
+            if (kind) row.appendChild(scriptPicker(inp, kind));
+            small.appendChild(row);
         };
-        field('Only if (script)', () => link.active, v => { link.active = v.trim(); }, 'a conditional script, e.g. a check');
-        field('Then run (script)', () => n.script, v => { n.script = v.trim(); }, 'an action script');
+        field('Only if (script)', () => link.active, v => { link.active = v.trim(); }, 'a conditional script, e.g. a check', 16, 'condition');
+        field('Then run (script)', () => n.script, v => { n.script = v.trim(); }, 'an action script', 16, 'action');
         if (side === 0) field('Speaker tag', () => n.speaker, v => { n.speaker = v.trim(); }, 'blank: the owner of the conversation');
         field('Note', () => n.comment, v => { n.comment = v; }, 'for builders', 200);
         box.appendChild(small);
@@ -107,7 +111,7 @@ export async function openConversation(resref) {
         for (const [label, key] of [['Script when it ends', 'end'], ['Script when it is aborted', 'abort']]) {
             const inp = el('input', { type: 'text', value: m[key] ?? '', maxLength: 16 });
             inp.onchange = () => { m[key] = inp.value.trim(); later(); };
-            end.appendChild(el('label', {}, el('span', { textContent: label }), inp));
+            end.appendChild(el('label', {}, el('span', { textContent: label }), inp, scriptPicker(inp, 'action')));
         }
         tree.appendChild(end);
     }

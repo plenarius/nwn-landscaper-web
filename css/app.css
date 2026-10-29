@@ -464,3 +464,9 @@ dialog label.check input { width: auto; }
 
 .propform { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .propmore { display: flex; flex-direction: column; gap: 6px; }
+
+#scriptDialog { width: min(900px, 96vw); }
+.scripthost { height: 56vh; border: 1px solid #000; border-radius: 6px; overflow: hidden; }
+.scripthost .cm-editor { height: 100%; }
+.scriptbtns { display: flex; gap: 6px; grid-column: 1 / -1; }
+.scriptbtns button.small { padding: 2px 10px; font-size: 12px; }
