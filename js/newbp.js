@@ -3,6 +3,7 @@
 
 import { ThingsTool } from './things.js';
 import { openConversation } from './dialogs.js';
+import { scriptPicker } from './scripts.js';
 
 const json = r => r.json().catch(() => ({}));
 
@@ -135,6 +136,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         row.append(span, input);
         section.appendChild(row);
         if (label === 'Conversation') this.bpConversationRow(ext, resref, input, section);
+        if (/^Script/.test(label) && f.type === 'r') row.appendChild(scriptPicker(input, 'action'));
     }
     if (ext === 'uti') await this.bpProperties(resref, body);
     document.getElementById('bpDelete').onclick = async () => {
