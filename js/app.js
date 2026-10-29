@@ -45,6 +45,7 @@ for (const [id, t] of Object.entries(TOOLS)) {
 
 function selectTool(id) {
     tool = id;
+    for (const c of document.querySelectorAll('canvas')) c.style.cursor = '';
     for (const b of document.querySelectorAll('#toolButtons .tool')) b.classList.toggle('active', b.dataset.tool === id);
     updatePanels();
 }
@@ -901,6 +902,12 @@ canvas.addEventListener('pointerdown', e => {
         }
     }
     if (e.button !== 0 || !area) { dbg.note = `(ignored: button ${e.button})`; showDebug(); return; }
+    // A click on a marker that shows (the Show menu) selects it, from any tool: its properties open in the Things tool, as the
+    // right-click menu does. (The Place tool has its own objects to pick.)
+    if (tool !== 'things' && tool !== 'place' && !readOnly) {
+        const hit = view.pickThing(e.clientX, e.clientY, true);
+        if (hit != null) { e.preventDefault(); selectTool('things'); thingsTool.pick(hit); return; }
+    }
     mouse = { x: e.clientX, y: e.clientY };
     const p = view.pick(e.clientX, e.clientY);
     if (!p) { dbg.note = '(down missed the terrain)'; showDebug(); return; }
@@ -1014,6 +1021,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtx(); 
 
 canvas.addEventListener('pointermove', e => {
     mouse = { x: e.clientX, y: e.clientY };
+    // A marker you can click shows a pointer, whichever tool is on.
+    if (tool !== 'things' && tool !== 'place' && !stroke && !transformer.active && area && !readOnly && e.buttons === 0) canvas.style.cursor = view.pickThing(e.clientX, e.clientY, true) != null ? 'pointer' : '';
     transformer.move(e);
     if (thingsTool.drag) { const p = view.pick(e.clientX, e.clientY); if (p) thingsTool.move(p); }
     if (stroke?.water) waterDrag(e);
