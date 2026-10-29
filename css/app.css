@@ -439,3 +439,12 @@ dialog label.check input { width: auto; }
 .review-box { margin: 8px 0; font-size: 13px; }
 .review-box summary { cursor: pointer; color: var(--muted); }
 .review-box pre { max-height: 220px; overflow: auto; margin: 6px 0 0; padding: 8px; white-space: pre-wrap; background: var(--panel-2); border-radius: 6px; font: 12px/1.4 ui-monospace, monospace; }
+
+.thingmake { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.thingmake button { text-align: left; white-space: normal; }
+#bpDialog { width: min(560px, 92vw); }
+#bpBody { max-height: 60vh; overflow: auto; padding-right: 6px; }
+#bpBody fieldset { border: 1px solid #000; border-radius: 8px; margin: 0 0 10px; padding: 4px 10px 10px; }
+#bpBody legend { color: var(--muted); padding: 0 6px; }
+#bpBody label { display: grid; grid-template-columns: 1fr 1.2fr; gap: 8px; align-items: center; margin: 6px 0; }
+#bpBody input, #bpBody textarea { width: 100%; box-sizing: border-box; }

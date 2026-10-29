@@ -162,6 +162,7 @@
             <div id="thingPick" hidden>
                 <input id="thingSearch" type="search" placeholder="Search by name or resref…" autocomplete="off">
                 <div id="thingResults" class="bplist"></div>
+                <div id="thingMake" class="thingmake" hidden></div>
             </div>
             <button type="button" id="thingFinish" hidden>Finish the outline (Enter)</button>
             <div id="thingOrigs" class="thingprops" hidden></div>
@@ -195,6 +196,16 @@
         <span id="statusMsg"></span>
     </footer>
 
+    <dialog id="bpDialog">
+        <h2 id="bpTitle">Blueprint</h2>
+        <p class="note">Your own blueprint. Changes are saved as you make them and go to review with the area that uses it.</p>
+        <div id="bpBody" class="bpbody"></div>
+        <p id="bpStatus" class="note"></p>
+        <menu>
+            <button type="button" id="bpDelete" class="danger">Delete it</button>
+            <button type="button" onclick="document.getElementById('bpDialog').close()">Close</button>
+        </menu>
+    </dialog>
     <dialog id="newDialog">
         <form method="dialog">
             <h2>New area</h2>
