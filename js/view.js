@@ -87,6 +87,10 @@ export class View {
     constructor(container) {
         this.container = container;
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.localClippingEnabled = true;
+        // Imported tiles' roofs and upper floors: cut away above this height (null: whole).
+        this.cut = null;
+        this.cutPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.setClearColor(0x1d2228);
         container.appendChild(this.renderer.domElement);
@@ -523,7 +527,25 @@ export class View {
         inst.scale.setScalar(o.scale);
         inst.userData.object = o;
         group.add(inst);
+        this.applyCut(inst);
         this.addDecal(group, o, model.userData.flat);
+    }
+
+    /** Cuts the imported tiles' roofs and upper floors away above `h` metres (null: shows them whole). Only imported tile
+     *  models are cut: the ground, things and anything else stay as they are. */
+    setCut(h) {
+        this.cut = h;
+        if (h != null) this.cutPlane.constant = h;
+        if (this.objectGroup) for (const c of this.objectGroup.children) this.applyCut(c);
+    }
+
+    applyCut(inst) {
+        if (!inst.userData.object?.model?.startsWith('@import:')) return;
+        const planes = this.cut == null ? [] : [this.cutPlane];
+        inst.traverse(m => {
+            if (!m.material) return;
+            for (const mat of Array.isArray(m.material) ? m.material : [m.material]) { mat.clippingPlanes = planes; mat.needsUpdate = true; }
+        });
     }
 
     /** Takes objects (a Set) out of the view. */
