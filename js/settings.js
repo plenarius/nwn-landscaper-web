@@ -5,6 +5,7 @@
 // builder changes is kept: the rest stays what the area has.
 
 import { renderVars } from './vars.js';
+import { scriptPicker } from './scripts.js';
 
 const PVP = [[0, 'No PvP'], [1, 'Party only'], [2, 'Full PvP'], [3, "The module's setting"]];
 const WIND = [[0, 'None'], [1, 'Light'], [2, 'Strong']];
@@ -93,6 +94,7 @@ export function openSettings(area, template, lists, onSave) {
         if (f.p === 'name' && area.settings?.nameText) input.placeholder = area.settings.nameText;
         if (f.note) label.title = f.note;
         label.append(span, input);
+        if (f.p.startsWith('scripts.')) label.appendChild(scriptPicker(input, 'action'));
         section.appendChild(label);
         inputs.push([f, input, f.t === 'check' ? input.checked : input.value]);
     }

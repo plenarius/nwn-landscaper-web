@@ -13,7 +13,7 @@ export async function scriptsWritable() {
 }
 
 /** The script editor for one of your own scripts, in its dialog. Saved (and checked) as you type. */
-export async function openScript(resref) {
+export async function openScript(resref, onMade = null) {
     const dlg = document.getElementById('scriptDialog');
     const host = document.getElementById('scriptHost');
     const status = document.getElementById('scriptStatus');
@@ -22,10 +22,16 @@ export async function openScript(resref) {
     status.textContent = '';
     status.className = 'note';
     dlg.showModal();
-    const res = await fetch(`/api/script?resref=${encodeURIComponent(resref)}`);
+    const res = await fetch(`/api/script?resref=${encodeURIComponent(resref)}&any=1`);
     const d = await json(res);
     if (!res.ok) { host.textContent = d.error || res.statusText; return; }
     host.textContent = '';
+    // One that isn't yours (the module's or the game's) is shown to read, with a button to make your own copy.
+    const mineAlready = !!d.mine;
+    const copy = document.getElementById('scriptCopy');
+    copy.hidden = mineAlready;
+    document.getElementById('scriptDelete').hidden = !mineAlready;
+    document.getElementById('scriptTitle').textContent = mineAlready ? `Script ${resref}` : `Script ${resref} (read only)`;
     let timer = null, saving = Promise.resolve(), view = null;
     const show = r => {
         const doc = view.state.doc;
@@ -55,19 +61,29 @@ export async function openScript(resref) {
         parent: host,
         state: EditorState.create({
             doc: d.source,
-            extensions: [basicSetup, cpp(), oneDark, lintGutter(), EditorView.updateListener.of(u => {
-                if (u.docChanged) { status.className = 'note'; status.textContent = 'Saving…'; clearTimeout(timer); timer = setTimeout(save, 700); }
+            extensions: [basicSetup, cpp(), oneDark, lintGutter(), ...(mineAlready ? [] : [EditorState.readOnly.of(true), EditorView.editable.of(false)]), EditorView.updateListener.of(u => {
+                if (u.docChanged && mineAlready) { status.className = 'note'; status.textContent = 'Saving…'; clearTimeout(timer); timer = setTimeout(save, 700); }
             })],
         }),
     });
-    save();
+    if (mineAlready) save(); else { status.className = 'note'; status.textContent = `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`; }
+    copy.onclick = async () => {
+        const pick = prompt('A name for your copy (16 letters, digits or _):', '');
+        if (!pick) return;
+        const res2 = await fetch(`/api/script?resref=${encodeURIComponent(pick.trim().toLowerCase())}&from=${encodeURIComponent(resref)}&kind=action`, { method: 'POST' });
+        const r2 = await json(res2);
+        if (!res2.ok) { alert(r2.error || res2.statusText); return; }
+        dlg.close();
+        onMade?.(r2.resref);
+        await openScript(r2.resref, onMade);
+    };
     document.getElementById('scriptDelete').onclick = async () => {
         if (!confirm(`Delete ${resref}? Anything that names it will then name a script that isn't there.`)) return;
         await fetch(`/api/script-delete?resref=${encodeURIComponent(resref)}`, { method: 'POST' });
         dlg.close();
     };
     await new Promise(done => {
-        const close = async () => { dlg.removeEventListener('close', close); await save(); view.destroy(); done(); };
+        const close = async () => { dlg.removeEventListener('close', close); if (mineAlready) await save(); view.destroy(); done(); };
         dlg.addEventListener('close', close);
     });
 }
@@ -96,12 +112,13 @@ export function scriptPicker(input, kind = 'action') {
         if (!ok) return;
         const b = el('button', { type: 'button', className: 'small' });
         const mine = async () => ((await json(await fetch(`/api/scripts?q=${encodeURIComponent(input.value.trim().toLowerCase())}`))).scripts ?? []).some(s => s.source === 'mine' && s.resref === input.value.trim().toLowerCase());
-        const sync = async () => { b.textContent = (await mine()) ? 'Edit script' : input.value.trim() ? 'Write my own from this' : 'Write a script'; };
+        const sync = async () => { b.textContent = (await mine()) ? 'Edit script' : input.value.trim() ? 'View script' : 'Write a script'; };
         sync();
         input.addEventListener('change', sync);
         b.onclick = async () => {
             const name = input.value.trim().toLowerCase();
-            if (await mine()) { await openScript(name); return; }
+            const made = r => { input.value = r; input.dispatchEvent(new Event('change')); };
+            if (name) { await openScript(name, made); sync(); return; }
             const pick = prompt('A name for your script (16 letters, digits or _):', '');
             if (!pick) return;
             const q = `resref=${encodeURIComponent(pick.trim().toLowerCase())}&from=${encodeURIComponent(name)}&kind=${kind}`;
