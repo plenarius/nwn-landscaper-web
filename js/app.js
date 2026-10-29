@@ -11,6 +11,7 @@ import { ModelLibrary } from './models.js';
 import { Transformer } from './transform.js';
 import { ThingsTool, thingsForExport } from './things.js';
 import './newbp.js';
+import { ask } from './ask.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
 
@@ -483,23 +484,6 @@ $('btnOpen').onclick = async () => {
  * Asks the person something in the page's own dialog. Resolves to true (OK), or with `input` the
  * typed text ('' allowed), or null if they cancel (Cancel, Esc). `text` paragraphs split on blank lines.
  */
-function ask({ title, text, ok = 'OK', danger = false, input = null }) {
-    const dlg = $('askDialog');
-    $('askTitle').textContent = title;
-    $('askText').textContent = '';
-    for (const para of text.split('\n\n')) { const p = document.createElement('p'); p.textContent = para; $('askText').appendChild(p); }
-    $('askLabel').hidden = !input;
-    if (input) { $('askLabelText').textContent = input.label; $('askInput').value = input.value ?? ''; $('askInput').placeholder = input.placeholder ?? ''; }
-    $('askOk').textContent = ok;
-    $('askOk').classList.toggle('danger', danger);
-    return new Promise(resolve => {
-        dlg.returnValue = '';
-        dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok' ? (input ? $('askInput').value.trim() : true) : null), { once: true });
-        dlg.showModal();
-        (input ? $('askInput') : $('askCancel')).focus();
-    });
-}
-
 /** Imports area `a` again from its kept original, then opens it. */
 async function reimport(a, button) {
     if (readOnly) return;

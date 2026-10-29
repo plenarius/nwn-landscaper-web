@@ -4,6 +4,7 @@
 import { ThingsTool } from './things.js';
 import { openConversation } from './dialogs.js';
 import { scriptPicker } from './scripts.js';
+import { ask } from './ask.js';
 
 const json = r => r.json().catch(() => ({}));
 
@@ -141,7 +142,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     if (ext === 'uti') await this.bpProperties(resref, body);
     if (ext === 'utc') await this.bpGear(resref, body);
     document.getElementById('bpDelete').onclick = async () => {
-        if (!confirm(`Delete ${resref}? Placed copies of it stay in your areas, but it won't be published.`)) return;
+        if (!await ask({ title: `Delete ${resref}?`, text: `Placed copies of it stay in your areas, but it won't be published.`, ok: 'Delete it', danger: true })) return;
         await fetch(`/api/new-blueprint-delete?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST' });
         dlg.close();
         if (this.blueprint?.resref === resref) this.blueprint = null;
@@ -161,12 +162,18 @@ ThingsTool.prototype.bpConversationRow = function (ext, resref, input, section) 
     write.onclick = async () => {
         const name = input.value.trim().toLowerCase();
         if (await mine()) { await openConversation(name); return; }
-        const pick = prompt('A name for your conversation (16 letters, digits or _):', resref.slice(0, 16));
-        if (!pick) return;
-        const q = `resref=${encodeURIComponent(pick.trim().toLowerCase())}&from=${encodeURIComponent(name)}`;
-        const res = await fetch(`/api/dialog?${q}`, { method: 'POST' });
-        const r = await json(res);
-        if (!res.ok) { alert(r.error || res.statusText); return; }
+        let r = null;
+        const ok = await ask({
+            title: 'Write a conversation', text: name ? `A conversation of yours that starts as a copy of ${name}.` : 'A new conversation of yours, with a first line for the NPC to say.',
+            ok: 'Start writing', input: { label: 'Name', value: resref.slice(0, 16), placeholder: 'up to 16 letters, digits or _' },
+            submit: async pick => {
+                const res = await fetch(`/api/dialog?resref=${encodeURIComponent(pick.toLowerCase())}&from=${encodeURIComponent(name)}`, { method: 'POST' });
+                const out = await json(res);
+                if (!res.ok) return out.error || res.statusText;
+                r = out;
+            },
+        });
+        if (!ok || !r) return;
         input.value = r.resref;
         input.dispatchEvent(new Event('change'));
         await openConversation(r.resref);

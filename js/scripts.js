@@ -3,6 +3,8 @@
 
 import { EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, oneDark } from '../vendor/codemirror/codemirror.js';
 
+import { ask } from './ask.js';
+
 const json = r => r.json().catch(() => ({}));
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 
@@ -68,17 +70,24 @@ export async function openScript(resref, onMade = null) {
     });
     if (mineAlready) save(); else { status.className = 'note'; status.textContent = `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`; }
     copy.onclick = async () => {
-        const pick = prompt('A name for your copy (16 letters, digits or _):', '');
-        if (!pick) return;
-        const res2 = await fetch(`/api/script?resref=${encodeURIComponent(pick.trim().toLowerCase())}&from=${encodeURIComponent(resref)}&kind=action`, { method: 'POST' });
-        const r2 = await json(res2);
-        if (!res2.ok) { alert(r2.error || res2.statusText); return; }
+        let made = null;
+        const ok = await ask({
+            title: 'Make your own copy', text: `A script of yours that starts as a copy of ${resref}. Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
+            ok: 'Make the copy', input: { label: 'Name', placeholder: 'e.g. my_spawn' },
+            submit: async name => {
+                const res2 = await fetch(`/api/script?resref=${encodeURIComponent(name.toLowerCase())}&from=${encodeURIComponent(resref)}&kind=action`, { method: 'POST' });
+                const r2 = await json(res2);
+                if (!res2.ok) return r2.error || res2.statusText;
+                made = r2.resref;
+            },
+        });
+        if (!ok || !made) return;
         dlg.close();
-        onMade?.(r2.resref);
-        await openScript(r2.resref, onMade);
+        onMade?.(made);
+        await openScript(made, onMade);
     };
     document.getElementById('scriptDelete').onclick = async () => {
-        if (!confirm(`Delete ${resref}? Anything that names it will then name a script that isn't there.`)) return;
+        if (!await ask({ title: `Delete ${resref}?`, text: `Anything that names it will then name a script that isn't there.`, ok: 'Delete it', danger: true })) return;
         await fetch(`/api/script-delete?resref=${encodeURIComponent(resref)}`, { method: 'POST' });
         dlg.close();
     };
@@ -119,15 +128,21 @@ export function scriptPicker(input, kind = 'action') {
             const name = input.value.trim().toLowerCase();
             const made = r => { input.value = r; input.dispatchEvent(new Event('change')); };
             if (name) { await openScript(name, made); sync(); return; }
-            const pick = prompt('A name for your script (16 letters, digits or _):', '');
-            if (!pick) return;
-            const q = `resref=${encodeURIComponent(pick.trim().toLowerCase())}&from=${encodeURIComponent(name)}&kind=${kind}`;
-            const res = await fetch(`/api/script?${q}`, { method: 'POST' });
-            const r = await json(res);
-            if (!res.ok) { alert(r.error || res.statusText); return; }
-            input.value = r.resref;
+            let created = null;
+            const ok = await ask({
+                title: 'Write a script', text: `A new script of yours (${kind === 'condition' ? 'a condition, which answers yes or no' : 'an action, which does something'}). Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
+                ok: 'Start writing', input: { label: 'Name', placeholder: 'e.g. my_spawn' },
+                submit: async pick => {
+                    const res = await fetch(`/api/script?resref=${encodeURIComponent(pick.toLowerCase())}&from=&kind=${kind}`, { method: 'POST' });
+                    const r = await json(res);
+                    if (!res.ok) return r.error || res.statusText;
+                    created = r.resref;
+                },
+            });
+            if (!ok || !created) return;
+            input.value = created;
             input.dispatchEvent(new Event('change'));
-            await openScript(r.resref);
+            await openScript(created);
             sync();
         };
         row.appendChild(b);
