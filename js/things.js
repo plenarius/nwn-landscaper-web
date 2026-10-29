@@ -7,6 +7,7 @@ import { renderVars } from './vars.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { creaturePreview, itemPreview, modelPreview } from './preview.js';
 import { scriptPicker } from './scripts.js';
+import { conversationPicker } from './dialogs.js';
 
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
@@ -737,6 +738,8 @@ export class ThingsTool {
                     const input = into(label(f.label), field('text', t.fields[f.label] ?? '', v => setv(v.trim()), { maxLength: f.type === 'r' ? 16 : 200 }));
                     // A script: found by name as you type, and (for admins) opened beside it.
                     if (f.type === 'r' && /^(Script|On)/.test(f.label)) input.parentElement.appendChild(scriptPicker(input, 'action'));
+                    // A conversation: found by name, viewed, written or changed beside the box.
+                    if (f.label === 'Conversation') input.parentElement.appendChild(conversationPicker(input, (t.blueprint || t.tag || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 16)));
                     // A transition's or door's destination: the waypoints and doors this area has to pick from
                     // (another area's: type its tag, or pick it below).
                     if (f.label === 'LinkedTo') {

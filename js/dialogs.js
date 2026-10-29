@@ -3,12 +3,13 @@
 // as a link elsewhere. Every change is saved as it is made (lines keep their places); closing tidies the numbering.
 
 import { scriptPicker } from './scripts.js';
+import { ask } from './ask.js';
 
 const json = r => r.json().catch(() => ({}));
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const excerpt = (t, n = 48) => (t || '(empty)').replace(/\s+/g, ' ').slice(0, n) + ((t || '').length > n ? '…' : '');
 
-export async function openConversation(resref) {
+export async function openConversation(resref, onMade = null) {
     const dlg = document.getElementById('dlgDialog');
     const tree = document.getElementById('dlgTree');
     const status = document.getElementById('dlgStatus');
@@ -17,11 +18,35 @@ export async function openConversation(resref) {
     status.textContent = '';
     status.className = 'note';
     dlg.showModal();
-    const res = await fetch(`/api/dialog?resref=${encodeURIComponent(resref)}`);
+    const res = await fetch(`/api/dialog?resref=${encodeURIComponent(resref)}&any=1`);
     const m = await json(res);
     if (!res.ok) { tree.textContent = m.error || res.statusText; return; }
+    // One that isn't yours (the module's or the game's) is shown to read, with a button to start your own from it.
+    const readOnly = !m.mine;
+    tree.classList.toggle('ro', readOnly);
+    document.getElementById('dlgCopy').hidden = !readOnly;
+    document.getElementById('dlgTitle').textContent = readOnly ? `Conversation ${resref} (read only)` : `Conversation ${resref}`;
+    document.getElementById('dlgNote').textContent = readOnly ? `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.` : 'Your own conversation. Changes are saved as you make them and go to review with what uses it.';
+    document.getElementById('dlgCopy').onclick = async () => {
+        let made = null;
+        const ok = await ask({
+            title: 'Make your own copy', text: `A conversation of yours that starts as a copy of ${resref}. Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
+            ok: 'Make the copy', input: { label: 'Name', placeholder: 'e.g. my_innkeeper' },
+            submit: async name => {
+                const r = await fetch(`/api/dialog?resref=${encodeURIComponent(name.toLowerCase())}&from=${encodeURIComponent(resref)}`, { method: 'POST' });
+                const out = await json(r);
+                if (!r.ok) return out.error || r.statusText;
+                made = out.resref;
+            },
+        });
+        if (!ok || !made) return;
+        dlg.close();
+        onMade?.(made);
+        await openConversation(made, onMade);
+    };
     let timer = null, saving = Promise.resolve();
     const save = (compact = false) => {
+        if (readOnly) return Promise.resolve();
         clearTimeout(timer);
         const body = JSON.stringify(m);
         saving = saving.then(async () => {
@@ -32,7 +57,8 @@ export async function openConversation(resref) {
         });
         return saving;
     };
-    const later = () => { status.textContent = 'Saving…'; clearTimeout(timer); timer = setTimeout(() => save(), 700); };
+    const later = () => {
+        if (readOnly) return; status.textContent = 'Saving…'; clearTimeout(timer); timer = setTimeout(() => save(), 700); };
     const redraw = () => { later(); render(); };
 
     /** One line and what follows it. `link` is the link that leads here (it holds the condition). */
@@ -114,10 +140,58 @@ export async function openConversation(resref) {
             end.appendChild(el('label', {}, el('span', { textContent: label }), inp, scriptPicker(inp, 'action')));
         }
         tree.appendChild(end);
+        if (readOnly) for (const e of tree.querySelectorAll('textarea, input, select')) e.disabled = true;
     }
     render();
     await new Promise(done => {
         const close = async () => { dlg.removeEventListener('close', close); await save(true); done(); };
         dlg.addEventListener('close', close);
     });
+}
+
+let listId = 0;
+
+/** Beside a creature's (or door's, placeable's) Conversation box: conversations found by name as you type, and a button to
+ *  write one (new, named by `suggest`), look at the module's (read only, with a copy button) or change one of yours. */
+export function conversationPicker(input, suggest = '') {
+    const list = el('datalist', { id: `convs${++listId}` });
+    input.setAttribute('list', list.id);
+    let timer = null;
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const q = input.value.trim();
+            if (q.length < 2) return;
+            list.textContent = '';
+            for (const d of (await json(await fetch(`/api/dialogs?q=${encodeURIComponent(q)}`))).found ?? []) list.appendChild(new Option(d.source === 'mine' ? `${d.resref} (yours)` : d.resref, d.resref));
+        }, 250);
+    });
+    const row = el('span', { className: 'scriptbtns' }, list);
+    const b = el('button', { type: 'button', className: 'small' });
+    const mine = async () => ((await json(await fetch('/api/dialogs'))).dialogs ?? []).includes(input.value.trim().toLowerCase());
+    const sync = async () => { b.textContent = (await mine()) ? 'Edit conversation' : input.value.trim() ? 'View conversation' : 'Write a conversation'; };
+    sync();
+    input.addEventListener('change', sync);
+    const made = r => { input.value = r; input.dispatchEvent(new Event('change')); };
+    b.onclick = async () => {
+        const name = input.value.trim().toLowerCase();
+        if (name) { await openConversation(name, made); sync(); return; }
+        let r = null;
+        const ok = await ask({
+            title: 'Write a conversation', text: 'A new conversation of yours, with a first line for the NPC to say. Its name is what the game calls it: up to 16 lower case letters, digits or _.',
+            ok: 'Start writing', input: { label: 'Name', value: suggest, placeholder: 'e.g. my_innkeeper' },
+            submit: async pick => {
+                const res = await fetch(`/api/dialog?resref=${encodeURIComponent(pick.toLowerCase())}&from=`, { method: 'POST' });
+                const out = await json(res);
+                if (!res.ok) return out.error || res.statusText;
+                r = out;
+            },
+        });
+        if (!ok || !r) return;
+        made(r.resref);
+        await openConversation(r.resref, made);
+        sync();
+    };
+    row.appendChild(b);
+    return row;
 }
