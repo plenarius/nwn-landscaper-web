@@ -139,6 +139,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         if (/^Script/.test(label) && f.type === 'r') row.appendChild(scriptPicker(input, 'action'));
     }
     if (ext === 'uti') await this.bpProperties(resref, body);
+    if (ext === 'utc') await this.bpGear(resref, body);
     document.getElementById('bpDelete').onclick = async () => {
         if (!confirm(`Delete ${resref}? Placed copies of it stay in your areas, but it won't be published.`)) return;
         await fetch(`/api/new-blueprint-delete?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST' });
@@ -234,4 +235,76 @@ ThingsTool.prototype.bpProperties = async function (resref, body) {
         type.value = '';
         choose();
     };
+};
+
+const SLOTS = ['head', 'chest', 'boots', 'arms', 'right hand', 'left hand', 'cloak', 'left ring', 'right ring', 'neck', 'belt', 'arrows', 'bullets', 'bolts', 'claw left', 'claw right', 'bite', 'skin'];
+
+/** What a new creature carries and wears, as its blueprint holds it (every copy placed gets it). Saved as it is changed. */
+ThingsTool.prototype.bpGear = async function (resref, body) {
+    const box = el('fieldset', {}, el('legend', { textContent: 'Carries and wears' }));
+    body.appendChild(box);
+    const url = `/api/new-blueprint-gear?resref=${encodeURIComponent(resref)}`;
+    let c = await json(await fetch(`/api/blueprint-contents?kind=creature&resref=${encodeURIComponent(resref)}`));
+    const put = async patch => {
+        const r = await fetch(url, { method: 'POST', body: JSON.stringify(patch) });
+        const out = await json(r);
+        const st = document.getElementById('bpStatus');
+        st.className = r.ok ? 'note' : 'note err';
+        st.textContent = r.ok ? 'Saved.' : (out.error || r.statusText);
+        if (r.ok) c = await json(await fetch(`/api/blueprint-contents?kind=creature&resref=${encodeURIComponent(resref)}`));
+        draw();
+    };
+    const finder = (placeholder, pick) => {
+        const find = el('input', { type: 'search', placeholder, autocomplete: 'off' });
+        const found = el('div', { className: 'bplist' });
+        let timer = null, seq = 0;
+        find.oninput = () => {
+            clearTimeout(timer);
+            timer = setTimeout(async () => {
+                const me = ++seq, q = find.value.trim();
+                found.textContent = '';
+                if (q.length < 2) return;
+                const r = await json(await fetch(`/api/blueprints?kind=item&q=${encodeURIComponent(q)}&limit=8`));
+                if (me !== seq) return;
+                for (const b of r.blueprints ?? []) {
+                    const e = el('button', { type: 'button', className: 'bp' });
+                    e.innerHTML = '<span class="txt"><b></b><small></small></span>';
+                    e.querySelector('b').textContent = b.name;
+                    e.querySelector('small').textContent = b.resref;
+                    e.onclick = () => { find.value = ''; found.textContent = ''; pick(b); };
+                    found.appendChild(e);
+                }
+                if (!found.children.length) found.textContent = 'Nothing matches.';
+            }, 250);
+        };
+        return [find, found];
+    };
+    function draw() {
+        box.textContent = '';
+        box.appendChild(el('legend', { textContent: 'Carries and wears' }));
+        const worn = c.equipment ?? [], items = c.items ?? [];
+        box.appendChild(el('h5', { textContent: `Worn and wielded (${worn.length})` }));
+        const wl = el('div', { className: 'stock' });
+        worn.forEach((w, i) => {
+            const rm = el('button', { type: 'button', textContent: '×', title: 'Take it off' });
+            rm.onclick = () => put({ equipment: worn.filter((_, k) => k !== i) });
+            wl.appendChild(el('div', { className: 'stock-row' }, el('span', { className: 'name', textContent: `${w.slot}: ${w.name || w.resref}` }), rm));
+        });
+        if (!worn.length) wl.textContent = 'Nothing.';
+        const slot = el('select', {});
+        for (const n of SLOTS) slot.add(new Option(n, n));
+        const [wf, wfound] = finder('Put on or in hand: type the item\'s name', b => put({ equipment: [...worn.filter(w => w.slot !== slot.value), { slot: slot.value, resref: b.resref }] }));
+        box.append(wl, slot, wf, wfound);
+        box.appendChild(el('h5', { textContent: `Carries (${items.length})` }));
+        const il = el('div', { className: 'stock' });
+        items.forEach((it, i) => {
+            const rm = el('button', { type: 'button', textContent: '×', title: 'Take it out' });
+            rm.onclick = () => put({ inventory: items.filter((_, k) => k !== i) });
+            il.appendChild(el('div', { className: 'stock-row' }, el('span', { className: 'name', textContent: it.name || it.resref }), rm));
+        });
+        if (!items.length) il.textContent = 'Nothing.';
+        const [cf, cfound] = finder('Add an item: type its name', b => put({ inventory: [...items, { resref: b.resref }] }));
+        box.append(il, cf, cfound);
+    }
+    draw();
 };
