@@ -57,6 +57,9 @@
                 <label class="menu-item" data-stay><input type="checkbox" data-kind="door"><span class="dot"></span><span>Doors</span></label>
                 <label class="menu-item" data-stay><input type="checkbox" data-kind="placeable"><span class="dot"></span><span>Placeables</span></label>
                 <hr class="menu-sep">
+                <label class="menu-item" data-stay title="For an imported building: hide what is above this height, to look inside"><input type="checkbox" id="showCut"><span>Cut away roofs and upper floors</span></label>
+                <label class="menu-item" data-stay id="cutRow"><span>Cut at</span><input type="range" id="cutHeight" min="1" max="8" step="0.25" value="3"><output id="cutOut">3 m</output></label>
+                <hr class="menu-sep">
                 <div class="menu-row" data-stay><button type="button" id="showAll">All</button><button type="button" id="showNone">None</button></div>
             </div>
         </div>

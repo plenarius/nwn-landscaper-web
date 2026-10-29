@@ -1107,6 +1107,18 @@ view.onFrame = () => {
         cb.onchange = () => { thingsTool.setShown(cb.dataset.kind, cb.checked); label(); };
     }
     const all = on => { for (const cb of boxes) { cb.checked = on; thingsTool.setShown(cb.dataset.kind, on); } label(); };
+    // Imported buildings: cut the roofs and upper floors away to see inside (the height is kept in this browser).
+    const cutOn = $('showCut'), cutH = $('cutHeight'), cutOut = $('cutOut');
+    try { const k = JSON.parse(localStorage.getItem('landscaper.cut') ?? 'null'); if (k) { cutOn.checked = !!k.on; cutH.value = k.h ?? 3; } } catch { /* default */ }
+    const cut = () => {
+        cutOut.textContent = `${cutH.value} m`;
+        $('cutRow').style.opacity = cutOn.checked ? '1' : '0.5';
+        view.setCut(cutOn.checked ? +cutH.value : null);
+        try { localStorage.setItem('landscaper.cut', JSON.stringify({ on: cutOn.checked, h: +cutH.value })); } catch { /* not kept */ }
+    };
+    cutOn.onchange = cut;
+    cutH.oninput = cut;
+    cut();
     $('showAll').onclick = () => all(true);
     $('showNone').onclick = () => all(false);
     label();
