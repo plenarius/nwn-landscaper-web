@@ -2,7 +2,7 @@
 // The engine keeps them in the builder's workspace and Publish sends the ones an area uses.
 
 import { ThingsTool } from './things.js';
-import { openConversation } from './dialogs.js';
+import { conversationPicker } from './dialogs.js';
 import { scriptPicker } from './scripts.js';
 import { ask } from './ask.js';
 
@@ -151,36 +151,9 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     };
 };
 
-/** Beside a creature's Conversation: write a conversation (new, or a copy of the one named), or change one of your own. */
+/** Beside a creature's Conversation: pick, view, write or change one (the same picker the properties panel has). */
 ThingsTool.prototype.bpConversationRow = function (ext, resref, input, section) {
-    const bar = el('div', { className: 'dlgbar' });
-    const mine = async () => ((await json(await fetch('/api/dialogs'))).dialogs ?? []).includes(input.value.trim().toLowerCase());
-    const write = el('button', { type: 'button' });
-    const sync = async () => { write.textContent = (await mine()) ? 'Change this conversation' : input.value.trim() ? 'Write my own from this one' : 'Write a conversation'; };
-    sync();
-    input.addEventListener('change', sync);
-    write.onclick = async () => {
-        const name = input.value.trim().toLowerCase();
-        if (await mine()) { await openConversation(name); return; }
-        let r = null;
-        const ok = await ask({
-            title: 'Write a conversation', text: name ? `A conversation of yours that starts as a copy of ${name}.` : 'A new conversation of yours, with a first line for the NPC to say.',
-            ok: 'Start writing', input: { label: 'Name', value: resref.slice(0, 16), placeholder: 'up to 16 letters, digits or _' },
-            submit: async pick => {
-                const res = await fetch(`/api/dialog?resref=${encodeURIComponent(pick.toLowerCase())}&from=${encodeURIComponent(name)}`, { method: 'POST' });
-                const out = await json(res);
-                if (!res.ok) return out.error || res.statusText;
-                r = out;
-            },
-        });
-        if (!ok || !r) return;
-        input.value = r.resref;
-        input.dispatchEvent(new Event('change'));
-        await openConversation(r.resref);
-        sync();
-    };
-    bar.appendChild(write);
-    section.appendChild(bar);
+    section.appendChild(conversationPicker(input, resref.slice(0, 16)));
 };
 
 function el(tag, props = {}, ...kids) { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; }
