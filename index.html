@@ -196,6 +196,13 @@
         <span id="statusMsg"></span>
     </footer>
 
+    <dialog id="dlgDialog">
+        <h2 id="dlgTitle">Conversation</h2>
+        <p class="note">Your own conversation. Changes are saved as you make them and go to review with what uses it.</p>
+        <div id="dlgTree" class="dlgtree"></div>
+        <p id="dlgStatus" class="note"></p>
+        <menu><button type="button" onclick="document.getElementById('dlgDialog').close()">Close</button></menu>
+    </dialog>
     <dialog id="bpDialog">
         <h2 id="bpTitle">Blueprint</h2>
         <p class="note">Your own blueprint. Changes are saved as you make them and go to review with the area that uses it.</p>
