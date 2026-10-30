@@ -473,3 +473,4 @@ dialog label.check input { width: auto; }
 
 .dlgtree.ro .dlgbar, .dlgtree.ro .dlghead button { display: none; }
 .dlgtree.ro textarea, .dlgtree.ro input { opacity: 0.85; }
+#bpBody input[type=number], #bpBody input[type=search] { background: var(--panel-2); color: inherit; border: 1px solid #000; border-radius: 6px; padding: 5px 8px; font: inherit; }
