@@ -18,6 +18,7 @@ export const ICONS = {
     dig: svg('<path d="M4 40 V14 H44 V40 Z" fill="currentColor" fill-opacity="0.35"/><path d="M14 40 C14 26 34 26 34 40" fill="#1d2228" stroke="currentColor"/><path d="M30 6 L40 16 M40 6 L36 10"/>'),
     open: svg('<path d="M6 38 V12 H18 L22 16 H40 V22"/><path d="M6 38 L12 22 H44 L38 38 Z" fill="currentColor" fill-opacity="0.25"/>'),
     ramp: svg('<path d="M6 36 H14 V30 H22 V24 H30 V18 H38 V12 H44" stroke-width="3"/><path d="M6 40 H44" stroke-opacity="0.5"/><path d="M8 36 L40 14" stroke="#e0b24a" stroke-width="2.5" stroke-dasharray="3 3"/>'),
+    descent: svg('<path d="M6 10 H42 M42 10 V20 M42 20 H6 M6 20 V30 M6 30 H42 M42 30 V40 M42 40 H12" stroke-width="3"/><path d="M40 12 L44 18 M8 22 L4 28" stroke="#e0b24a" stroke-width="2.5"/>'),
     room: svg('<rect x="6" y="10" width="36" height="28" fill="currentColor" fill-opacity="0.35"/><path d="M14 18 H34 V30 H14 Z" fill="#1d2228"/><path d="M24 30 V38" stroke-width="4" stroke="#1d2228"/>'),
     newArea: svg('<rect x="8" y="8" width="32" height="32" rx="3"/><path d="M8 19 H40 M8 30 H40 M19 8 V40 M30 8 V40" stroke-width="1.5" stroke-opacity="0.6"/><circle cx="38" cy="38" r="9" fill="currentColor"/><path d="M38 33 V43 M33 38 H43" stroke="#1d2228" stroke-width="3"/>'),
     undo: svg('<path d="M14 16 H30 A10 10 0 0 1 30 36 H18"/><path d="M20 10 L14 16 L20 22"/>'),

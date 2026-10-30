@@ -2,7 +2,7 @@
 
 import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW, CAVE_ROCK } from './area.js';
 import { View } from './view.js';
-import { TOOLS, stamp, roomRect, cutRoom, rampPlan, cutRamp, DIG_MIN } from './tools.js';
+import { TOOLS, stamp, roomRect, cutRoom, rampPlan, cutRamp, descentPlan, cutDescent, DIG_MIN } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { PRESETS, copyPreset } from './atmosphere.js';
@@ -58,6 +58,7 @@ function updatePanels() {
     $('palette').hidden = skyOpen || tool !== 'paint';
     $('placePanel').hidden = skyOpen || tool !== 'place';
     $('rampPanel').hidden = skyOpen || tool !== 'ramp';
+    $('descentPanel').hidden = skyOpen || tool !== 'descent';
     $('entrancePanel').hidden = skyOpen || tool !== 'entrance';
     if (tool === 'entrance' && !skyOpen) showEntrances();
     $('scatterPanel').hidden = skyOpen || tool !== 'scatter';
@@ -963,6 +964,10 @@ canvas.addEventListener('pointerdown', e => {
         // From here to where the button comes up; laid then.
         stroke.ramp = { from: p, to: p };
     }
+    if (tool === 'descent') {
+        // The box from here to where the button comes up; filled then.
+        stroke.descent = { from: p, to: p };
+    }
     if (tool === 'room') {
         // From here to where the button comes up; cut out then.
         // Started in a room: its floor (the lowest ground within 2 m, not a
@@ -1042,6 +1047,15 @@ canvas.addEventListener('pointermove', e => {
             $('statusMsg').textContent = `Ramp ${plan.len.toFixed(1)} m long, ${dir} ${Math.abs(plan.dh).toFixed(2)} m: ${plan.degrees.toFixed(0)}°${plan.eased ? ' (eased: it was too steep or too high)' : ''}`;
         }
     }
+    if (stroke?.descent) {
+        const p = view.pick(e.clientX, e.clientY);
+        if (p) {
+            stroke.descent.to = p;
+            const plan = descentPlan(area, stroke.descent.from, p, descentOptions());
+            view.setDescentPreview(plan);
+            $('statusMsg').textContent = plan.error ?? `${plan.floors} floors, ${plan.drop} m apart: ramps of ${plan.pitch.toFixed(0)} m at ${plan.degrees.toFixed(0)}°, the lowest at ${plan.bottom.toFixed(1)} m`;
+        }
+    }
     if (stroke?.room) {
         const p = view.pick(e.clientX, e.clientY);
         if (p) {
@@ -1057,6 +1071,8 @@ canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(nul
 const rampOptions = () => ({ rise: $('rampRise').value === '' ? null : +$('rampRise').value, keepWalkable: $('rampWalkable').checked });
 /** A ramp is twice the brush size wide, and at least as wide as the narrowest passage NWN's pathfinding keeps open. */
 const rampWidth = () => Math.max(+sizeIn.value, DIG_MIN) * 2;
+/** The descent tool's settings. */
+const descentOptions = () => ({ floors: Math.round(+$('descentFloors').value), drop: +$('descentDrop').value, flip: $('descentFlip').checked });
 let placePointer = null;
 const endStroke = () => {
     placePointer = null;
@@ -1068,6 +1084,22 @@ const endStroke = () => {
         if (rect) view.markDirty(rect);
         view.setRampPreview(null);
         $('statusMsg').textContent = area.enclosed() && rect && rect.changed < 20 ? 'Nothing to lay it on there: dig or make a room first (or tick "Cut through rock").' : '';
+    }
+    if (stroke.descent) {
+        const plan = descentPlan(area, stroke.descent.from, stroke.descent.to, descentOptions());
+        view.setDescentPreview(null);
+        if (plan.error) {
+            $('statusMsg').textContent = plan.error;
+        } else {
+            // The same headroom all the way down, or the walls grow as the floors drop.
+            const headroom = +$('descentCeiling').value;
+            if (headroom >= 2 && headroom <= 20) area.clearance = headroom;
+            const floorTexture = library.byId.get(paintTexture)?.category === 'Floors' ? paintTexture : 'woodOld';
+            const rect = cutDescent(area, plan, library.byId.has(floorTexture) ? area.materialIndex(floorTexture) : undefined);
+            view.markDirty(rect);
+            view.syncPalette();
+            $('statusMsg').textContent = `A descent of ${plan.floors} floors, down to ${plan.bottom.toFixed(1)} m.`;
+        }
     }
     if (stroke.room) {
         const r = roomRect(stroke.room.from, stroke.room.to, area.sizeX, area.sizeY);
@@ -1106,7 +1138,7 @@ view.onFrame = () => {
         dbg.stamps++;
         return;
     }
-    if (stroke && p && !stroke.water && !stroke.place && !stroke.room && !stroke.ramp) {
+    if (stroke && p && !stroke.water && !stroke.place && !stroke.room && !stroke.ramp && !stroke.descent) {
         const now = performance.now();
         const dt = (now - stroke.last) / 1000;
         stroke.last = now;
