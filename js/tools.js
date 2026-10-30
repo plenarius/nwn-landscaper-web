@@ -193,8 +193,10 @@ export function rampPlan(area, a, b, { rise = null, keepWalkable = true } = {}) 
 }
 
 /** Lays the ramp `plan` (see rampPlan) `width` metres wide; with `step` (metres) as stairs of that height, else a smooth slope. The
- *  outer metre of its width blends into the ground beside it. Returns the changed sample rectangle. */
-export function cutRamp(area, plan, width, step = null) {
+ *  outer metre of its width blends into the ground beside it. In a cave or interior only floor is changed (a ramp is laid in a
+ *  passage or room that is already dug: the walls the Room and Dig tools leave are the ones NWN's pathfinding accepts), unless
+ *  `carve`. Returns the changed sample rectangle and how many samples changed. */
+export function cutRamp(area, plan, width, step = null, carve = false) {
     const { a, b, len, hA, dh } = plan;
     if (len < 0.5) return null;
     const half = width / 2, edge = Math.min(1.25, half / 2);
@@ -204,6 +206,8 @@ export function cutRamp(area, plan, width, step = null) {
     const i0 = Math.max(0, Math.floor(x0 / SPACING)), i1 = Math.min(n - 1, Math.ceil(x1 / SPACING));
     const j0 = Math.max(0, Math.floor(y0 / SPACING)), j1 = Math.min(rows - 1, Math.ceil(y1 / SPACING));
     const steps = step && step > 0 ? Math.max(1, Math.round(Math.abs(dh) / step)) : 0;
+    const floorOnly = area.enclosed() && !carve;
+    let changed = 0;
     for (let j = j0; j <= j1; j++) {
         for (let i = i0; i <= i1; i++) {
             const px = i * SPACING - a.x, py = j * SPACING - a.y;
@@ -212,13 +216,15 @@ export function cutRamp(area, plan, width, step = null) {
             // beyond either end the ramp is a half-circle of its own width, level with that end
             const d = Math.hypot(Math.abs(across), along < 0 ? along : along > len ? along - len : 0);
             if (d >= half) continue;
+            if (floorOnly && area.void(i, j)) continue;
             const m = steps ? Math.min(steps, Math.floor(t * steps) + 1) / steps : t;
             const target = hA + dh * m;
             const u = Math.min(1, (half - d) / edge);
             const w = u * u * (3 - 2 * u);
             const k = j * n + i;
             h[k] += (target - h[k]) * w;
+            changed++;
         }
     }
-    return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(rows - 1, j1 + 1) };
+    return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(rows - 1, j1 + 1), changed };
 }

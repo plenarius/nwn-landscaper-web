@@ -1064,10 +1064,10 @@ const endStroke = () => {
     if (!stroke) return;
     if (stroke.ramp) {
         const plan = rampPlan(area, stroke.ramp.from, stroke.ramp.to, rampOptions());
-        const rect = cutRamp(area, plan, rampWidth(), $('rampStairs').checked ? +$('rampStep').value : null);
+        const rect = cutRamp(area, plan, rampWidth(), $('rampStairs').checked ? +$('rampStep').value : null, $('rampCarve').checked);
         if (rect) view.markDirty(rect);
         view.setRampPreview(null);
-        $('statusMsg').textContent = '';
+        $('statusMsg').textContent = area.enclosed() && rect && rect.changed < 20 ? 'Nothing to lay it on there: dig or make a room first (or tick "Cut through rock").' : '';
     }
     if (stroke.room) {
         const r = roomRect(stroke.room.from, stroke.room.to, area.sizeX, area.sizeY);
