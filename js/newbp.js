@@ -11,12 +11,32 @@ const json = r => r.json().catch(() => ({}));
 /** How each setting reads in the form, in the order shown: [label, text, group]. Anything the engine lists that isn't here
  *  comes last under "Other" with its own name. */
 /** The blueprint file type of each kind the builder can make their own of. */
-const EXT = { creature: 'utc', item: 'uti', placeable: 'utp' };
+const EXT = { creature: 'utc', item: 'uti', placeable: 'utp', door: 'utd', store: 'utm' };
 
 /** Settings that are on or off (stored as 0 or 1): shown as a tick box. */
-const BOOLS = new Set(['Static', 'Useable', 'Plot', 'HasInventory', 'Locked', 'Lockable', 'KeyRequired', 'AutoRemoveKey', 'TrapFlag', 'TrapOneShot', 'TrapDetectable', 'TrapDisarmable', 'Interruptable', 'IsImmortal', 'NoPermDeath', 'Lootable', 'Disarmable', 'Cursed', 'Stolen', 'Identified']);
+const BOOLS = new Set(['Static', 'Useable', 'Plot', 'HasInventory', 'Locked', 'Lockable', 'KeyRequired', 'AutoRemoveKey', 'TrapFlag', 'TrapOneShot', 'TrapDetectable', 'TrapDisarmable', 'Interruptable', 'IsImmortal', 'NoPermDeath', 'Lootable', 'Disarmable', 'Cursed', 'Stolen', 'Identified', 'BlackMarket']);
 
 const NAMES = {
+    utd: [
+        ['LocName', 'Name', 'The door'], ['Description', 'Description', 'The door'], ['Tag', 'Tag', 'The door'], ['Appearance', 'Appearance', 'The door'],
+        ['Plot', 'Plot (can\'t be hurt)', 'Behaviour'], ['Interruptable', 'Can be interrupted in conversation', 'Behaviour'], ['Conversation', 'Conversation', 'Behaviour'], ['Faction', 'Faction (repute.2da / factions row)', 'Behaviour'],
+        ['Locked', 'Locked', 'Lock'], ['Lockable', 'Can be locked', 'Lock'], ['KeyRequired', 'Needs its key', 'Lock'], ['KeyName', 'Key tag', 'Lock'], ['AutoRemoveKey', 'Key is used up', 'Lock'],
+        ['OpenLockDC', 'Pick-lock DC', 'Lock'], ['CloseLockDC', 'Lock DC', 'Lock'],
+        ['TrapFlag', 'Trapped', 'Trap'], ['TrapType', 'Trap type (traps.2da row)', 'Trap'], ['TrapOneShot', 'Trap goes off once', 'Trap'], ['TrapDetectable', 'Trap can be found', 'Trap'],
+        ['TrapDetectDC', 'Find DC', 'Trap'], ['TrapDisarmable', 'Trap can be disarmed', 'Trap'], ['DisarmDC', 'Disarm DC', 'Trap'],
+        ['HP', 'Hit points', 'Strength'], ['CurrentHP', 'Hit points now', 'Strength'], ['Hardness', 'Hardness', 'Strength'], ['Fort', 'Fortitude save', 'Strength'], ['Ref', 'Reflex save', 'Strength'], ['Will', 'Will save', 'Strength'],
+        ['OnOpen', 'On open', 'Scripts'], ['OnClosed', 'On closed', 'Scripts'], ['OnDeath', 'On death', 'Scripts'], ['OnDamaged', 'On damaged', 'Scripts'], ['OnHeartbeat', 'On heartbeat', 'Scripts'],
+        ['OnLock', 'On lock', 'Scripts'], ['OnUnlock', 'On unlock', 'Scripts'], ['OnMeleeAttacked', 'On attacked', 'Scripts'], ['OnSpellCastAt', 'On spell cast at', 'Scripts'],
+        ['OnTrapTriggered', 'On trap triggered', 'Scripts'], ['OnDisarm', 'On disarm', 'Scripts'], ['OnFailToOpen', 'On failing to open', 'Scripts'], ['OnUserDefined', 'On user defined', 'Scripts'],
+        ['OnClick', 'On click', 'Scripts'], ['Comment', 'Comment (for builders)', 'Other'],
+    ],
+    utm: [
+        ['LocName', 'Name', 'The store'], ['Tag', 'Tag', 'The store'],
+        ['MarkUp', 'Sells at this % of an item\'s value', 'Prices'], ['MarkDown', 'Buys at this % of an item\'s value', 'Prices'], ['StoreGold', 'Gold it has to buy with (-1: no limit)', 'Prices'],
+        ['MaxBuyPrice', 'Most it pays for one item (-1: no limit)', 'Prices'], ['IdentifyPrice', 'Price to identify an item', 'Prices'],
+        ['BlackMarket', 'Black market (buys stolen goods)', 'Prices'], ['BM_MarkDown', 'Black market buys at this % of value', 'Prices'],
+        ['OnOpenStore', 'On opened', 'Scripts'], ['OnStoreClosed', 'On closed', 'Scripts'], ['Comment', 'Comment (for builders)', 'Other'],
+    ],
     utp: [
         ['LocName', 'Name', 'The placeable'], ['Description', 'Description', 'The placeable'], ['Tag', 'Tag', 'The placeable'], ['Appearance', 'Appearance', 'The placeable'],
         ['Static', 'Static (scenery only: nothing can be done with it)', 'Behaviour'], ['Useable', 'Can be used', 'Behaviour'], ['Plot', 'Plot (can\'t be hurt)', 'Behaviour'],
@@ -158,11 +178,12 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         row.append(span, input);
         section.appendChild(row);
         if (ext === 'utp' && label === 'Appearance') this.bpAppearance(input, row);
+        if (ext === 'utd' && label === 'Appearance') this.bpDoorLook(resref, byLabel, input, row, status);
         if (label === 'Conversation') this.bpConversationRow(ext, resref, input, section);
         if (/^Script/.test(label) && f.type === 'r') row.appendChild(scriptPicker(input, 'action'));
     }
     if (ext === 'uti') await this.bpProperties(resref, body);
-    if (ext === 'utc' || (ext === 'utp' && byLabel.get('HasInventory'))) await this.bpGear(resref, body, ext);
+    if (ext === 'utc' || ext === 'utm' || (ext === 'utp' && byLabel.get('HasInventory'))) await this.bpGear(resref, body, ext);
     document.getElementById('bpDelete').onclick = async () => {
         if (!await ask({ title: `Delete ${resref}?`, text: `Placed copies of it stay in your areas, but it won't be published.`, ok: 'Delete it', danger: true })) return;
         await fetch(`/api/new-blueprint-delete?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST' });
@@ -243,12 +264,13 @@ const SLOTS = ['head', 'chest', 'boots', 'arms', 'right hand', 'left hand', 'clo
 
 /** What a new creature carries and wears, as its blueprint holds it (every copy placed gets it). Saved as it is changed. */
 ThingsTool.prototype.bpGear = async function (resref, body, ext = 'utc') {
-    const placeable = ext === 'utp';
-    const title = placeable ? 'Holds' : 'Carries and wears';
+    const placeable = ext !== 'utc';
+    const store = ext === 'utm';
+    const title = store ? 'Stock' : placeable ? 'Holds' : 'Carries and wears';
     const box = el('fieldset', {}, el('legend', { textContent: title }));
     body.appendChild(box);
-    const url = `/api/new-blueprint-gear?resref=${encodeURIComponent(resref)}${placeable ? '&ext=utp' : ''}`;
-    const kind = placeable ? 'placeable' : 'creature';
+    const url = `/api/new-blueprint-gear?resref=${encodeURIComponent(resref)}${placeable ? `&ext=${ext}` : ''}`;
+    const kind = store ? 'store' : placeable ? 'placeable' : 'creature';
     let c = await json(await fetch(`/api/blueprint-contents?kind=${kind}&resref=${encodeURIComponent(resref)}`));
     const put = async patch => {
         const r = await fetch(url, { method: 'POST', body: JSON.stringify(patch) });
@@ -300,12 +322,19 @@ ThingsTool.prototype.bpGear = async function (resref, body, ext = 'utc') {
         for (const n of SLOTS) slot.add(new Option(n, n));
         const [wf, wfound] = finder('Put on or in hand: type the item\'s name', b => put({ equipment: [...worn.filter(w => w.slot !== slot.value), { slot: slot.value, resref: b.resref }] }));
         if (!placeable) box.append(wl, slot, wf, wfound);
-        box.appendChild(el('h5', { textContent: `${placeable ? 'Contents' : 'Carries'} (${items.length})` }));
+        box.appendChild(el('h5', { textContent: `${store ? 'For sale' : placeable ? 'Contents' : 'Carries'} (${items.length})` }));
         const il = el('div', { className: 'stock' });
         items.forEach((it, i) => {
             const rm = el('button', { type: 'button', textContent: '×', title: 'Take it out' });
             rm.onclick = () => put({ inventory: items.filter((_, k) => k !== i) });
-            il.appendChild(el('div', { className: 'stock-row' }, el('span', { className: 'name', textContent: it.name || it.resref }), rm));
+            const row = el('div', { className: 'stock-row' }, el('span', { className: 'name', textContent: it.name || it.resref }));
+            if (store) {
+                const cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !!it.infinite, title: 'Never runs out' });
+                cb.onchange = () => put({ inventory: items.map((x, k) => k === i ? { ...x, infinite: cb.checked } : x) });
+                row.append(el('label', { className: 'check' }, cb, document.createTextNode('∞')));
+            }
+            row.appendChild(rm);
+            il.appendChild(row);
         });
         if (!items.length) il.textContent = 'Nothing.';
         const [cf, cfound] = finder('Add an item: type its name', b => put({ inventory: [...items, { resref: b.resref }] }));
@@ -336,6 +365,49 @@ ThingsTool.prototype.bpAppearance = async function (input, row) {
             b.querySelector('b').textContent = p.name || p.label;
             b.querySelector('small').textContent = `row ${p.row} · ${p.model}`;
             b.onclick = () => { input.value = String(p.row); input.dispatchEvent(new Event('change')); label(); find.value = ''; found.textContent = ''; };
+            found.appendChild(b);
+        }
+        if (!found.children.length) found.textContent = 'Nothing matches.';
+    };
+    input.style.display = 'none';
+    row.append(shown, find, found);
+};
+
+let doorLooks = null;
+
+/** A door's look: a generic door (genericdoors.2da, Appearance 0 and a generic type) or a tile door (doortypes.2da, an Appearance row), found by name. */
+ThingsTool.prototype.bpDoorLook = async function (resref, byLabel, input, row, status) {
+    doorLooks ??= (await json(await fetch('/api/door-appearances'))).doors ?? [];
+    const edit = async fields => {
+        const r = await fetch(`/api/new-blueprint-edit?ext=utd&resref=${encodeURIComponent(resref)}`, { method: 'POST', body: JSON.stringify(fields) });
+        const out = await json(r);
+        status.className = r.ok ? 'note' : 'note err';
+        status.textContent = r.ok ? 'Saved.' : (out.error || r.statusText);
+        return r.ok ? out : null;
+    };
+    let appearance = Number(byLabel.get('Appearance')?.value ?? 0), generic = Number(byLabel.get('GenericType_New')?.value ?? 0);
+    const shown = el('div', { className: 'note' });
+    const label = () => {
+        const d = doorLooks.find(x => appearance === 0 ? x.generic && x.row === generic : !x.generic && x.row === appearance);
+        shown.textContent = d ? `${d.name || d.label} (${d.generic ? 'generic' : 'tile'} door ${d.row}, model ${d.model})` : `appearance ${appearance}, generic ${generic}`;
+    };
+    label();
+    const find = el('input', { type: 'search', placeholder: 'Search the door looks by name', autocomplete: 'off' });
+    const found = el('div', { className: 'bplist' });
+    find.oninput = () => {
+        found.textContent = '';
+        const q = find.value.trim().toLowerCase();
+        if (q.length < 2) return;
+        for (const d of doorLooks.filter(x => (x.name || '').toLowerCase().includes(q) || (x.label || '').toLowerCase().includes(q) || x.model.includes(q)).slice(0, 10)) {
+            const b = el('button', { type: 'button', className: 'bp' });
+            b.innerHTML = '<span class="txt"><b></b><small></small></span>';
+            b.querySelector('b').textContent = d.name || d.label;
+            b.querySelector('small').textContent = `${d.generic ? 'generic' : 'tile'} door ${d.row} · ${d.model}`;
+            b.onclick = async () => {
+                const ok = await edit(d.generic ? { Appearance: 0, GenericType_New: d.row } : { Appearance: d.row });
+                if (ok) { appearance = d.generic ? 0 : d.row; generic = d.generic ? d.row : generic; label(); }
+                find.value = ''; found.textContent = '';
+            };
             found.appendChild(b);
         }
         if (!found.children.length) found.textContent = 'Nothing matches.';
