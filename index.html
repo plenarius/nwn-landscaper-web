@@ -177,6 +177,14 @@
             <div id="thingProps" class="thingprops" hidden></div>
             <button type="button" id="thingDelete" class="danger" hidden>Delete it</button>
         </section>
+        <section id="rampPanel" class="side-panel" hidden>
+            <h3>Ramp</h3>
+            <p class="note">Drag from one level to another. The brush size sets the width (at least 6 m: narrower passages defeat NWN's pathfinding). It rises to where you let go, unless you set a rise.</p>
+            <label>Rise <small>metres; blank: to where you let go. Negative goes down</small><input id="rampRise" type="number" step="0.25" placeholder="to where I let go"></label>
+            <label class="check"><input type="checkbox" id="rampStairs"> Stairs</label>
+            <label>Step height <small>metres</small><input id="rampStep" type="number" min="0.1" max="0.7" step="0.05" value="0.25"></label>
+            <label class="check"><input type="checkbox" id="rampWalkable" checked> Keep it walkable <small>(eases a slope that is too steep)</small></label>
+        </section>
         <section id="entrancePanel" class="side-panel" hidden>
             <h3>Entrances</h3>
             <p class="note">Click a slope (or a cave wall) to carve one; Shift-click one to remove it. Each has a door: pick where it leads (an entrance door in the same module), or link it in the toolset.</p>

@@ -2,7 +2,7 @@
 
 import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW, CAVE_ROCK } from './area.js';
 import { View } from './view.js';
-import { TOOLS, stamp, roomRect, cutRoom } from './tools.js';
+import { TOOLS, stamp, roomRect, cutRoom, rampPlan, cutRamp, DIG_MIN } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { PRESETS, copyPreset } from './atmosphere.js';
@@ -57,6 +57,7 @@ function updatePanels() {
     $('skyPanel').hidden = !skyOpen;
     $('palette').hidden = skyOpen || tool !== 'paint';
     $('placePanel').hidden = skyOpen || tool !== 'place';
+    $('rampPanel').hidden = skyOpen || tool !== 'ramp';
     $('entrancePanel').hidden = skyOpen || tool !== 'entrance';
     if (tool === 'entrance' && !skyOpen) showEntrances();
     $('scatterPanel').hidden = skyOpen || tool !== 'scatter';
@@ -958,6 +959,10 @@ canvas.addEventListener('pointerdown', e => {
         stroke.paintIndex = area.materialIndex(paintTexture);
         view.syncPalette();
     }
+    if (tool === 'ramp') {
+        // From here to where the button comes up; laid then.
+        stroke.ramp = { from: p, to: p };
+    }
     if (tool === 'room') {
         // From here to where the button comes up; cut out then.
         // Started in a room: its floor (the lowest ground within 2 m, not a
@@ -1027,6 +1032,16 @@ canvas.addEventListener('pointermove', e => {
     if (thingsTool.drag) { const p = view.pick(e.clientX, e.clientY); if (p) thingsTool.move(p); }
     if (stroke?.water) waterDrag(e);
     if (stroke?.place) placeDrag(e);
+    if (stroke?.ramp) {
+        const p = view.pick(e.clientX, e.clientY);
+        if (p) {
+            stroke.ramp.to = p;
+            const plan = rampPlan(area, stroke.ramp.from, p, rampOptions());
+            view.setRampPreview(plan, rampWidth());
+            const dir = plan.dh > 0.05 ? 'up' : plan.dh < -0.05 ? 'down' : 'level';
+            $('statusMsg').textContent = `Ramp ${plan.len.toFixed(1)} m long, ${dir} ${Math.abs(plan.dh).toFixed(2)} m: ${plan.degrees.toFixed(0)}°${plan.eased ? ' (eased: it was too steep or too high)' : ''}`;
+        }
+    }
     if (stroke?.room) {
         const p = view.pick(e.clientX, e.clientY);
         if (p) {
@@ -1038,11 +1053,22 @@ canvas.addEventListener('pointermove', e => {
     }
 });
 canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(null); $('statusPos').textContent = ''; });
+/** The ramp tool's settings: the rise you typed (blank: to where the button comes up), and whether to keep it walkable. */
+const rampOptions = () => ({ rise: $('rampRise').value === '' ? null : +$('rampRise').value, keepWalkable: $('rampWalkable').checked });
+/** A ramp is twice the brush size wide, and at least as wide as the narrowest passage NWN's pathfinding keeps open. */
+const rampWidth = () => Math.max(+sizeIn.value, DIG_MIN) * 2;
 let placePointer = null;
 const endStroke = () => {
     placePointer = null;
     if (thingsTool.drag) { thingsTool.up(); return; }
     if (!stroke) return;
+    if (stroke.ramp) {
+        const plan = rampPlan(area, stroke.ramp.from, stroke.ramp.to, rampOptions());
+        const rect = cutRamp(area, plan, rampWidth(), $('rampStairs').checked ? +$('rampStep').value : null);
+        if (rect) view.markDirty(rect);
+        view.setRampPreview(null);
+        $('statusMsg').textContent = '';
+    }
     if (stroke.room) {
         const r = roomRect(stroke.room.from, stroke.room.to, area.sizeX, area.sizeY);
         view.markDirty(cutRoom(area, r, stroke.room.floor, stroke.paintIndex));
@@ -1080,7 +1106,7 @@ view.onFrame = () => {
         dbg.stamps++;
         return;
     }
-    if (stroke && p && !stroke.water && !stroke.place && !stroke.room) {
+    if (stroke && p && !stroke.water && !stroke.place && !stroke.room && !stroke.ramp) {
         const now = performance.now();
         const dt = (now - stroke.last) / 1000;
         stroke.last = now;

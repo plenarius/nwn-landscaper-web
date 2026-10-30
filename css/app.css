@@ -474,3 +474,6 @@ dialog label.check input { width: auto; }
 .dlgtree.ro .dlgbar, .dlgtree.ro .dlghead button { display: none; }
 .dlgtree.ro textarea, .dlgtree.ro input { opacity: 0.85; }
 #bpBody input[type=number], #bpBody input[type=search] { background: var(--panel-2); color: inherit; border: 1px solid #000; border-radius: 6px; padding: 5px 8px; font: inherit; }
+#rampPanel label { display: block; margin: 10px 0 4px; }
+#rampPanel input[type=number] { width: 100%; box-sizing: border-box; background: var(--panel-2); color: inherit; border: 1px solid #000; border-radius: 6px; padding: 6px 8px; font: inherit; }
+#rampPanel label.check { display: flex; align-items: center; gap: 8px; }
