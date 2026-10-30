@@ -187,6 +187,14 @@
             <label class="check"><input type="checkbox" id="rampCarve"> Cut through rock <small>(in a cave or interior: also dig where there is no floor. Better to dig or make a room first)</small></label>
             <label class="check"><input type="checkbox" id="rampWalkable" checked> Keep it walkable <small>(eases a slope that is too steep)</small></label>
         </section>
+        <section id="descentPanel" class="side-panel" hidden>
+            <h3>Descent</h3>
+            <p class="note">In a cave or interior, drag a box over whole tiles. It is filled with halls side by side, each lower than the last, joined by a ramp at alternating ends. Each floor takes two tiles across the box; the halls run along its longer side.</p>
+            <label>Floors<input id="descentFloors" type="number" min="2" max="12" step="1" value="6"></label>
+            <label>Drop per floor <small>metres</small><input id="descentDrop" type="number" min="1" max="20" step="0.5" value="5"></label>
+            <label>Ceiling over the floor <small>metres, kept all the way down</small><input id="descentCeiling" type="number" min="2" max="20" step="0.5" value="4"></label>
+            <label class="check"><input type="checkbox" id="descentFlip"> Start from the other side</label>
+        </section>
         <section id="entrancePanel" class="side-panel" hidden>
             <h3>Entrances</h3>
             <p class="note">Click a slope (or a cave wall) to carve one; Shift-click one to remove it. Each has a door: pick where it leads (an entrance door in the same module), or link it in the toolset.</p>
@@ -258,6 +266,9 @@
                 <label><input type="radio" name="start" value="rough"> Rough hills</label>
                 <label><input type="radio" name="start" value="cave"> Cave (dig it out of rock)</label>
                 <label><input type="radio" name="start" value="interior"> Interior (rooms)</label>
+                <label><input type="radio" name="start" value="crypt"> Descending crypt <small>(six floors down, stone halls: a sample to change)</small></label>
+                <label><input type="radio" name="start" value="dungeon"> Descending dungeon <small>(four floors, cobbles)</small></label>
+                <label><input type="radio" name="start" value="descending-cave"> Descending cave <small>(five floors in rock)</small></label>
             </div>
             <label>Start height <small>metres; start high (a plateau) to dig valleys and canyons down into it</small>
                 <input id="newBase" type="number" min="0" max="100" step="1" value="5"></label>

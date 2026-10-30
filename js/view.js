@@ -950,6 +950,24 @@ export class View {
         this.scene.add(this.roomLine);
     }
 
+    /** The descent being dragged: its box, each hall at its floor, and each ramp's line (null hides it; an error shows the box alone). */
+    setDescentPreview(plan) {
+        if (this.descentLine) { this.scene.remove(this.descentLine); this.descentLine.geometry.dispose(); this.descentLine = null; }
+        if (!plan) return;
+        const s = this.area.sizeY, pts = [];
+        const rect = (r, z) => {
+            const c = [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]];
+            for (let i = 0; i < 4; i++) for (const [x, y] of [c[i], c[(i + 1) % 4]]) pts.push(new THREE.Vector3(x, z + 0.1, s - y));
+        };
+        const top = plan.halls[0]?.floor ?? this.area.roof - 6;
+        rect(plan.box, top);
+        for (const h of plan.halls) rect(h.rect, h.floor);
+        for (const r of plan.ramps) pts.push(new THREE.Vector3(r.a.x, top + 0.2, s - r.a.y), new THREE.Vector3(r.b.x, top + 0.2, s - r.b.y));
+        this.descentLine = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: plan.error ? 0xe08a3a : 0xd8a24a, depthTest: false }));
+        this.descentLine.renderOrder = 2;
+        this.scene.add(this.descentLine);
+    }
+
     /** The ramp being dragged: its outline at the heights it will have, and its centre line (null hides it). */
     setRampPreview(plan, width) {
         if (this.rampLine) { this.scene.remove(this.rampLine); this.rampLine.geometry.dispose(); this.rampLine = null; }

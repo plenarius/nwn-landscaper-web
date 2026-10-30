@@ -17,6 +17,7 @@ export const TOOLS = {
     things: { label: 'Things', key: 't', hint: 'Place creatures, waypoints, triggers and transitions, sounds, encounters, stores, items, doors and placeables' },
     dig: { label: 'Dig', key: '0', hint: 'Dig cave passages and chambers out of the rock, down to the floor (or the level where you start). At least 3 m radius: narrower passages defeat NWN\'s pathfinding' },
     ramp: { label: 'Ramp', key: 'p', hint: 'Drag from one level to another to lay a ramp (or stairs) between them; the brush size is half its width. It rises to where you let go, or by the amount you set' },
+    descent: { label: 'Descent', key: 'd', hint: 'Drag a box in a cave or interior: it is filled with halls, one a floor lower than the last, joined by ramps at alternating ends (a switchback descent)' },
     room: { label: 'Room', key: 'r', hint: 'Drag a rectangle to cut out a room (snapped to 1.25 m, at least 5 m a side); overlapping rooms join' },
 };
 
@@ -229,4 +230,60 @@ export function cutRamp(area, plan, width, step = null, carve = false) {
         }
     }
     return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(rows - 1, j1 + 1), changed };
+}
+
+// A descent: halls side by side across a box, each `drop` metres lower than the one before, joined by a ramp at alternating ends.
+// Every length is what the tested layouts used: halls a tile in from the box's ends, ramps along the tile middle lines 15 m in,
+// a passage 8 m wide with the ramp 10 m wide over it (so no ledge is left), and two tiles at least for a floor.
+const DESCENT_MARGIN = 10, DESCENT_RAMP_IN = 15, DESCENT_PASSAGE = 4, DESCENT_RAMP_WIDTH = 10, DESCENT_PITCH_MIN = 20, DESCENT_LENGTH_MIN = 40;
+
+/**
+ * The descent over the tile box that holds `from` and `to`: `floors` halls, `drop` metres between them. Halls run along the box's
+ * longer side and stack across the other; `flip` starts from the other end. `plan.error` says why it can't be made; otherwise
+ * `plan.halls` (rooms with their floor), `plan.passages` (rooms with their floor) and `plan.ramps` (area points, for rampPlan).
+ */
+export function descentPlan(area, from, to, { floors = 6, drop = 5, flip = false } = {}) {
+    const snap = (v, size) => Math.min(size, Math.max(0, v));
+    const x0 = snap(Math.floor(Math.min(from.x, to.x) / TILE) * TILE, area.sizeX), x1 = snap(Math.ceil(Math.max(from.x, to.x) / TILE) * TILE, area.sizeX);
+    const y0 = snap(Math.floor(Math.min(from.y, to.y) / TILE) * TILE, area.sizeY), y1 = snap(Math.ceil(Math.max(from.y, to.y) / TILE) * TILE, area.sizeY);
+    const alongX = x1 - x0 >= y1 - y0;
+    // u runs along the halls, v across them; `pt` turns them into area points.
+    const [u0, u1, v0, v1] = alongX ? [x0, x1, y0, y1] : [y0, y1, x0, x1];
+    const pt = (u, v) => (alongX ? { x: u, y: v } : { x: v, y: u });
+    const plan = { box: { x0, x1, y0, y1 }, alongX, floors, drop, halls: [], passages: [], ramps: [] };
+    if (!area.enclosed()) return { ...plan, error: 'Descents are for a cave or an interior.' };
+    if (!(floors >= 2) || !(drop > 0)) return { ...plan, error: 'Two floors at least, and a drop of more than 0.' };
+    const pitch = (v1 - v0) / floors;
+    if (pitch < DESCENT_PITCH_MIN) return { ...plan, error: `Each floor needs two tiles across: make the box ${floors * 2} tiles deep, or use fewer floors.` };
+    if (u1 - u0 < DESCENT_LENGTH_MIN) return { ...plan, error: 'The halls need four tiles of length: make the box longer.' };
+    if (drop > pitch * MAX_SLOPE * 0.92) return { ...plan, error: `${drop} m over ${pitch.toFixed(0)} m is too steep to walk: a smaller drop, or a deeper box.` };
+    // The top floor: where the first hall is dug (the area's floor if it is still rock).
+    const centre = k => v0 + Math.round(pitch * (k + 0.5) / 5) * 5;
+    const first = pt((u0 + u1) / 2, centre(flip ? floors - 1 : 0));
+    const start = area.heightAt(first.x, first.y);
+    const top = start >= area.roof - 0.5 ? area.roof - CAVE_ROCK : start;
+    const room = (ua, va, ub, vb) => roomRect(pt(ua, va), pt(ub, vb), area.sizeX, area.sizeY);
+    for (let n = 0; n < floors; n++) {
+        const k = flip ? floors - 1 - n : n, v = centre(k), floor = top - drop * n;
+        plan.halls.push({ rect: room(u0 + DESCENT_MARGIN, v - 5, u1 - DESCENT_MARGIN, v + 5), floor });
+        if (n < floors - 1) {
+            const k2 = flip ? k - 1 : k + 1, v2 = centre(k2);
+            const u = n % 2 === 0 ? u1 - DESCENT_RAMP_IN : u0 + DESCENT_RAMP_IN;
+            plan.passages.push({ rect: room(u - DESCENT_PASSAGE, Math.min(v, v2), u + DESCENT_PASSAGE, Math.max(v, v2)), floor });
+            plan.ramps.push({ a: pt(u, v), b: pt(u, v2), rise: -drop });
+        }
+    }
+    plan.pitch = pitch;
+    plan.degrees = Math.atan2(drop, pitch) * 180 / Math.PI;
+    plan.bottom = top - drop * (floors - 1);
+    return plan;
+}
+
+/** Cuts the descent `plan` (no error): the halls, then the passages between them, then a ramp down each. Returns the box's samples. */
+export function cutDescent(area, plan, paintIndex) {
+    for (const h of plan.halls) cutRoom(area, h.rect, h.floor, paintIndex);
+    for (const p of plan.passages) cutRoom(area, p.rect, p.floor, paintIndex);
+    for (const r of plan.ramps) cutRamp(area, rampPlan(area, r.a, r.b, { rise: r.rise }), DESCENT_RAMP_WIDTH, null);
+    const { x0, x1, y0, y1 } = plan.box;
+    return { i0: Math.max(0, Math.floor(x0 / SPACING) - 1), i1: Math.min(area.nx - 1, Math.ceil(x1 / SPACING) + 1), j0: Math.max(0, Math.floor(y0 / SPACING) - 1), j1: Math.min(area.ny - 1, Math.ceil(y1 / SPACING) + 1) };
 }
