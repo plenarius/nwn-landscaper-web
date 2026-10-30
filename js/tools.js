@@ -193,7 +193,8 @@ export function rampPlan(area, a, b, { rise = null, keepWalkable = true } = {}) 
 }
 
 /** Lays the ramp `plan` (see rampPlan) `width` metres wide; with `step` (metres) as stairs of that height, else a smooth slope. The
- *  outer metre of its width blends into the ground beside it. In a cave or interior only floor is changed (a ramp is laid in a
+ *  outer metre of its width blends into the ground beside it. In a cave or interior only floor is changed, all of it to the
+ *  ramp's level, so make the ramp a little wider than the passage (a ramp is laid in a
  *  passage or room that is already dug: the walls the Room and Dig tools leave are the ones NWN's pathfinding accepts), unless
  *  `carve`. Returns the changed sample rectangle and how many samples changed. */
 export function cutRamp(area, plan, width, step = null, carve = false) {
@@ -220,7 +221,8 @@ export function cutRamp(area, plan, width, step = null, carve = false) {
             const m = steps ? Math.min(steps, Math.floor(t * steps) + 1) / steps : t;
             const target = hA + dh * m;
             const u = Math.min(1, (half - d) / edge);
-            const w = u * u * (3 - 2 * u);
+            // (In a dug passage nothing is blended: a taper would leave a half-lowered ledge along each wall.)
+            const w = floorOnly ? 1 : u * u * (3 - 2 * u);
             const k = j * n + i;
             h[k] += (target - h[k]) * w;
             changed++;
