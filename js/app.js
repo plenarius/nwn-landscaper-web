@@ -1761,6 +1761,25 @@ for (const s of SIZES) {
 $('newW').oninput = $('newH').oninput = showSize;
 showSize();
 
+// Sample starts: a switchback descent already laid, to show what it is and to change. How many floors depends on the size.
+const DESCENT_STARTERS = {
+    crypt: { from: 'interior', floors: 6, drop: 5, ceiling: 4, floor: 'flagIrregular', size: [12, 12] },
+    dungeon: { from: 'interior', floors: 4, drop: 4, ceiling: 4, floor: 'cobbles', size: [12, 8] },
+    'descending-cave': { from: 'cave', floors: 5, drop: 5, ceiling: 5, floor: 'pebbles', size: [12, 10] },
+};
+function seedDescent(created, starter) {
+    const floors = Math.min(starter.floors, Math.floor(Math.min(created.tiles, created.tilesY) / 2));
+    const plan = descentPlan(created, { x: 0, y: 0 }, { x: created.sizeX, y: created.sizeY }, { floors, drop: starter.drop });
+    if (plan.error) { $('statusMsg').textContent = `Too small for the sample descent (${plan.error}); started empty.`; return; }
+    cutDescent(created, plan, created.materialIndex(starter.floor));
+    created.clearance = starter.ceiling;
+}
+for (const radio of document.querySelectorAll('input[name=start]')) {
+    radio.addEventListener('change', () => {
+        const size = DESCENT_STARTERS[radio.value]?.size;
+        if (size && radio.checked) { $('newW').value = size[0]; $('newH').value = size[1]; showSize(); }
+    });
+}
 $('btnNew').onclick = () => {
     if (area) $('newName').value = area.name;
     $('newDialog').showModal();
@@ -1770,7 +1789,9 @@ $('newDialog').addEventListener('close', () => {
     const start = new FormData($('newDialog').querySelector('form')).get('start');
     const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
     const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
-    const created = Area.create($('newName').value.trim().toLowerCase(), tiles($('newW').value), start, base, tiles($('newH').value));
+    const starter = DESCENT_STARTERS[start];
+    const created = Area.create($('newName').value.trim().toLowerCase(), tiles($('newW').value), starter?.from ?? start, base, tiles($('newH').value));
+    if (starter) seedDescent(created, starter);
     created.module = $('newModule').value.trim().toLowerCase() || created.name;
     // A new area starts with the settings Layonara's areas have (the standard scripts and so on).
     thingsTool.loadMeta().then(meta => {
