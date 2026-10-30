@@ -62,6 +62,8 @@ export class Area {
         // 'interior' (rooms cut out of a solid mass, the same way).
         this.kind = 'surface';
         this.roof = null;
+        // Metres of headroom the roof keeps over the floor everywhere (null: one flat roof, so a floor that drops gets more).
+        this.clearance = null;
         // The NWN module it is exported into (another area's, to link them).
         this.module = name;
         this.waterLevel = new Float32Array(this.nx * this.ny).fill(NaN);
@@ -185,6 +187,31 @@ export class Area {
         return this.enclosed() && this.heights[j * this.nx + i] >= this.roof - VOID_BELOW;
     }
 
+    /** With a `clearance`, the roof follows the floor: each sample's ceiling is the nearest open ground's height plus the
+     *  clearance, and the rock is cut down to it (as landscaper's fit_ceiling does). `ceiling` is each sample's roof and
+     *  `shown` the heights with the rock cut down; null for one flat roof. */
+    ceilingFit() {
+        if (!this.enclosed() || !(this.clearance > 0)) return null;
+        const { nx, ny, heights: h } = this, n = nx * ny, roof = this.roof;
+        const from = new Int32Array(n).fill(-1), queue = new Int32Array(n);
+        let head = 0, tail = 0;
+        for (let k = 0; k < n; k++) if (h[k] < roof - VOID_BELOW) { from[k] = k; queue[tail++] = k; }
+        while (head < tail) {
+            const k = queue[head++], i = k % nx, j = (k - i) / nx;
+            for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) {
+                if (a < 0 || b < 0 || a >= nx || b >= ny) continue;
+                const m = b * nx + a;
+                if (from[m] < 0) { from[m] = from[k]; queue[tail++] = m; }
+            }
+        }
+        const ceiling = new Float32Array(n), shown = new Float32Array(h);
+        for (let k = 0; k < n; k++) {
+            ceiling[k] = from[k] < 0 ? roof : h[from[k]] + this.clearance;
+            if (h[k] >= roof - VOID_BELOW) shown[k] = Math.min(ceiling[k], h[k]);
+        }
+        return { ceiling, shown };
+    }
+
     /** A cave or an interior: dug out of a mass, its tops void, no sky. */
     enclosed() {
         return this.kind === 'underground' || this.kind === 'interior';
@@ -230,7 +257,7 @@ export class Area {
             name: this.name, tiles: this.tiles, tilesY: this.tilesY,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials), palette: this.palette,
-            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId, kind: this.kind, roof: this.roof, module: this.module,
+            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId, kind: this.kind, roof: this.roof, clearance: this.clearance, module: this.module,
             things: this.things, nextThingId: this.nextThingId, settings: this.settings, originals: this.originals,
         };
     }
@@ -243,7 +270,7 @@ export class Area {
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.entrances) area.entrances = o.entrances;
         if (o.objects) area.objects = o.objects;
-        if (o.kind) { area.kind = o.kind; area.roof = o.roof; }
+        if (o.kind) { area.kind = o.kind; area.roof = o.roof; area.clearance = o.clearance ?? null; }
         if (o.module) area.module = o.module;
         if (Array.isArray(o.things)) area.things = o.things;
         area.nextThingId = o.nextThingId ?? Math.max(0, ...area.things.map(x => x.id ?? 0)) + 1;

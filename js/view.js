@@ -8,7 +8,7 @@
 import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SPACING, TILE } from './area.js';
+import { SPACING, TILE, VOID_BELOW } from './area.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, SHADE_STEP } from './shade.js';
 import { at as entranceAt, scenery as entranceScenery } from './entrance.js';
@@ -38,12 +38,13 @@ const SHADE_FRAGMENT = `
         vec2 extent = (uShadeCells - 1.0) * ${SHADE_STEP.toFixed(4)};
         if (all(greaterThanEqual(vArea, vec2(0.0))) && all(lessThanEqual(vArea, extent)))
             diffuseColor.rgb *= texture2D(uShade, (vArea / ${SHADE_STEP.toFixed(4)} + 0.5) / uShadeCells).r;
-        if (vUp >= uVoid) diffuseColor.rgb = vec3(0.0);
+        if (vGap <= ${VOID_BELOW.toFixed(2)}) diffuseColor.rgb = vec3(0.0);
     }`;
 
 const SPLAT_VERTEX = `
     vArea = vec2(transformed.x, uSize.y - transformed.z);
     vUp = transformed.y;
+    vGap = aGap;
     vNormalUp = normal.y;`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
@@ -135,7 +136,6 @@ export class View {
             uShade: { value: null },
             uShadeCells: { value: new THREE.Vector2(1, 1) },
             // A cave's rock tops from here up are void: black.
-            uVoid: { value: 1e9 },
             // An imported area's picture, and its palette index (-1: none).
             uImport: { value: null },
             uImportLayer: { value: -1 },
@@ -209,6 +209,8 @@ export class View {
         const geo = new THREE.PlaneGeometry(sizeX, sizeY, nx - 1, ny - 1);
         geo.rotateX(-Math.PI / 2);
         geo.translate(sizeX / 2, 0, sizeY / 2);
+        // How far under its ceiling each sample is: the rock tops (0.3 or less) are void, drawn black.
+        geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1e9), 1));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
         this.uniforms.uMat.value?.dispose();
         const mat = new THREE.DataTexture(area.materials, nx, ny, THREE.RedFormat, THREE.UnsignedByteType);
@@ -218,7 +220,6 @@ export class View {
         this.uniforms.uMat.value = mat;
         this.uniforms.uN.value.set(nx, ny);
         this.uniforms.uSize.value.set(sizeX, sizeY);
-        this.uniforms.uVoid.value = area.enclosed() ? area.roof - 0.3 : 1e9;
         this.updateShade();
         this.mesh = new THREE.Mesh(geo, this.splatMaterial());
         this.scene.add(this.mesh);
@@ -240,10 +241,10 @@ export class View {
         material.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, this.uniforms);
             shader.vertexShader = shader.vertexShader
-                .replace('#include <common>', '#include <common>\nuniform vec2 uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
+                .replace('#include <common>', '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>' + SPLAT_VERTEX);
             shader.fragmentShader = shader.fragmentShader
-                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform float uVoid;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform vec2 uSize;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
+                .replace('#include <common>', '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform vec2 uSize;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;')
                 .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT + SHADE_FRAGMENT);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
@@ -379,15 +380,19 @@ export class View {
         const pos = this.mesh.geometry.attributes.position;
         const col = this.mesh.geometry.attributes.color;
         // Heights of the changed rows and a margin (walkability uses neighbours).
-        const i0 = Math.max(0, d.i0 - 1), i1 = Math.min(n - 1, d.i1 + 1), j0 = Math.max(0, d.j0 - 1), j1 = Math.min(area.ny - 1, d.j1 + 1);
+        // (A roof that follows the floor moves with any edit: everything is redone.)
+        const fit = area.ceilingFit(), all = fit || area.enclosed();
+        const i0 = all ? 0 : Math.max(0, d.i0 - 1), i1 = all ? n - 1 : Math.min(n - 1, d.i1 + 1), j0 = all ? 0 : Math.max(0, d.j0 - 1), j1 = all ? area.ny - 1 : Math.min(area.ny - 1, d.j1 + 1);
+        const gap = this.mesh.geometry.attributes.aGap, shownHeights = fit ? fit.shown : area.heights;
         let lo = Infinity, hi = -Infinity;
         for (const v of area.heights) { if (v < lo) lo = v; if (v > hi) hi = v; }
         const span = Math.max(hi - lo, 1);
         const c = new THREE.Color();
         for (let j = j0; j <= j1; j++) {
             for (let i = i0; i <= i1; i++) {
-                const v = this.vertex(i, j), z = area.heights[j * n + i];
-                pos.setY(v, z);
+                const v = this.vertex(i, j), z = area.heights[j * n + i], shown = shownHeights[j * n + i];
+                pos.setY(v, shown);
+                gap.setX(v, !area.enclosed() ? 1e9 : fit ? fit.ceiling[j * n + i] - shown : area.roof - shown);
                 // Under water the water shows it; no red tint.
                 const wet = !Number.isNaN(area.waterLevel[j * n + i]);
                 if (this.textured) {
@@ -403,6 +408,7 @@ export class View {
             }
         }
         pos.needsUpdate = true;
+        gap.needsUpdate = true;
         col.needsUpdate = true;
         this.uniforms.uMat.value.needsUpdate = true;
         this.mesh.geometry.computeVertexNormals();

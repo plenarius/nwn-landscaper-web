@@ -1669,6 +1669,21 @@ $('btnSettings').onclick = async () => {
     areaLists ??= await fetch('/api/area-lists').then(r => r.json()).catch(() => ({}));
     openSettings(area, meta.template, areaLists, () => { saveSoon(); $('statusMsg').textContent = 'Area settings kept.'; });
 };
+$('menuArea').querySelector('.menu-btn').addEventListener('click', () => { $('btnCeiling').hidden = !area?.enclosed(); });
+$('btnCeiling').onclick = async () => {
+    if (!area?.enclosed() || readOnly) return;
+    const text = await ask({
+        title: 'Ceiling height',
+        text: 'How many metres of headroom to keep over the floor everywhere, so a passage that descends keeps the same ceiling. Leave empty for one flat roof (the walls grow as the floor drops).',
+        ok: 'Set', input: { label: 'Metres (2 to 20)', value: area.clearance ?? '', placeholder: 'flat roof' },
+        submit: v => (v === '' || (+v >= 2 && +v <= 20)) ? undefined : 'Between 2 and 20 metres, or empty.',
+    });
+    if (text === null) return;
+    area.clearance = text === '' ? null : +text;
+    view.markDirty(view.everything());
+    saveSoon();
+    $('statusMsg').textContent = area.clearance ? `The ceiling stays ${area.clearance} m over the floor.` : 'One flat roof.';
+};
 $('btnUndo').onclick = () => { if (area?.undo()) refreshAll(); };
 $('btnRedo').onclick = () => { if (area?.redo()) refreshAll(); };
 
@@ -1725,7 +1740,7 @@ function areaRequest() {
         + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
         + `&shadow=${area.shadow}`
         + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`
-        + (area.enclosed() ? `&kind=${area.kind}&roof=${area.roof}` : '')
+        + (area.enclosed() ? `&kind=${area.kind}&roof=${area.roof}` + (area.clearance > 0 ? `&clearance=${area.clearance}` : '') : '')
         + `&module=${encodeURIComponent(area.module || area.name)}`;
     return { query, body };
 }
