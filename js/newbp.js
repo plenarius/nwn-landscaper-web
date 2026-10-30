@@ -10,7 +10,27 @@ const json = r => r.json().catch(() => ({}));
 
 /** How each setting reads in the form, in the order shown: [label, text, group]. Anything the engine lists that isn't here
  *  comes last under "Other" with its own name. */
+/** The blueprint file type of each kind the builder can make their own of. */
+const EXT = { creature: 'utc', item: 'uti', placeable: 'utp' };
+
+/** Settings that are on or off (stored as 0 or 1): shown as a tick box. */
+const BOOLS = new Set(['Static', 'Useable', 'Plot', 'HasInventory', 'Locked', 'Lockable', 'KeyRequired', 'AutoRemoveKey', 'TrapFlag', 'TrapOneShot', 'TrapDetectable', 'TrapDisarmable', 'Interruptable', 'IsImmortal', 'NoPermDeath', 'Lootable', 'Disarmable', 'Cursed', 'Stolen', 'Identified']);
+
 const NAMES = {
+    utp: [
+        ['LocName', 'Name', 'The placeable'], ['Description', 'Description', 'The placeable'], ['Tag', 'Tag', 'The placeable'], ['Appearance', 'Appearance', 'The placeable'],
+        ['Static', 'Static (scenery only: nothing can be done with it)', 'Behaviour'], ['Useable', 'Can be used', 'Behaviour'], ['Plot', 'Plot (can\'t be hurt)', 'Behaviour'],
+        ['HasInventory', 'Holds items', 'Behaviour'], ['Conversation', 'Conversation', 'Behaviour'], ['Faction', 'Faction (repute.2da / factions row)', 'Behaviour'],
+        ['Locked', 'Locked', 'Lock'], ['Lockable', 'Can be locked', 'Lock'], ['KeyRequired', 'Needs its key', 'Lock'], ['KeyName', 'Key tag', 'Lock'], ['AutoRemoveKey', 'Key is used up', 'Lock'],
+        ['OpenLockDC', 'Pick-lock DC', 'Lock'], ['CloseLockDC', 'Lock DC', 'Lock'],
+        ['TrapFlag', 'Trapped', 'Trap'], ['TrapType', 'Trap type (traps.2da row)', 'Trap'], ['TrapOneShot', 'Trap goes off once', 'Trap'], ['TrapDetectable', 'Trap can be found', 'Trap'],
+        ['TrapDetectDC', 'Find DC', 'Trap'], ['TrapDisarmable', 'Trap can be disarmed', 'Trap'], ['DisarmDC', 'Disarm DC', 'Trap'],
+        ['HP', 'Hit points', 'Strength'], ['CurrentHP', 'Hit points now', 'Strength'], ['Hardness', 'Hardness', 'Strength'], ['Fort', 'Fortitude save', 'Strength'], ['Ref', 'Reflex save', 'Strength'], ['Will', 'Will save', 'Strength'],
+        ['OnUsed', 'On used', 'Scripts'], ['OnOpen', 'On open', 'Scripts'], ['OnClosed', 'On closed', 'Scripts'], ['OnDeath', 'On death', 'Scripts'], ['OnDamaged', 'On damaged', 'Scripts'],
+        ['OnHeartbeat', 'On heartbeat', 'Scripts'], ['OnInvDisturbed', 'On inventory disturbed', 'Scripts'], ['OnLock', 'On lock', 'Scripts'], ['OnUnlock', 'On unlock', 'Scripts'],
+        ['OnMeleeAttacked', 'On attacked', 'Scripts'], ['OnSpellCastAt', 'On spell cast at', 'Scripts'], ['OnTrapTriggered', 'On trap triggered', 'Scripts'], ['OnDisarm', 'On disarm', 'Scripts'],
+        ['OnUserDefined', 'On user defined', 'Scripts'], ['OnClick', 'On click', 'Scripts'], ['Comment', 'Comment (for builders)', 'Other'],
+    ],
     utc: [
         ['FirstName', 'First name', 'Who'], ['LastName', 'Last name', 'Who'], ['Description', 'Description', 'Who'], ['Tag', 'Tag', 'Who'],
         ['Appearance_Type', 'Appearance (appearance.2da row)', 'Looks'], ['Gender', 'Gender (0 male, 1 female)', 'Looks'], ['Phenotype', 'Phenotype', 'Looks'],
@@ -43,7 +63,7 @@ ThingsTool.prototype.bpFinder = function () {
     const box = $('thingMake');
     if (!box) return;
     const k = this.armed;
-    box.hidden = !['creature', 'item'].includes(k?.kind);
+    box.hidden = !(k?.kind in EXT);
     if (box.hidden) return;
     box.textContent = '';
     const sel = this.blueprint;
@@ -53,7 +73,7 @@ ThingsTool.prototype.bpFinder = function () {
     box.appendChild(b);
     if (sel?.source === 'mine') {
         const e = Object.assign(document.createElement('button'), { type: 'button', textContent: `Change ${sel.name}` });
-        e.onclick = () => this.bpEdit(k.kind === 'creature' ? 'utc' : 'uti', sel.resref);
+        e.onclick = () => this.bpEdit(EXT[k.kind], sel.resref);
         box.appendChild(e);
     }
 };
@@ -62,7 +82,7 @@ ThingsTool.prototype.bpFinder = function () {
 const slug = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 16);
 
 ThingsTool.prototype.bpCreateForm = function (box, from) {
-    const ext = this.armed.kind === 'creature' ? 'utc' : 'uti';
+    const ext = EXT[this.armed.kind];
     box.textContent = '';
     const name = Object.assign(document.createElement('input'), { type: 'text', placeholder: 'Its name', maxLength: 60 });
     const resref = Object.assign(document.createElement('input'), { type: 'text', placeholder: 'resref (16 letters, digits or _)', maxLength: 16 });
@@ -122,13 +142,14 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         span.textContent = text;
         const long = f.type === 'l' && /Description/.test(label);
         const input = document.createElement(long ? 'textarea' : 'input');
-        if (!long) input.type = f.type === 's' || f.type === 'l' || f.type === 'r' ? 'text' : 'number';
+        const bool = BOOLS.has(label) && 'bhiwd'.includes(f.type);
+        if (!long) input.type = bool ? 'checkbox' : f.type === 's' || f.type === 'l' || f.type === 'r' ? 'text' : 'number';
         if (long) input.rows = 3;
         if (f.type === 'f') input.step = 'any';
-        input.value = f.value ?? '';
+        if (bool) input.checked = !!Number(f.value); else input.value = f.value ?? '';
         if (f.type === 'r') input.maxLength = 16;
         input.onchange = async () => {
-            const r = await fetch(`/api/new-blueprint-edit?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST', body: JSON.stringify({ [label]: input.value }) });
+            const r = await fetch(`/api/new-blueprint-edit?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST', body: JSON.stringify({ [label]: bool ? (input.checked ? 1 : 0) : input.value }) });
             const out = await json(r);
             status.className = r.ok ? 'note' : 'note err';
             status.textContent = r.ok ? 'Saved.' : (out.error || r.statusText);
@@ -136,11 +157,12 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         };
         row.append(span, input);
         section.appendChild(row);
+        if (ext === 'utp' && label === 'Appearance') this.bpAppearance(input, row);
         if (label === 'Conversation') this.bpConversationRow(ext, resref, input, section);
         if (/^Script/.test(label) && f.type === 'r') row.appendChild(scriptPicker(input, 'action'));
     }
     if (ext === 'uti') await this.bpProperties(resref, body);
-    if (ext === 'utc') await this.bpGear(resref, body);
+    if (ext === 'utc' || (ext === 'utp' && byLabel.get('HasInventory'))) await this.bpGear(resref, body, ext);
     document.getElementById('bpDelete').onclick = async () => {
         if (!await ask({ title: `Delete ${resref}?`, text: `Placed copies of it stay in your areas, but it won't be published.`, ok: 'Delete it', danger: true })) return;
         await fetch(`/api/new-blueprint-delete?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST' });
@@ -220,18 +242,21 @@ ThingsTool.prototype.bpProperties = async function (resref, body) {
 const SLOTS = ['head', 'chest', 'boots', 'arms', 'right hand', 'left hand', 'cloak', 'left ring', 'right ring', 'neck', 'belt', 'arrows', 'bullets', 'bolts', 'claw left', 'claw right', 'bite', 'skin'];
 
 /** What a new creature carries and wears, as its blueprint holds it (every copy placed gets it). Saved as it is changed. */
-ThingsTool.prototype.bpGear = async function (resref, body) {
-    const box = el('fieldset', {}, el('legend', { textContent: 'Carries and wears' }));
+ThingsTool.prototype.bpGear = async function (resref, body, ext = 'utc') {
+    const placeable = ext === 'utp';
+    const title = placeable ? 'Holds' : 'Carries and wears';
+    const box = el('fieldset', {}, el('legend', { textContent: title }));
     body.appendChild(box);
-    const url = `/api/new-blueprint-gear?resref=${encodeURIComponent(resref)}`;
-    let c = await json(await fetch(`/api/blueprint-contents?kind=creature&resref=${encodeURIComponent(resref)}`));
+    const url = `/api/new-blueprint-gear?resref=${encodeURIComponent(resref)}${placeable ? '&ext=utp' : ''}`;
+    const kind = placeable ? 'placeable' : 'creature';
+    let c = await json(await fetch(`/api/blueprint-contents?kind=${kind}&resref=${encodeURIComponent(resref)}`));
     const put = async patch => {
         const r = await fetch(url, { method: 'POST', body: JSON.stringify(patch) });
         const out = await json(r);
         const st = document.getElementById('bpStatus');
         st.className = r.ok ? 'note' : 'note err';
         st.textContent = r.ok ? 'Saved.' : (out.error || r.statusText);
-        if (r.ok) c = await json(await fetch(`/api/blueprint-contents?kind=creature&resref=${encodeURIComponent(resref)}`));
+        if (r.ok) c = await json(await fetch(`/api/blueprint-contents?kind=${kind}&resref=${encodeURIComponent(resref)}`));
         draw();
     };
     const finder = (placeholder, pick) => {
@@ -261,9 +286,9 @@ ThingsTool.prototype.bpGear = async function (resref, body) {
     };
     function draw() {
         box.textContent = '';
-        box.appendChild(el('legend', { textContent: 'Carries and wears' }));
+        box.appendChild(el('legend', { textContent: title }));
         const worn = c.equipment ?? [], items = c.items ?? [];
-        box.appendChild(el('h5', { textContent: `Worn and wielded (${worn.length})` }));
+        if (!placeable) box.appendChild(el('h5', { textContent: `Worn and wielded (${worn.length})` }));
         const wl = el('div', { className: 'stock' });
         worn.forEach((w, i) => {
             const rm = el('button', { type: 'button', textContent: '×', title: 'Take it off' });
@@ -274,8 +299,8 @@ ThingsTool.prototype.bpGear = async function (resref, body) {
         const slot = el('select', {});
         for (const n of SLOTS) slot.add(new Option(n, n));
         const [wf, wfound] = finder('Put on or in hand: type the item\'s name', b => put({ equipment: [...worn.filter(w => w.slot !== slot.value), { slot: slot.value, resref: b.resref }] }));
-        box.append(wl, slot, wf, wfound);
-        box.appendChild(el('h5', { textContent: `Carries (${items.length})` }));
+        if (!placeable) box.append(wl, slot, wf, wfound);
+        box.appendChild(el('h5', { textContent: `${placeable ? 'Contents' : 'Carries'} (${items.length})` }));
         const il = el('div', { className: 'stock' });
         items.forEach((it, i) => {
             const rm = el('button', { type: 'button', textContent: '×', title: 'Take it out' });
@@ -287,4 +312,34 @@ ThingsTool.prototype.bpGear = async function (resref, body) {
         box.append(il, cf, cfound);
     }
     draw();
+};
+
+let placeableRows = null;
+
+/** A placeable's Appearance: the game's placeables.2da rows (the game's own and the haks'), found by name as you type. The
+ *  box keeps the row number the blueprint stores; the line above it says what that row is. */
+ThingsTool.prototype.bpAppearance = async function (input, row) {
+    placeableRows ??= (await json(await fetch('/api/placeables'))).placeables ?? [];
+    const byRow = new Map(placeableRows.map(p => [p.row, p]));
+    const shown = el('div', { className: 'note' });
+    const label = () => { const p = byRow.get(Number(input.value)); shown.textContent = p ? `${p.name || p.label} (row ${p.row}, model ${p.model})` : `row ${input.value}`; };
+    label();
+    const find = el('input', { type: 'search', placeholder: 'Search the appearances by name', autocomplete: 'off' });
+    const found = el('div', { className: 'bplist' });
+    find.oninput = () => {
+        found.textContent = '';
+        const q = find.value.trim().toLowerCase();
+        if (q.length < 2) return;
+        for (const p of placeableRows.filter(x => (x.name || '').toLowerCase().includes(q) || (x.label || '').toLowerCase().includes(q) || x.model.includes(q)).slice(0, 10)) {
+            const b = el('button', { type: 'button', className: 'bp' });
+            b.innerHTML = '<span class="txt"><b></b><small></small></span>';
+            b.querySelector('b').textContent = p.name || p.label;
+            b.querySelector('small').textContent = `row ${p.row} · ${p.model}`;
+            b.onclick = () => { input.value = String(p.row); input.dispatchEvent(new Event('change')); label(); find.value = ''; found.textContent = ''; };
+            found.appendChild(b);
+        }
+        if (!found.children.length) found.textContent = 'Nothing matches.';
+    };
+    input.style.display = 'none';
+    row.append(shown, find, found);
 };
