@@ -2,7 +2,7 @@
 // with a smooth falloff, scaled by `strength` (0..1) and the frame time,
 // so holding the mouse keeps working at a steady rate.
 
-import { SPACING, TILE } from './area.js';
+import { SPACING, TILE, MAX_RISE, CAVE_ROCK } from './area.js';
 
 export const TOOLS = {
     raise: { label: 'Raise', key: '1', hint: 'Build up the ground' },
@@ -16,6 +16,7 @@ export const TOOLS = {
     scatter: { label: 'Scatter', key: '9', hint: 'Paint rocks, trees and bushes; Shift-drag to erase' },
     things: { label: 'Things', key: 't', hint: 'Place creatures, waypoints, triggers and transitions, sounds, encounters, stores, items, doors and placeables' },
     dig: { label: 'Dig', key: '0', hint: 'Dig cave passages and chambers out of the rock, down to the floor (or the level where you start). At least 3 m radius: narrower passages defeat NWN\'s pathfinding' },
+    ramp: { label: 'Ramp', key: 'p', hint: 'Drag from one level to another to lay a ramp (or stairs) between them; the brush size is half its width. It rises to where you let go, or by the amount you set' },
     room: { label: 'Room', key: 'r', hint: 'Drag a rectangle to cut out a room (snapped to 1.25 m, at least 5 m a side); overlapping rooms join' },
 };
 
@@ -169,4 +170,63 @@ export function cutRoom(area, r, floor, paintIndex) {
         }
     }
     return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(rows - 1, j1 + 1) };
+}
+
+/** The steepest slope (rise over run) that is walkable: the editor's rule for a sample's neighbours. */
+export const MAX_SLOPE = MAX_RISE / SPACING;
+
+/**
+ * A ramp from `a` to `b` (area points): where it starts and ends, how long and steep, and whether it had to be eased to stay
+ * walkable. The start's height is the ground there; the end's is the ground where it was let go, or `rise` metres above the start.
+ * `keepWalkable` limits the slope to what NWN can walk (a little under the limit); a cave's end stays clear of its roof.
+ */
+export function rampPlan(area, a, b, { rise = null, keepWalkable = true } = {}) {
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const hA = area.heightAt(a.x, a.y);
+    let hB = rise == null || Number.isNaN(rise) ? area.heightAt(b.x, b.y) : hA + rise;
+    let eased = false;
+    const limit = len * MAX_SLOPE * 0.92;
+    if (keepWalkable && Math.abs(hB - hA) > limit) { hB = hA + Math.sign(hB - hA) * limit; eased = true; }
+    if (area.enclosed() && area.roof != null && hB > area.roof - 2) { hB = area.roof - 2; eased = true; }
+    const dh = hB - hA;
+    return { a, b, len, hA, hB, dh, degrees: len > 0 ? Math.atan2(Math.abs(dh), len) * 180 / Math.PI : 0, eased };
+}
+
+/** Lays the ramp `plan` (see rampPlan) `width` metres wide; with `step` (metres) as stairs of that height, else a smooth slope. The
+ *  outer metre of its width blends into the ground beside it. In a cave or interior only floor is changed, all of it to the
+ *  ramp's level, so make the ramp a little wider than the passage (a ramp is laid in a
+ *  passage or room that is already dug: the walls the Room and Dig tools leave are the ones NWN's pathfinding accepts), unless
+ *  `carve`. Returns the changed sample rectangle and how many samples changed. */
+export function cutRamp(area, plan, width, step = null, carve = false) {
+    const { a, b, len, hA, dh } = plan;
+    if (len < 0.5) return null;
+    const half = width / 2, edge = Math.min(1.25, half / 2);
+    const n = area.nx, rows = area.ny, h = area.heights;
+    const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+    const x0 = Math.min(a.x, b.x) - half, x1 = Math.max(a.x, b.x) + half, y0 = Math.min(a.y, b.y) - half, y1 = Math.max(a.y, b.y) + half;
+    const i0 = Math.max(0, Math.floor(x0 / SPACING)), i1 = Math.min(n - 1, Math.ceil(x1 / SPACING));
+    const j0 = Math.max(0, Math.floor(y0 / SPACING)), j1 = Math.min(rows - 1, Math.ceil(y1 / SPACING));
+    const steps = step && step > 0 ? Math.max(1, Math.round(Math.abs(dh) / step)) : 0;
+    const floorOnly = area.enclosed() && !carve;
+    let changed = 0;
+    for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+            const px = i * SPACING - a.x, py = j * SPACING - a.y;
+            const along = px * ux + py * uy, across = px * -uy + py * ux;
+            const t = Math.min(1, Math.max(0, along / len));
+            // beyond either end the ramp is a half-circle of its own width, level with that end
+            const d = Math.hypot(Math.abs(across), along < 0 ? along : along > len ? along - len : 0);
+            if (d >= half) continue;
+            if (floorOnly && area.void(i, j)) continue;
+            const m = steps ? Math.min(steps, Math.floor(t * steps) + 1) / steps : t;
+            const target = hA + dh * m;
+            const u = Math.min(1, (half - d) / edge);
+            // (In a dug passage nothing is blended: a taper would leave a half-lowered ledge along each wall.)
+            const w = floorOnly ? 1 : u * u * (3 - 2 * u);
+            const k = j * n + i;
+            h[k] += (target - h[k]) * w;
+            changed++;
+        }
+    }
+    return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(rows - 1, j1 + 1), changed };
 }

@@ -950,6 +950,19 @@ export class View {
         this.scene.add(this.roomLine);
     }
 
+    /** The ramp being dragged: its outline at the heights it will have, and its centre line (null hides it). */
+    setRampPreview(plan, width) {
+        if (this.rampLine) { this.scene.remove(this.rampLine); this.rampLine.geometry.dispose(); this.rampLine = null; }
+        if (!plan || plan.len < 0.1) return;
+        const s = this.area.sizeY, half = width / 2, nx = -(plan.b.y - plan.a.y) / plan.len, ny = (plan.b.x - plan.a.x) / plan.len;
+        const v = (x, y, z) => new THREE.Vector3(x, z + 0.15, s - y);
+        const A = (k) => v(plan.a.x + nx * half * k, plan.a.y + ny * half * k, plan.hA), B = (k) => v(plan.b.x + nx * half * k, plan.b.y + ny * half * k, plan.hB);
+        const pts = [A(1), B(1), B(0), B(-1), A(-1), A(0), A(1)];
+        this.rampLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: plan.eased ? 0xe08a3a : 0xd8a24a, depthTest: false }));
+        this.rampLine.renderOrder = 2;
+        this.scene.add(this.rampLine);
+    }
+
     /** Brush ring at area point p (or hide it). */
     setCursor(p, radius) {
         if (!p) { this.cursor.visible = false; return; }
