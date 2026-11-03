@@ -27,11 +27,17 @@ brave-browser --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 
 ## Use
 
-- **New area**: name (1-9 of a-z 0-9 _, prefixes every resref), size in 10 m NWN tiles,
-  start flat or from hills. Your work is kept in the browser between sessions.
-- **Tools** (big buttons, keys 1-4): Raise, Lower, Smooth, Flatten. Brush size `[` `]`, strength
-  slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel zooms;
-  `F` reframes. Undo/redo with Ctrl+Z / Ctrl+Y.
+- **New area**: name (1-9 of a-z 0-9 _, prefixes every resref), size in 10 m NWN tiles (up to 32 x 32), and a start: flat, gentle or
+  rough hills, a cave or an interior (solid rock to cut rooms out of), or a sample descending crypt, dungeon or cave to change.
+  Your work is kept in the browser between sessions.
+- **Tools** (big buttons; the key is under each): Raise `1`, Lower `2`, Smooth `3`, Flatten `4`, Paint `5`, Water `6`, Entrance `7`,
+  Place `8`, Scatter `9`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r`. Brush size `[` `]`,
+  strength slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel zooms; `F` reframes. Undo/redo with
+  Ctrl+Z / Ctrl+Y.
+- **Caves and interiors**: cut rooms and passages out of the rock with Room and Dig (passages about 6 m wide at least, along tile
+  middles), lay a Ramp between levels (a little wider than the passage), or drag a box with Descent to fill it with halls that step
+  down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See
+  [BUILDER-WORKFLOW.md](../landscaper/docs/BUILDER-WORKFLOW.md) for the rules and the limits.
 - **Walkable** (`W`) tints ground too steep for NWN creatures in red, by the same rule the exporter
   uses. The status bar shows position, height, tile and walkability under the cursor.
 - **Export to NWN** builds the hak (into your NWN `hak/` folder) and module (into `modules/`, ready
