@@ -1430,7 +1430,7 @@ async function testRefresh(touch = true) {
         st.textContent = `Working: ${busy.join(', ')}. This takes a few minutes (build, upload, restart); the dev server comes back by itself.`;
         st.className = 'note work';
     } else if (claim && mine) {
-        st.textContent = `You have the dev server with module ${claim.module} (${testSaysMinutes(claim.expires_in)} left). It is ready: join nwn-dev.layonara.com port 5122 and walk in from ${claim.area} near ${claim.waypoint}.`;
+        st.textContent = `You have the dev server with module ${claim.module} (${testSaysMinutes(claim.expires_in)} left). It is ready: join ${r.join ?? 'the dev server'} and walk in from ${claim.area} near ${claim.waypoint}.`;
         st.className = 'note ok';
     } else if (claim) {
         st.textContent = `${claim.user} has the dev server (module ${claim.module}), free in about ${testSaysMinutes(claim.expires_in)}.`;
@@ -1793,7 +1793,7 @@ $('newDialog').addEventListener('close', () => {
     const created = Area.create($('newName').value.trim().toLowerCase(), tiles($('newW').value), starter?.from ?? start, base, tiles($('newH').value));
     if (starter) seedDescent(created, starter);
     created.module = $('newModule').value.trim().toLowerCase() || created.name;
-    // A new area starts with the settings Layonara's areas have (the standard scripts and so on).
+    // A new area starts with the project's template (the standard scripts and so on; the server's, or a plain one).
     thingsTool.loadMeta().then(meta => {
         created.settings = { ...structuredClone(meta.template ?? {}), tag: created.name };
         delete created.settings._note;
