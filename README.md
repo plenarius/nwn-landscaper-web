@@ -34,6 +34,9 @@ brave-browser --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   Place `8`, Scatter `9`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r`. Brush size `[` `]`,
   strength slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel zooms; `F` reframes. Undo/redo with
   Ctrl+Z / Ctrl+Y.
+- **Pick a texture up**: in the Paint tool press `I` (or the **Pick from the ground** button, or Alt-click) and click the ground. On painted
+  ground it picks that texture; on an imported area it picks the tileset's own texture under the click and adds it to the library
+  (under **Tileset**) the first time.
 - **Caves and interiors**: cut rooms and passages out of the rock with Room and Dig (passages about 6 m wide at least, along tile
   middles), lay a Ramp between levels (a little wider than the passage), or drag a box with Descent to fill it with halls that step
   down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See

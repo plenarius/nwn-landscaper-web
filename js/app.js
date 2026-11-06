@@ -43,9 +43,14 @@ for (const [id, t] of Object.entries(TOOLS)) {
     $('toolButtons').appendChild(b);
 }
 
+// Whether the next click on the ground in the Paint tool picks its texture up (see setPicking).
+let picking = false;
+
 function selectTool(id) {
     tool = id;
     for (const c of document.querySelectorAll('canvas')) c.style.cursor = '';
+    picking = false;
+    $('btnPick')?.classList.remove('active');
     for (const b of document.querySelectorAll('#toolButtons .tool')) b.classList.toggle('active', b.dataset.tool === id);
     updatePanels();
 }
@@ -95,7 +100,7 @@ function buildPalette() {
     const body = $('paletteBody');
     body.textContent = '';
     if (!library.catalog.length) {
-        body.innerHTML = '<p>No texture library. Run the page from <code>landscaper serve</code> after building the library (landscaper scripts/build_texture_library.py).</p>';
+        body.innerHTML = '<p>No texture library. Run the page from <code>landscaper serve</code>: it builds a starter library from your game files the first time (or run <code>landscaper textures init</code>).</p>';
         return;
     }
     const categories = [...new Set(library.catalog.map(t => t.category))]
@@ -130,6 +135,47 @@ library.load().then(ok => {
     buildPalette();
     if (ok) view.setLibrary(library);
 });
+
+// The eyedropper: click the ground to paint with what is there. Ground you painted gives its library texture; the ground of an
+// imported area gives the tileset's own texture under the click, which the server puts in the library (as "Tileset") the first time.
+function setPicking(on) {
+    picking = on;
+    $('btnPick').classList.toggle('active', on);
+    canvas.style.cursor = on ? 'crosshair' : '';
+    if (on) $('statusMsg').textContent = 'Click the ground to pick up its texture.';
+}
+$('btnPick').onclick = () => setPicking(!picking);
+
+async function pickTexture(p) {
+    const say = m => { $('statusMsg').textContent = m; };
+    const i = Math.min(Math.max(Math.round(p.x / SPACING), 0), area.nx - 1);
+    const j = Math.min(Math.max(Math.round(p.y / SPACING), 0), area.ny - 1);
+    const ground = area.palette[area.materials[j * area.nx + i]];
+    if (!ground) return;
+    if (!ground.startsWith('@import:')) {
+        selectTexture(ground);
+        document.querySelector(`#paletteBody .swatch[data-texture="${CSS.escape(ground)}"]`)?.scrollIntoView({ block: 'nearest' });
+        say(`Picked ${library.byId.get(ground)?.name ?? ground}.`);
+        return;
+    }
+    if (readOnly) { say('You are looking at someone else\'s area: nothing can be picked up into the library.'); return; }
+    say('Picking up the ground texture…');
+    let r = {};
+    let ok = false;
+    try {
+        const res = await fetch(`/api/pick-texture?name=${encodeURIComponent(ground.slice('@import:'.length))}&x=${p.x.toFixed(2)}&y=${p.y.toFixed(2)}`, { method: 'POST' });
+        ok = res.ok;
+        r = await res.json();
+    } catch { /* r stays empty */ }
+    if (!ok) { say(r.error ?? 'Could not pick up that texture.'); return; }
+    if (r.added) {
+        await library.load();
+        buildPalette();
+    }
+    selectTexture(r.id);
+    document.querySelector(`#paletteBody .swatch[data-texture="${CSS.escape(r.id)}"]`)?.scrollIntoView({ block: 'nearest' });
+    say(r.added ? `Picked ${r.name}: added to the Tileset textures.` : `Picked ${library.byId.get(r.id)?.name ?? r.name}.`);
+}
 
 // --- Placeables --------------------------------------------------------------------
 
@@ -906,7 +952,8 @@ canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0 || !area) { dbg.note = `(ignored: button ${e.button})`; showDebug(); return; }
     // A click on a marker that shows (the Show menu) selects it, from any tool: its properties open in the Things tool, as the
     // right-click menu does. (The Place tool has its own objects to pick.)
-    if (tool !== 'things' && tool !== 'place' && !readOnly) {
+    // (Not when picking a texture up: a marker over the ground is not what is being asked about.)
+    if (tool !== 'things' && tool !== 'place' && !readOnly && !(tool === 'paint' && (picking || e.altKey))) {
         const hit = view.pickThing(e.clientX, e.clientY, true);
         if (hit != null) { e.preventDefault(); selectTool('things'); thingsTool.pick(hit); return; }
     }
@@ -952,6 +999,13 @@ canvas.addEventListener('pointerdown', e => {
             stroke = { water: w };
             try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
         }
+        return;
+    }
+    // The eyedropper (its button, the I key, or Alt-click): one click picks the texture, no paint goes down.
+    if (tool === 'paint' && (picking || e.altKey)) {
+        e.preventDefault();
+        setPicking(false);
+        pickTexture(p);
         return;
     }
     area.beginStroke();
@@ -1951,7 +2005,9 @@ window.addEventListener('keydown', e => {
         if (e.key === 'Escape') { selectObject(null); return; }
     }
     const t = Object.entries(TOOLS).find(([, v]) => v.key === e.key);
-    if (t) selectTool(t[0]);
+    if (e.key === 'Escape' && picking) setPicking(false);
+    else if (e.key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) { selectTool('paint'); setPicking(true); }
+    else if (t) selectTool(t[0]);
     else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); $('btnUndo').click(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); $('btnRedo').click(); }
     else if (e.key === '[') { sizeIn.value = +sizeIn.value - 1; showSliders(); }
