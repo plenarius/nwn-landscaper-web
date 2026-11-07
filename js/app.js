@@ -407,16 +407,19 @@ async function showImportList() {
     const box = $('importList');
     let r = { sources: [] };
     try { r = await (await fetch(`/api/import-sources?q=${encodeURIComponent($('importFind').value.trim())}`)).json(); } catch { /* none */ }
-    // Their own uploaded files come first (not while searching the module).
+    // Their own uploaded files come first, and stay while they search (filtered by the same words).
     let uploads = [];
-    if (!$('importFind').value.trim()) try { uploads = (await (await fetch('/api/uploads')).json()).uploads ?? []; } catch { /* none */ }
+    try { uploads = (await (await fetch('/api/uploads')).json()).uploads ?? []; } catch { /* none */ }
     if (mine !== importSeq) return; // a newer search is on its way
     box.textContent = '';
-    const own = uploads.flatMap(u => (u.areas ?? []).map(a => ({ ...a, upload: u.file, from: `your file ${u.file}` })));
+    const words = $('importFind').value.toLowerCase().split(/\s+/).filter(Boolean);
+    const own = uploads.flatMap(u => (u.areas ?? []).map(a => ({ ...a, upload: u.file, from: `your file ${u.file}` })))
+        .filter(a => words.every(w => `${a.tag} ${a.area} ${a.tileset} ${a.upload}`.toLowerCase().includes(w)));
     const found = [...own, ...(r.sources ?? [])];
     for (const s of found) {
         const b = document.createElement('button');
         b.type = 'button';
+        if (s.upload) { b.dataset.upload = s.upload; b.dataset.area = s.area; }
         // An admin's entries say what they come from; a builder's say whether it is theirs.
         const kind = s.kind ?? (s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors');
         const allowed = s.assigned !== false;
@@ -443,15 +446,25 @@ async function showImportList() {
 $('importFile').onchange = async () => {
     const file = $('importFile').files[0];
     if (!file || importing) return;
+    // The server keeps letters, digits and _ . - (a toolset file is often called "My Cave.erf").
+    const kept = file.name.replace(/[^A-Za-z0-9_.-]/g, '_').replace(/^\.+/, '_');
+    const ext = /\.(mod|erf)$/i.exec(kept)?.[0] ?? '';
+    const saveAs = kept.slice(0, kept.length - ext.length).slice(0, 64 - ext.length) + ext;
     $('importStatus').textContent = `Uploading ${file.name}…`;
     try {
-        const res = await fetch(`/api/upload?file=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
+        const res = await fetch(`/api/upload?file=${encodeURIComponent(saveAs)}`, { method: 'POST', body: file });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
-        $('importStatus').textContent = `${file.name}: ${r.areas.length} area${r.areas.length === 1 ? '' : 's'}. Pick one below.`;
         $('importFind').value = '';
         importChosen = null;
         await showImportList();
+        const only = r.areas.length === 1 ? [...$('importList').querySelectorAll('button')].find(b => b.dataset.upload === saveAs && b.dataset.area === r.areas[0].area) : null;
+        if (only) {
+            only.click();
+            $('importStatus').textContent = `${file.name}: its area (${r.areas[0].tag || r.areas[0].area}) is chosen. Change the name if you like, then Import.`;
+        } else {
+            $('importStatus').textContent = `${file.name}: ${r.areas.length} area${r.areas.length === 1 ? '' : 's'}, at the top of the list. Pick one.`;
+        }
     } catch (err) {
         $('importStatus').textContent = `Couldn't use ${file.name}: ${err.message}`;
     }
