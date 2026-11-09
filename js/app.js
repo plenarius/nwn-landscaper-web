@@ -373,6 +373,8 @@ $('objAngle').onchange = () => changeSelected(o => { o.bearing = +$('objAngle').
 $('objScale').onchange = () => changeSelected(o => { o.scale = Math.min(5, Math.max(0.1, +$('objScale').value || 1)); }).then(() => { showObjectPanel(view.selected); if (view.selected) { $('placeScale').value = view.selected.scale; showScale(); } });
 
 // --- Import an NWN area ----------------------------------------------------------------
+// What a list shows for an area: the name the game shows for it (when the server knows it), else its tag.
+const areaTitle = s => String(s.name || s.tag || s.area).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 let importChosen = null, importing = false, importSeq = 0, importTimer = null;
 $('btnImport').onclick = async () => {
@@ -424,7 +426,7 @@ async function showImportList() {
         const kind = s.kind ?? (s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors');
         const allowed = s.assigned !== false;
         const state = s.assigned === true ? ' · assigned to you' : allowed ? '' : ' · needs an assignment';
-        b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ' · ' + s.from : ''}${state}</small>`;
+        b.innerHTML = `<span><b>${areaTitle(s)}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ' · ' + s.from : ''}${state}</small>`;
         b.disabled = !allowed;
         if (!allowed) b.title = 'Ask an admin to assign this area to you';
         if (importChosen?.area === s.area && importChosen?.upload === s.upload) b.classList.add('selected');
@@ -1540,7 +1542,7 @@ async function testAreas() {
     for (const s of (r.sources ?? []).slice(0, 12)) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.innerHTML = `<span><b>${s.tag || s.area}</b> <small>${s.area}</small></span><small>${s.width}×${s.height}</small>`;
+        b.innerHTML = `<span><b>${areaTitle(s)}</b> <small>${s.area}</small></span><small>${s.width}×${s.height}</small>`;
         if (testPicked === s.area) b.classList.add('selected');
         b.onclick = async () => {
             for (const o of box.children) o.classList.toggle('selected', o === b);

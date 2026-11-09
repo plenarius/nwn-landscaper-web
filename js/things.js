@@ -1039,7 +1039,11 @@ ThingsTool.prototype.destinationPicker = function (t, input) {
             for (const s of (r.sources ?? []).slice(0, 8)) {
                 const b = document.createElement('button');
                 b.type = 'button';
-                b.innerHTML = `<b>${s.tag || s.area}</b> <small>${s.area}</small>`;
+                const title = document.createElement('b');
+                title.textContent = s.name || s.tag || s.area;
+                const small = document.createElement('small');
+                small.textContent = s.area;
+                b.append(title, ' ', small);
                 b.onclick = async () => {
                     note.textContent = `Waypoints of ${s.area}…`;
                     const w = await fetch(`/api/dev-test/waypoints?area=${encodeURIComponent(s.area)}`).then(json).catch(() => ({}));
