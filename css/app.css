@@ -281,9 +281,24 @@ input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #00
 #importDialog { width: min(1000px, 92vw); }
 #openDialog { width: min(760px, 92vw); }
 #importDialog input { box-sizing: border-box; width: 100%; }
-.import-list { max-height: 50vh; min-width: 0; }
+.import-list { max-height: 40vh; min-width: 0; }
 .import-list button.selected { border-color: var(--accent); background: #3d3a30; }
 #importStatus:empty { display: none; }
+/* The two ways to bring an area in, set apart: the module's areas, then (after an "or") one's own file. */
+.import-src { border: 1px solid #000; border-radius: 10px; padding: 12px 14px; background: rgba(255, 255, 255, 0.02); }
+.import-src h3 { margin: 0 0 8px; font-size: 15px; }
+.import-src label { margin-top: 0; }
+.import-or { display: flex; align-items: center; gap: 10px; margin: 10px 0; color: var(--muted); font-size: 13px; }
+.import-or::before, .import-or::after { content: ""; flex: 1; border-top: 1px solid #3a4452; }
+.import-own { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.import-own h3 { margin-bottom: 4px; }
+.import-own small { display: block; color: var(--muted); }
+.file-pick { position: relative; margin: 0 !important; flex: none; padding: 8px 14px; background: var(--panel-2); border: 1px solid #000; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.file-pick:hover { background: #3a4452; }
+.file-pick:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+#importDialog .file-pick input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.import-name { margin-top: 14px; }
+@media (max-width: 560px) { .import-own { flex-direction: column; align-items: stretch; } .file-pick { text-align: center; } }
 .size-free { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 .size-free label { display: flex; align-items: center; gap: 6px; margin: 0; }
 .size-free input { width: 4.5em; }

@@ -364,12 +364,21 @@
         <form method="dialog">
             <h2>Import an NWN area</h2>
             <p class="note">Its ground, cliffs, trees and water come in on the tileset's own textures; its placeables, creatures, doors and scripts come with it on export.</p>
-            <label>Find <small>by tag, resref or tileset</small>
-                <input id="importFind" placeholder="e.g. bay, ttr01, forest" autocomplete="off"></label>
-            <div id="importList" class="open-list import-list"></div>
-            <label class="upload-row">Or bring your own <small>a .mod or .erf from the toolset (no new haks); its areas show first in the list</small>
-                <input type="file" id="importFile" accept=".mod,.erf"></label>
-            <label>Name <small>1–9 letters, digits or _ for the new area (prefixes every resref)</small>
+            <section class="import-src">
+                <h3>From the module</h3>
+                <label>Find <small>by name, tag, resref or tileset</small>
+                    <input id="importFind" placeholder="e.g. forest of fog, ttr01, bay" autocomplete="off"></label>
+                <div id="importList" class="open-list import-list"></div>
+            </section>
+            <div class="import-or"><span>or</span></div>
+            <section class="import-src import-own">
+                <div>
+                    <h3>From your own file</h3>
+                    <small>A .mod or .erf saved from the toolset (no new haks). Its areas then show at the top of the list above.</small>
+                </div>
+                <label class="file-pick"><input type="file" id="importFile" accept=".mod,.erf">Choose a .mod or .erf…</label>
+            </section>
+            <label class="import-name">Name <small>1–9 letters, digits or _ for the new area (prefixes every resref)</small>
                 <input id="importName" pattern="[a-z0-9_]{1,9}" maxlength="9"></label>
             <p id="importStatus" class="note"></p>
             <menu>
