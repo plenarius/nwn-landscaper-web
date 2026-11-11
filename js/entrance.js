@@ -69,7 +69,7 @@ export function carve(area, e, rock) {
     const n = area.nx,
         h = area.heights;
     const half = e.width / 2;
-    // The walls' outline: from just inside the mouth to behind the back.
+    // The walls' outline: from the mouth (u = -0.5) to behind the back.
     const r = { u0: -0.5, u1: e.depth + WALL, v: half + WALL };
     const reach = Math.hypot(e.depth + WALL, half + WALL) + ROOF / MOUND_SLOPE + 1;
     const i0 = Math.max(0, Math.floor((e.x - reach) / SPACING)),

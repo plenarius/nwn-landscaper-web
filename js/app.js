@@ -1204,7 +1204,7 @@ function entranceDown(e, p) {
     ent.floor = area.heightAt(ent.x, ent.y);
     area.beginStroke();
     area.entrances.push(ent);
-    // Rock that suits the slope: what's painted just behind the mouth.
+    // Rock that suits the slope: what's painted right behind the mouth.
     const [bx, by] = entranceAt(ent, ent.depth + 2, 0);
     const bi = Math.min(area.nx - 1, Math.max(0, Math.round(bx / SPACING))),
         bj = Math.min(area.ny - 1, Math.max(0, Math.round(by / SPACING)));
@@ -1870,7 +1870,7 @@ $('btnPublish').onclick = async () => {
     const dlg = $('publishDialog');
     $('pubLinks').textContent = '';
     $('pubGo').disabled = false;
-    // A module of several exported areas can go as one set.
+    // A module of two or more exported areas can go as one set.
     $('pubWhole').checked = false;
     $('pubWholeRow').hidden = true;
     try {
@@ -1881,7 +1881,7 @@ $('btnPublish').onclick = async () => {
             $('pubWholeNames').textContent = `(${same.map(a => a.name).join(', ')})`;
         }
     } catch {
-        /* just the one area */
+        /* the list fails to load: publish only this area */
     }
     dlg.showModal();
     await pubCheck();
@@ -2055,7 +2055,7 @@ $('btnTest').onclick = async () => {
         for (const a of mine.filter(a => a.exported && (a.module || a.name) === (area.module || area.name)))
             entry.add(new Option(a.name, a.name));
     } catch {
-        /* just the first */
+        /* the list fails to load: offer only "the first area" */
     }
     $('testStatus').textContent = 'Checking the dev server…';
     $('testDialog').showModal();

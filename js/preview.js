@@ -4,7 +4,7 @@
 // Thumbnails of what a blueprint looks like: a creature is baked by the server (nwn-bake, through the ops API)
 // into a scene of meshes and textures, which one hidden WebGL renderer draws from the front into a small picture.
 // One at a time (the server bakes one at a time too), each kept for the page's life; a creature it can't show
-// resolves to null and its entry simply has no picture.
+// resolves to null and its entry has no picture.
 
 import * as THREE from 'three';
 

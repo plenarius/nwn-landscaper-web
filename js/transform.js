@@ -9,7 +9,7 @@
 // control, Ctrl snaps. Mouse: the same three, from handles drawn on the object (two arrows, a
 // square, a ring and a corner box): press on one and drag.
 //
-// Everything goes through one `begin(mode, axis)`; the handles just begin it with the button held.
+// Everything goes through one `begin(mode, axis)`; the handles call it with the button held.
 
 import * as THREE from 'three';
 

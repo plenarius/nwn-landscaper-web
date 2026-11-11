@@ -5,7 +5,8 @@
 // Terrain filters that change a height field in place: smooth, sharpen, erode, terrace, ridged, invert, clamp, normalise,
 // noise and hydraulic erosion. Nothing imports this file today.
 // ergin3d's file from https://github.com/ergin3d/heightmap-generator (MIT), the project this one was forked from.
-// Changed here: the import of simplex-noise points at vendor/, and Biome formatted it and fixed its lint findings.
+// Changed here: the import of simplex-noise points at vendor/, Biome formatted it and fixed its lint findings, and the
+// em dashes in its comments are colons.
 
 import { createNoise2D } from '../vendor/simplex-noise/simplex-noise.js';
 
@@ -48,7 +49,7 @@ function idx(x, y, size) {
 }
 
 /**
- * Gaussian-like blur — averages neighbors. Multiple passes for stronger effect.
+ * Gaussian-like blur: averages neighbors. Multiple passes for stronger effect.
  */
 function smooth(data, size, strength) {
     const passes = Math.max(1, Math.round(strength * 8));
@@ -74,7 +75,7 @@ function smooth(data, size, strength) {
 }
 
 /**
- * Sharpen — enhances edges by subtracting blurred version.
+ * Sharpen: enhances edges by subtracting blurred version.
  */
 function sharpen(data, size, strength) {
     const blurred = new Float32Array(data);
@@ -87,7 +88,7 @@ function sharpen(data, size, strength) {
 }
 
 /**
- * Thermal erosion — material flows from steep to low neighbors.
+ * Thermal erosion: material flows from steep to low neighbors.
  * Uses its own UI settings for iterations, talus, transfer rate, and radius.
  */
 function erode(data, size, strength) {
@@ -147,7 +148,7 @@ function erode(data, size, strength) {
 }
 
 /**
- * Terrace — quantizes heights into steps like rice paddies.
+ * Terrace: quantizes heights into steps like rice paddies.
  */
 function terrace(data, _size, strength) {
     const levels = Math.max(2, Math.round(3 + strength * 15));
@@ -159,7 +160,7 @@ function terrace(data, _size, strength) {
 }
 
 /**
- * Ridged — creates sharp ridgelines from the noise (abs + invert).
+ * Ridged: creates sharp ridgelines from the noise (abs + invert).
  */
 function ridged(data, _size, strength) {
     for (let i = 0; i < data.length; i++) {
@@ -172,7 +173,7 @@ function ridged(data, _size, strength) {
 }
 
 /**
- * Invert — flips heights (valleys become peaks).
+ * Invert: flips heights (valleys become peaks).
  */
 function invert(data, _size, strength) {
     for (let i = 0; i < data.length; i++) {
@@ -182,7 +183,7 @@ function invert(data, _size, strength) {
 }
 
 /**
- * Clamp extremes — pushes values toward mid-range, reducing extreme peaks/valleys.
+ * Clamp extremes: pushes values toward mid-range, reducing extreme peaks/valleys.
  */
 function clamp(data, _size, strength) {
     const low = strength * 0.3;
@@ -197,7 +198,7 @@ function clamp(data, _size, strength) {
 }
 
 /**
- * Normalize — stretches the height range to fill full [0,1].
+ * Normalize: stretches the height range to fill full [0,1].
  */
 function normalize(data, _size, strength) {
     let min = Infinity,
@@ -225,7 +226,7 @@ function mulberry32(seed) {
 }
 
 /**
- * Add noise — overlays fractal simplex noise on the existing terrain
+ * Add noise: overlays fractal simplex noise on the existing terrain
  * using its own seed, octaves, scale, persistence, and lacunarity.
  */
 function addNoise(data, size, strength) {
@@ -311,7 +312,7 @@ function computeGradient(data, size, x, y) {
 }
 
 /**
- * Hydraulic (river) erosion — simulates water droplets flowing downhill,
+ * Hydraulic (river) erosion: simulates water droplets flowing downhill,
  * eroding terrain and depositing sediment to carve realistic river channels.
  */
 function hydraulic(data, size, strength) {

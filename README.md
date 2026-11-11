@@ -43,8 +43,8 @@ brave-browser --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   ground it picks that texture; on an imported area it picks the tileset's own texture under the click and adds it to the library
   (under **Tileset**) the first time.
 - **Caves and interiors**: cut rooms and passages out of the rock with Room and Dig (passages about 6 m wide at least, along tile
-  middles), lay a Ramp between levels (a little wider than the passage), or drag a box with Descent to fill it with halls that step
-  down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See
+  middles). Lay a Ramp between levels (a little wider than the passage), or drag a box with Descent to fill it with halls that
+  step down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See
   landscaper's [BUILDER-WORKFLOW.md](https://github.com/plenarius/landscaper/blob/master/docs/BUILDER-WORKFLOW.md) for the rules and the limits.
 - **Walkable** (`W`) tints ground too steep for NWN creatures in red, by the same rule the exporter
   uses. The status bar shows position, height, tile and walkability under the cursor.
@@ -69,9 +69,9 @@ Vendored, unmodified, each with its own `LICENSE`:
 - `vendor/three`: [three.js](https://threejs.org/) r170 (npm `three` 0.170.0: `build/three.module.js` and
   `examples/jsm/controls/OrbitControls.js`), MIT.
 - `vendor/simplex-noise`: [simplex-noise](https://github.com/jwagner/simplex-noise.js) 4.0.3 (`dist/esm/simplex-noise.js`), MIT.
-- `vendor/codemirror`: [CodeMirror](https://codemirror.net/) 6 for the script editor, one file bundled with esbuild 0.28.2 from
-  `codemirror` 6.0.2, `@codemirror/view` 6.43.15, `@codemirror/state` 6.7.6, `@codemirror/lint` 6.9.7, `@codemirror/lang-cpp`
-  6.0.3 and `@codemirror/theme-one-dark` 6.1.3, with the packages they pull in; all MIT.
+- `vendor/codemirror`: [CodeMirror](https://codemirror.net/) 6 for the script editor, all MIT. It is one file that esbuild 0.28.2
+  bundled from `codemirror` 6.0.2, `@codemirror/view` 6.43.15, `@codemirror/state` 6.7.6, `@codemirror/lint` 6.9.7,
+  `@codemirror/lang-cpp` 6.0.3 and `@codemirror/theme-one-dark` 6.1.3, with the packages they pull in.
   [vendor/codemirror/README.md](vendor/codemirror/README.md) lists every version and how to rebuild it.
 
 ## Licence
