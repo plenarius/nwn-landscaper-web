@@ -3,7 +3,8 @@
 Sculpt a Neverwinter Nights area in the browser and export it as an area with its own generated
 tileset (hak + module), checked against NWN's pathfinding. This repository is the page (three.js, no build step); the
 engine that reads the game, builds the areas and serves this page is [landscaper](https://github.com/plenarius/landscaper),
-a separate repository (Rust). The page talks to it over HTTP and does nothing without it.
+a separate repository (Rust). The page talks to it over HTTP. Sculpting and painting work in the page alone; importing,
+exporting, the path check, the texture library, the game's models and blueprints need the engine.
 
 ## You need
 
