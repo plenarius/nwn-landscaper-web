@@ -6,7 +6,11 @@ import { EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, o
 import { ask } from './ask.js';
 
 const json = r => r.json().catch(() => ({}));
-const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+const el = (tag, props = {}, ...kids) => {
+    const e = Object.assign(document.createElement(tag), props);
+    e.append(...kids);
+    return e;
+};
 
 let canWrite = null;
 export async function scriptsWritable() {
@@ -26,7 +30,10 @@ export async function openScript(resref, onMade = null) {
     dlg.showModal();
     const res = await fetch(`/api/script?resref=${encodeURIComponent(resref)}&any=1`);
     const d = await json(res);
-    if (!res.ok) { host.textContent = d.error || res.statusText; return; }
+    if (!res.ok) {
+        host.textContent = d.error || res.statusText;
+        return;
+    }
     host.textContent = '';
     // One that isn't yours (the module's or the game's) is shown to read, with a button to make your own copy.
     const mineAlready = !!d.mine;
@@ -34,7 +41,9 @@ export async function openScript(resref, onMade = null) {
     copy.hidden = mineAlready;
     document.getElementById('scriptDelete').hidden = !mineAlready;
     document.getElementById('scriptTitle').textContent = mineAlready ? `Script ${resref}` : `Script ${resref} (read only)`;
-    let timer = null, saving = Promise.resolve(), view = null;
+    let timer = null,
+        saving = Promise.resolve(),
+        view = null;
     const show = r => {
         const doc = view.state.doc;
         if (r.ok === false && r.error) {
@@ -56,26 +65,49 @@ export async function openScript(resref, onMade = null) {
     const save = () => {
         clearTimeout(timer);
         const text = view.state.doc.toString();
-        saving = saving.then(async () => show(await json(await fetch(`/api/script-save?resref=${encodeURIComponent(resref)}`, { method: 'POST', body: text }))));
+        saving = saving.then(async () =>
+            show(await json(await fetch(`/api/script-save?resref=${encodeURIComponent(resref)}`, { method: 'POST', body: text }))),
+        );
         return saving;
     };
     view = new EditorView({
         parent: host,
         state: EditorState.create({
             doc: d.source,
-            extensions: [basicSetup, cpp(), oneDark, lintGutter(), ...(mineAlready ? [] : [EditorState.readOnly.of(true), EditorView.editable.of(false)]), EditorView.updateListener.of(u => {
-                if (u.docChanged && mineAlready) { status.className = 'note'; status.textContent = 'Saving…'; clearTimeout(timer); timer = setTimeout(save, 700); }
-            })],
+            extensions: [
+                basicSetup,
+                cpp(),
+                oneDark,
+                lintGutter(),
+                ...(mineAlready ? [] : [EditorState.readOnly.of(true), EditorView.editable.of(false)]),
+                EditorView.updateListener.of(u => {
+                    if (u.docChanged && mineAlready) {
+                        status.className = 'note';
+                        status.textContent = 'Saving…';
+                        clearTimeout(timer);
+                        timer = setTimeout(save, 700);
+                    }
+                }),
+            ],
         }),
     });
-    if (mineAlready) save(); else { status.className = 'note'; status.textContent = `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`; }
+    if (mineAlready) save();
+    else {
+        status.className = 'note';
+        status.textContent = `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`;
+    }
     copy.onclick = async () => {
         let made = null;
         const ok = await ask({
-            title: 'Make your own copy', text: `A script of yours that starts as a copy of ${resref}. Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
-            ok: 'Make the copy', input: { label: 'Name', placeholder: 'e.g. my_spawn' },
+            title: 'Make your own copy',
+            text: `A script of yours that starts as a copy of ${resref}. Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
+            ok: 'Make the copy',
+            input: { label: 'Name', placeholder: 'e.g. my_spawn' },
             submit: async name => {
-                const res2 = await fetch(`/api/script?resref=${encodeURIComponent(name.toLowerCase())}&from=${encodeURIComponent(resref)}&kind=action`, { method: 'POST' });
+                const res2 = await fetch(
+                    `/api/script?resref=${encodeURIComponent(name.toLowerCase())}&from=${encodeURIComponent(resref)}&kind=action`,
+                    { method: 'POST' },
+                );
                 const r2 = await json(res2);
                 if (!res2.ok) return r2.error || res2.statusText;
                 made = r2.resref;
@@ -87,12 +119,25 @@ export async function openScript(resref, onMade = null) {
         await openScript(made, onMade);
     };
     document.getElementById('scriptDelete').onclick = async () => {
-        if (!await ask({ title: `Delete ${resref}?`, text: `Anything that names it will then name a script that isn't there.`, ok: 'Delete it', danger: true })) return;
+        if (
+            !(await ask({
+                title: `Delete ${resref}?`,
+                text: `Anything that names it will then name a script that isn't there.`,
+                ok: 'Delete it',
+                danger: true,
+            }))
+        )
+            return;
         await fetch(`/api/script-delete?resref=${encodeURIComponent(resref)}`, { method: 'POST' });
         dlg.close();
     };
     await new Promise(done => {
-        const close = async () => { dlg.removeEventListener('close', close); if (mineAlready) await save(); view.destroy(); done(); };
+        const close = async () => {
+            dlg.removeEventListener('close', close);
+            if (mineAlready) await save();
+            view.destroy();
+            done();
+        };
         dlg.addEventListener('close', close);
     });
 }
@@ -113,27 +158,46 @@ export function scriptPicker(input, kind = 'action') {
             if (q.length < 2) return;
             const r = await json(await fetch(`/api/scripts?q=${encodeURIComponent(q)}`));
             list.textContent = '';
-            for (const s of r.scripts ?? []) list.appendChild(new Option(s.source === 'mine' ? `${s.resref} (yours)` : s.folder ? `${s.resref} · ${s.folder}` : s.resref, s.resref));
+            for (const s of r.scripts ?? [])
+                list.appendChild(
+                    new Option(s.source === 'mine' ? `${s.resref} (yours)` : s.folder ? `${s.resref} · ${s.folder}` : s.resref, s.resref),
+                );
         }, 250);
     });
     const row = el('span', { className: 'scriptbtns' }, list);
     scriptsWritable().then(ok => {
         if (!ok) return;
         const b = el('button', { type: 'button', className: 'small' });
-        const mine = async () => ((await json(await fetch(`/api/scripts?q=${encodeURIComponent(input.value.trim().toLowerCase())}`))).scripts ?? []).some(s => s.source === 'mine' && s.resref === input.value.trim().toLowerCase());
-        const sync = async () => { b.textContent = (await mine()) ? 'Edit script' : input.value.trim() ? 'View script' : 'Write a script'; };
+        const mine = async () =>
+            ((await json(await fetch(`/api/scripts?q=${encodeURIComponent(input.value.trim().toLowerCase())}`))).scripts ?? []).some(
+                s => s.source === 'mine' && s.resref === input.value.trim().toLowerCase(),
+            );
+        const sync = async () => {
+            b.textContent = (await mine()) ? 'Edit script' : input.value.trim() ? 'View script' : 'Write a script';
+        };
         sync();
         input.addEventListener('change', sync);
         b.onclick = async () => {
             const name = input.value.trim().toLowerCase();
-            const made = r => { input.value = r; input.dispatchEvent(new Event('change')); };
-            if (name) { await openScript(name, made); sync(); return; }
+            const made = r => {
+                input.value = r;
+                input.dispatchEvent(new Event('change'));
+            };
+            if (name) {
+                await openScript(name, made);
+                sync();
+                return;
+            }
             let created = null;
             const ok = await ask({
-                title: 'Write a script', text: `A new script of yours (${kind === 'condition' ? 'a condition, which answers yes or no' : 'an action, which does something'}). Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
-                ok: 'Start writing', input: { label: 'Name', placeholder: 'e.g. my_spawn' },
+                title: 'Write a script',
+                text: `A new script of yours (${kind === 'condition' ? 'a condition, which answers yes or no' : 'an action, which does something'}). Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
+                ok: 'Start writing',
+                input: { label: 'Name', placeholder: 'e.g. my_spawn' },
                 submit: async pick => {
-                    const res = await fetch(`/api/script?resref=${encodeURIComponent(pick.toLowerCase())}&from=&kind=${kind}`, { method: 'POST' });
+                    const res = await fetch(`/api/script?resref=${encodeURIComponent(pick.toLowerCase())}&from=&kind=${kind}`, {
+                        method: 'POST',
+                    });
                     const r = await json(res);
                     if (!res.ok) return r.error || res.statusText;
                     created = r.resref;

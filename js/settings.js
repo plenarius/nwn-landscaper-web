@@ -7,15 +7,29 @@
 import { renderVars } from './vars.js';
 import { scriptPicker } from './scripts.js';
 
-const PVP = [[0, 'No PvP'], [1, 'Party only'], [2, 'Full PvP'], [3, "The module's setting"]];
-const WIND = [[0, 'None'], [1, 'Light'], [2, 'Strong']];
+const PVP = [
+    [0, 'No PvP'],
+    [1, 'Party only'],
+    [2, 'Full PvP'],
+    [3, "The module's setting"],
+];
+const WIND = [
+    [0, 'None'],
+    [1, 'Light'],
+    [2, 'Strong'],
+];
 
 const get = (o, path, d = '') => path.split('.').reduce((v, k) => v?.[k], o) ?? d;
-const put = (o, path, v) => { const ks = path.split('.'); let t = o; for (const k of ks.slice(0, -1)) t = t[k] ??= {}; t[ks.at(-1)] = v; };
+const put = (o, path, v) => {
+    const ks = path.split('.');
+    let t = o;
+    for (const k of ks.slice(0, -1)) t = t[k] ??= {};
+    t[ks.at(-1)] = v;
+};
 
 const FIELDS = [
     { h: 'The area' },
-    { p: 'name', t: 'text', l: 'Name', max: 60, note: 'what players see; empty keeps the original\'s' },
+    { p: 'name', t: 'text', l: 'Name', max: 60, note: "what players see; empty keeps the original's" },
     { p: 'tag', t: 'text', l: 'Tag', max: 32, note: 'what scripts call it' },
     { p: 'comments', t: 'text', l: 'Comments', max: 200 },
     { h: 'Scripts' },
@@ -50,7 +64,8 @@ const FIELDS = [
 
 /** Opens the dialog for `area`. `template`: what a new area starts with; `onSave()` after OK. */
 export function openSettings(area, template, lists, onSave) {
-    const dlg = document.getElementById('settingsDialog'), body = document.getElementById('settingsBody');
+    const dlg = document.getElementById('settingsDialog'),
+        body = document.getElementById('settingsBody');
     const base = structuredClone(area.settings ?? {});
     const current = structuredClone(area.settings ?? template ?? {});
     delete current._note;
@@ -87,7 +102,10 @@ export function openSettings(area, template, lists, onSave) {
             input = document.createElement('input');
             input.type = f.t === 'check' ? 'checkbox' : f.t;
             if (f.max && f.t === 'text') input.maxLength = f.max;
-            if (f.t === 'number') { if (f.min != null) input.min = f.min; if (f.max != null) input.max = f.max; }
+            if (f.t === 'number') {
+                if (f.min != null) input.min = f.min;
+                if (f.max != null) input.max = f.max;
+            }
             if (f.t === 'check') input.checked = !!get(current, f.p, false);
             else input.value = get(current, f.p, f.t === 'number' ? 0 : '');
         }
@@ -106,7 +124,15 @@ export function openSettings(area, template, lists, onSave) {
     body.append(vh, vbox);
     const vars = structuredClone(current.vars ?? []);
     let varsChanged = false;
-    const drawVars = () => { vbox.textContent = ''; renderVars(vbox, vars, { after: () => { varsChanged = true; }, redraw: drawVars }); };
+    const drawVars = () => {
+        vbox.textContent = '';
+        renderVars(vbox, vars, {
+            after: () => {
+                varsChanged = true;
+            },
+            redraw: drawVars,
+        });
+    };
     drawVars();
     const ok = document.getElementById('settingsOk');
     ok.onclick = () => {

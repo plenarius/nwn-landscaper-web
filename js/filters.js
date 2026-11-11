@@ -9,17 +9,28 @@ import { createNoise2D } from '../vendor/simplex-noise/simplex-noise.js';
  */
 export function applyFilter(data, size, type, strength) {
     switch (type) {
-        case 'smooth': return smooth(data, size, strength);
-        case 'sharpen': return sharpen(data, size, strength);
-        case 'erode': return erode(data, size, strength);
-        case 'terrace': return terrace(data, size, strength);
-        case 'ridged': return ridged(data, size, strength);
-        case 'invert': return invert(data, size, strength);
-        case 'clamp': return clamp(data, size, strength);
-        case 'normalize': return normalize(data, size, strength);
-        case 'noise': return addNoise(data, size, strength);
-        case 'hydraulic': return hydraulic(data, size, strength);
-        default: return;
+        case 'smooth':
+            return smooth(data, size, strength);
+        case 'sharpen':
+            return sharpen(data, size, strength);
+        case 'erode':
+            return erode(data, size, strength);
+        case 'terrace':
+            return terrace(data, size, strength);
+        case 'ridged':
+            return ridged(data, size, strength);
+        case 'invert':
+            return invert(data, size, strength);
+        case 'clamp':
+            return clamp(data, size, strength);
+        case 'normalize':
+            return normalize(data, size, strength);
+        case 'noise':
+            return addNoise(data, size, strength);
+        case 'hydraulic':
+            return hydraulic(data, size, strength);
+        default:
+            return;
     }
 }
 
@@ -182,7 +193,8 @@ function clamp(data, size, strength) {
  * Normalize — stretches the height range to fill full [0,1].
  */
 function normalize(data, size, strength) {
-    let min = Infinity, max = -Infinity;
+    let min = Infinity,
+        max = -Infinity;
     for (let i = 0; i < data.length; i++) {
         if (data[i] < min) min = data[i];
         if (data[i] > max) max = data[i];
@@ -246,9 +258,12 @@ function addNoise(data, size, strength) {
  * Get height at a fractional position using bilinear interpolation.
  */
 function sampleHeight(data, size, x, y) {
-    const x0 = Math.floor(x), y0 = Math.floor(y);
-    const x1 = Math.min(x0 + 1, size - 1), y1 = Math.min(y0 + 1, size - 1);
-    const fx = x - x0, fy = y - y0;
+    const x0 = Math.floor(x),
+        y0 = Math.floor(y);
+    const x1 = Math.min(x0 + 1, size - 1),
+        y1 = Math.min(y0 + 1, size - 1);
+    const fx = x - x0,
+        fy = y - y0;
 
     const cx0 = Math.max(0, Math.min(size - 1, x0));
     const cy0 = Math.max(0, Math.min(size - 1, y0));
@@ -266,9 +281,12 @@ function sampleHeight(data, size, x, y) {
  * Returns { gx, gy } pointing in the direction of steepest descent.
  */
 function computeGradient(data, size, x, y) {
-    const x0 = Math.floor(x), y0 = Math.floor(y);
-    const x1 = Math.min(x0 + 1, size - 1), y1 = Math.min(y0 + 1, size - 1);
-    const fx = x - x0, fy = y - y0;
+    const x0 = Math.floor(x),
+        y0 = Math.floor(y);
+    const x1 = Math.min(x0 + 1, size - 1),
+        y1 = Math.min(y0 + 1, size - 1);
+    const fx = x - x0,
+        fy = y - y0;
 
     const cx0 = Math.max(0, Math.min(size - 1, x0));
     const cy0 = Math.max(0, Math.min(size - 1, y0));
@@ -305,13 +323,15 @@ function hydraulic(data, size, strength) {
         // Random starting position
         let posX = rng() * (size - 2) + 1;
         let posY = rng() * (size - 2) + 1;
-        let dirX = 0, dirY = 0;
+        let dirX = 0,
+            dirY = 0;
         let speed = 1;
         let water = 1;
         let sediment = 0;
 
         for (let step = 0; step < maxLife; step++) {
-            const xi = Math.floor(posX), yi = Math.floor(posY);
+            const xi = Math.floor(posX),
+                yi = Math.floor(posY);
 
             // Compute gradient
             const grad = computeGradient(data, size, posX, posY);
@@ -349,9 +369,10 @@ function hydraulic(data, size, strength) {
 
             if (sediment > capacity || deltaH > 0) {
                 // Deposit sediment
-                const depositAmount = deltaH > 0
-                    ? Math.min(sediment, deltaH) // Fill up to new height
-                    : (sediment - capacity) * depositRate;
+                const depositAmount =
+                    deltaH > 0
+                        ? Math.min(sediment, deltaH) // Fill up to new height
+                        : (sediment - capacity) * depositRate;
 
                 sediment -= depositAmount;
 
@@ -369,7 +390,8 @@ function hydraulic(data, size, strength) {
                 const weights = [];
                 for (let dy = -radius; dy <= radius; dy++) {
                     for (let dx = -radius; dx <= radius; dx++) {
-                        const ex = xi + dx, ey = yi + dy;
+                        const ex = xi + dx,
+                            ey = yi + dy;
                         if (ex < 0 || ex >= size || ey < 0 || ey >= size) continue;
                         const dist = Math.sqrt(dx * dx + dy * dy);
                         if (dist > radius) continue;
@@ -392,7 +414,7 @@ function hydraulic(data, size, strength) {
             speed = Math.sqrt(Math.max(0, speed * speed + deltaH));
 
             // Evaporate water
-            water *= (1 - evapRate);
+            water *= 1 - evapRate;
 
             // Move
             posX = newX;

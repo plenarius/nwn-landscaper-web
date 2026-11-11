@@ -8,7 +8,7 @@ const LAYER = 512;
 
 export class TextureLibrary {
     constructor() {
-        this.catalog = [];      // [{ id, name, category, render, swatch, ... }]
+        this.catalog = []; // [{ id, name, category, render, swatch, ... }]
         this.byId = new Map();
         this.pixels = new Map(); // id -> Promise<Uint8ClampedArray> (LAYER² RGBA)
     }
@@ -26,14 +26,19 @@ export class TextureLibrary {
         return this.catalog.length > 0;
     }
 
-    swatchUrl(id) { return `textures/${this.byId.get(id).swatch}`; }
+    swatchUrl(id) {
+        return `textures/${this.byId.get(id).swatch}`;
+    }
 
     /** RGBA pixels of a texture at the layer size. */
     layerPixels(id) {
         if (!this.pixels.has(id)) {
             const t = this.byId.get(id);
             const p = new Promise((resolve, reject) => {
-                if (!t) { reject(new Error(`no texture '${id}' in the library`)); return; }
+                if (!t) {
+                    reject(new Error(`no texture '${id}' in the library`));
+                    return;
+                }
                 const img = new Image();
                 img.onload = () => {
                     const c = document.createElement('canvas');
@@ -53,12 +58,19 @@ export class TextureLibrary {
     /** A texture array with layer k = palette[k]; unknown ids are grey. */
     async buildArray(palette) {
         const data = new Uint8Array(LAYER * LAYER * 4 * palette.length);
-        await Promise.all(palette.map(async (id, k) => {
-            let px;
-            try { px = await this.layerPixels(id); } catch (err) { console.warn(err.message); px = null; }
-            if (px) data.set(px, k * LAYER * LAYER * 4);
-            else data.fill(128, k * LAYER * LAYER * 4, (k + 1) * LAYER * LAYER * 4);
-        }));
+        await Promise.all(
+            palette.map(async (id, k) => {
+                let px;
+                try {
+                    px = await this.layerPixels(id);
+                } catch (err) {
+                    console.warn(err.message);
+                    px = null;
+                }
+                if (px) data.set(px, k * LAYER * LAYER * 4);
+                else data.fill(128, k * LAYER * LAYER * 4, (k + 1) * LAYER * LAYER * 4);
+            }),
+        );
         const tex = new THREE.DataArrayTexture(data, LAYER, LAYER, palette.length);
         tex.format = THREE.RGBAFormat;
         tex.type = THREE.UnsignedByteType;

@@ -18,19 +18,44 @@ export function renderVars(box, vars, { before = () => {}, after = () => {}, red
         row.className = 'varrow';
         const name = Object.assign(document.createElement('input'), { value: v.name, maxLength: 32, placeholder: 'name' });
         name.dataset.keep = keep;
-        name.onchange = () => { before(); v.name = name.value.trim(); after(); };
+        name.onchange = () => {
+            before();
+            v.name = name.value.trim();
+            after();
+        };
         const type = document.createElement('select');
         for (const o of ['int', 'float', 'string']) type.add(new Option(o, o, false, v.type === o));
-        type.onchange = () => { before(); v.type = type.value; v.value = coerce(v); after(); redraw(); };
+        type.onchange = () => {
+            before();
+            v.type = type.value;
+            v.value = coerce(v);
+            after();
+            redraw();
+        };
         const val = Object.assign(document.createElement('input'), { value: v.value });
         val.dataset.keep = keep;
-        val.onchange = () => { before(); v.value = coerce({ type: v.type, value: val.value }); after(); redraw(); };
+        val.onchange = () => {
+            before();
+            v.value = coerce({ type: v.type, value: val.value });
+            after();
+            redraw();
+        };
         const del = Object.assign(document.createElement('button'), { type: 'button', textContent: '×' });
-        del.onclick = () => { before(); vars.splice(n, 1); after(); redraw(); };
+        del.onclick = () => {
+            before();
+            vars.splice(n, 1);
+            after();
+            redraw();
+        };
         row.append(name, type, val, del);
         box.appendChild(row);
     });
     const add = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Add a variable' });
-    add.onclick = () => { before(); vars.push({ name: '', type: 'int', value: 0 }); after(); redraw(); };
+    add.onclick = () => {
+        before();
+        vars.push({ name: '', type: 'int', value: 0 });
+        after();
+        redraw();
+    };
     box.appendChild(add);
 }
