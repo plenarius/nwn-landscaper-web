@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// Thumbnails of what a blueprint looks like: a creature is baked by the server (nwn-bake, through the ops API)
+// Thumbnails of what a blueprint looks like: a creature is baked by the server (nwn-bake, through the review service)
 // into a scene of meshes and textures, which one hidden WebGL renderer draws from the front into a small picture.
 // One at a time (the server bakes one at a time too), each kept for the page's life; a creature it can't show
 // resolves to null and its entry has no picture.
@@ -122,7 +122,7 @@ export async function modelPreview(models, kind, resref) {
     }
 }
 
-/** An item blueprint's inventory icon (the ops API says which one it is and draws it): a URL, or null. */
+/** An item blueprint's inventory icon (the review service says which one it is and draws it): a URL, or null. */
 const icons = new Map();
 export function itemPreview(resref) {
     if (!icons.has(resref)) {

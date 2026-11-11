@@ -1832,7 +1832,7 @@ async function pubCheck() {
     pubShow(`Checking ${whole ? `module ${area.module}` : area.name}${me.package ? '' : ' with the publishing service'}…`, 'work');
     try {
         const { plan, findings = [] } = await publishCall(true);
-        // What the pull request will say about it (the ops API writes it: what is new, or what changed against production).
+        // What the pull request will say about it (the review service writes it: what is new, or what changed against production).
         $('pubReview').textContent = (plan.review ?? '').replace(/^### /gm, '').replace(/[*`]/g, '');
         $('pubReviewBox').hidden = !plan.review;
         const errors = findings.filter(f => f.level === 'error').length;
@@ -1932,12 +1932,10 @@ $('pubGo').onclick = async () => {
     pubShow('Opening the pull requests (this can take a minute: it uploads the tile files)…', 'work');
     try {
         const { pr_urls } = await publishCall(false);
-        pubShow('Done. Two pull requests were opened, linked to each other:', 'ok');
+        pubShow('Done. The review service opened these pull requests:', 'ok');
         $('pubGo').hidden = true;
-        for (const [label, url] of [
-            ['nwn-module', pr_urls.nwn_module],
-            ['nwn-haks', pr_urls.nwn_haks],
-        ]) {
+        // One link per repository, under the name the review service gives it (the engine passes its answer on as it is).
+        for (const [label, url] of Object.entries(pr_urls ?? {})) {
             if (!/^https:\/\//.test(url ?? '')) continue; // (a link from the engine's answer: only a web address is followed)
             const a = document.createElement('a');
             a.href = url;
@@ -1956,7 +1954,7 @@ $('pubGo').onclick = async () => {
 };
 
 // --- Test on the dev server ------------------------------------------------------------------
-// One holder at a time (the ops API keeps the claim). The dialog says who has it, loads your last export of this
+// One holder at a time (the review service keeps the claim). The dialog says who has it, loads your last export of this
 // module with a temporary way in from an existing area, and gives it back.
 
 let testPoll = null,
@@ -2136,7 +2134,7 @@ $('testRelease').onclick = async () => {
     await testRefresh(false);
 };
 
-// Keeps this version of the area in the team's history (a commit in Gitea).
+// Keeps this version of the area in the team's history (a commit in the team server's history repository).
 $('btnVersion').onclick = async () => {
     if (readOnly || !area) return;
     const note = await ask({

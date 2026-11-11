@@ -1,14 +1,37 @@
 # NWN Landscaper (web editor)
 
-Sculpt a Neverwinter Nights area in the browser and export it as an area with its own generated
-tileset (hak + module), checked against NWN's pathfinding. This repository is the page (three.js, no build step); the
-engine that reads the game, builds the areas and serves this page is [landscaper](https://github.com/plenarius/landscaper),
-a separate repository (Rust). The page talks to it over HTTP. Sculpting and painting work in the page alone; importing,
-exporting, the path check, the texture library, the game's models and blueprints need the engine.
+> The engine, [plenarius/landscaper](https://github.com/plenarius/landscaper), is published at the same time as this page; until
+> then, only sculpting runs without it.
+
+Sculpt a Neverwinter Nights area in the browser and export it as an area with its own generated tileset (hak + module), checked
+against NWN's pathfinding. It is for builders of NWN:EE modules. This repository is the page (three.js, no build step); the engine
+that reads the game, builds the areas and serves this page is [landscaper](https://github.com/plenarius/landscaper), a separate
+repository (Rust). The page talks to it over HTTP. Without the engine the page opens a blank area and only sculpting works: the
+textures to paint with, saving to disk, importing, exporting, the path check, and the game's models and blueprints all come
+from the engine.
+
+What it does (*team* marks what only a team server offers, see landscaper's
+[TEAM-SERVER.md](https://github.com/plenarius/landscaper/blob/master/docs/TEAM-SERVER.md)):
+
+- **Sculpt** the ground: raise, lower, smooth, flatten; water; cave entrances.
+- **Paint** with a texture library the engine builds from your own game files, or pick a texture up from the ground.
+- **Caves and interiors**: cut rooms and passages out of rock, ramps and descending halls, a ceiling height.
+- **Things**: creatures, placeables, doors, waypoints, triggers, sounds, encounters, stores and items from the module's
+  blueprints, with their tag, name, scripts and variables; your own creature and item blueprints made from existing ones.
+- **Scripts and conversations**: pick scripts by name and edit them with the compiler's errors underlined as you type (on a
+  team server, admins only); write conversations as a tree of lines.
+- **Area settings**: name, tag, scripts, weather, music, sky and fog, as the toolset's Area Properties.
+- **Import** an NWN area from the module's source or from a `.mod` or `.erf` you upload.
+- **Check paths**: simulate NWN's pathfinding on random routes, after each edit or on demand, and show ground too steep to walk.
+- **Export to NWN**: the hak and module, ready to play.
+- **Publish**: on your own machine, a package (a zip) to unzip into your module's repository; on a team server, pull requests
+  opened by the team's review service (*team*).
+- **Test on the dev server**, **Save version** into the team's history, and an **Activity** log for admins (*team*).
 
 ## You need
 
-- The engine, [landscaper](https://github.com/plenarius/landscaper), and what it needs (your own copy of NWN:EE).
+- The engine, [landscaper](https://github.com/plenarius/landscaper), and what it needs: your own copy of NWN:EE and
+  `nwn_gff`. Its [SELF-HOSTING.md](https://github.com/plenarius/landscaper/blob/master/docs/SELF-HOSTING.md) lists them.
 - A browser with WebGL.
 
 ## Run
@@ -17,29 +40,31 @@ Clone [landscaper](https://github.com/plenarius/landscaper) next to this folder,
 
 ```bash
 cd ../landscaper && cargo build --release
-./target/release/landscaper serve          # http://127.0.0.1:8765/  (only on this machine)
+NWN_ROOT=/path/to/nwn ./target/release/landscaper serve   # http://127.0.0.1:8765/  (only on this machine)
 ```
 
-Then open <http://127.0.0.1:8765/>. `serve` finds this folder at `~/dev/layonara/landscaper-web`,
-or pass `--web <folder>` (or set `LANDSCAPER_WEB`). `--port` changes the port. landscaper's
+`NWN_ROOT` is the game's install folder (the Steam install on Linux is found without it); `NWN_HOME` is your user folder, the
+one with `hak/`, `modules/` and `tlk/`. Then open <http://127.0.0.1:8765/>. `serve` looks for this folder as `web/` beside the
+program, then `landscaper-web` and `../landscaper-web` from where you start it; or pass `--web <folder>` (or set
+`LANDSCAPER_WEB`). `--port` changes the port. landscaper's
 [SELF-HOSTING.md](https://github.com/plenarius/landscaper/blob/master/docs/SELF-HOSTING.md) covers a team server.
 
-The page needs WebGL. Without a GPU (e.g. a remote desktop), start a separate browser window with
-software rendering:
+The page needs WebGL. Without a GPU (e.g. a remote desktop), start a separate browser window with software rendering:
 
 ```bash
-brave-browser --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshader --ignore-gpu-blocklist http://127.0.0.1:8765/
+google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshader --ignore-gpu-blocklist http://127.0.0.1:8765/
 ```
 
 ## Use
 
 - **New area**: name (1-9 of a-z 0-9 _, prefixes every resref), size in 10 m NWN tiles (up to 32 x 32), and a start. The
   starts are flat ground, gentle or rough hills, a cave or an interior (solid rock to cut rooms out of), or a sample descending
-  crypt, dungeon or cave to change. The browser keeps your work between sessions.
+  crypt, dungeon or cave to change. The engine saves your work to disk as you go; when it can't (no engine, or a failed save),
+  the browser keeps the area until the engine is back and then hands it over.
 - **Tools** (big buttons; the key is under each): Raise `1`, Lower `2`, Smooth `3`, Flatten `4`, Paint `5`, Water `6`, Entrance `7`,
-  Place `8`, Scatter `9` and Things `t`. Caves and interiors add Dig `0`, Ramp `p`, Descent `d` and Room `r`. Brush size `[` `]`,
-  strength slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel zooms; `F` reframes. Undo/redo with
-  Ctrl+Z / Ctrl+Y.
+  Place `8`, Scatter `9`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r` (shown on every
+  area). Brush size `[` `]`, strength slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel
+  zooms; `F` reframes. Undo/redo with Ctrl+Z / Ctrl+Y.
 - **Pick a texture up**: in the Paint tool press `I` (or the **Pick from the ground** button, or Alt-click) and click the ground. On painted
   ground it picks that texture; on an imported area it picks the tileset's own texture under the click and adds it to the library
   (under **Tileset**) the first time.

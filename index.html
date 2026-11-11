@@ -395,9 +395,9 @@
     <div id="nowebgl" hidden>
         <h2>This browser isn't giving the page 3D graphics (WebGL)</h2>
         <p>Common on remote desktops without a GPU. Either turn on hardware acceleration
-        (<code>brave://settings/system</code> or <code>chrome://settings/system</code>, then relaunch),
+        (<code>chrome://settings/system</code>, or <code>brave://settings/system</code> in Brave, then relaunch),
         or start a separate window with software rendering:</p>
-        <pre>brave-browser --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshader --ignore-gpu-blocklist URL</pre>
+        <pre>google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshader --ignore-gpu-blocklist URL</pre>
     </div>
 
     <script type="module" src="js/app.js"></script>

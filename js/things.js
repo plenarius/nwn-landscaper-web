@@ -383,7 +383,7 @@ export class ThingsTool {
             e.querySelector('b').textContent = b.name;
             e.querySelector('small').textContent = `${b.resref}${b.source === 'game' ? ' · stock' : b.source === 'mine' ? ' · mine' : ''}`;
             // What a creature looks like, drawn when its entry scrolls into view.
-            // The module's creatures and items come from the ops API; a placeable's or door's model from the game's data.
+            // The module's creatures and items come from the review service; a placeable's or door's model from the game's data.
             if ((['creature', 'item'].includes(k.kind) && b.source === 'module') || ['placeable', 'door'].includes(k.kind)) {
                 e.classList.add('has-thumb');
                 this.previews().observe(e.querySelector('.thumb'), k.kind, b.resref);
