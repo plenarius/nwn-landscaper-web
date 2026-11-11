@@ -47,7 +47,7 @@ function outcrop(e, r, u, v) {
         b = r.v * 1.1;
     const du = Math.abs(u - uc) / a,
         dv = Math.abs(v) / b;
-    const q = Math.pow(du ** 4 + dv ** 4, 0.25);
+    const q = (du ** 4 + dv ** 4) ** 0.25;
     const angle = Math.atan2(dv, du),
         s = e.x * 0.37 + e.y * 0.61;
     const ragged = 0.3 * Math.sin(3 * angle + s) + 0.2 * Math.sin(7 * angle + 2 * s);

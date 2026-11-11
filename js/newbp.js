@@ -1,6 +1,8 @@
 // The builder's own blueprints: a creature or item made as a copy of an existing one, then changed in a dialog.
 // The engine keeps them in the builder's workspace and Publish sends the ones an area uses.
 
+// biome-ignore-all lint/complexity/useArrowFunction: these are ThingsTool methods, written as functions like the rest so that `this` works in them
+
 import { ThingsTool } from './things.js';
 import { conversationPicker } from './dialogs.js';
 import { scriptPicker } from './scripts.js';
@@ -373,7 +375,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
 };
 
 /** Beside a creature's Conversation: pick, view, write or change one (the same picker the properties panel has). */
-ThingsTool.prototype.bpConversationRow = function (ext, resref, input, section) {
+ThingsTool.prototype.bpConversationRow = function (_ext, resref, input, section) {
     section.appendChild(conversationPicker(input, resref.slice(0, 16)));
 };
 

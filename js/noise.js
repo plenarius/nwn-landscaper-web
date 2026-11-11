@@ -2,7 +2,7 @@ import { createNoise2D } from '../vendor/simplex-noise/simplex-noise.js';
 
 // Mulberry32 seeded PRNG - returns function () => [0, 1)
 function mulberry32(seed) {
-    return function () {
+    return () => {
         seed |= 0;
         seed = (seed + 0x6d2b79f5) | 0;
         let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);

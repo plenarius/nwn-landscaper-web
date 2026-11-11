@@ -732,7 +732,7 @@ input[type="color"] {
 }
 .file-pick {
     position: relative;
-    margin: 0 !important;
+    margin: 0;
     flex: none;
     padding: 8px 14px;
     background: var(--panel-2);

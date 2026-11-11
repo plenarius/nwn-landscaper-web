@@ -211,7 +211,7 @@ export async function openConversation(resref, onMade = null) {
     function render() {
         tree.textContent = '';
         const seen = new Set();
-        m.starts.forEach(s => tree.appendChild(node(0, s.index, s, seen, m.starts)));
+        for (const s of m.starts) tree.appendChild(node(0, s.index, s, seen, m.starts));
         const add = el('button', { type: 'button', textContent: '+ Another way for the NPC to start' });
         add.onclick = () => {
             m.entries.push({ text: '', speaker: '', script: '', comment: '', links: [] });

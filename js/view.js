@@ -264,13 +264,13 @@ export class View {
                     '#include <common>',
                     '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
                 )
-                .replace('#include <begin_vertex>', '#include <begin_vertex>' + SPLAT_VERTEX);
+                .replace('#include <begin_vertex>', `#include <begin_vertex>${SPLAT_VERTEX}`);
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
                     '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform vec2 uSize;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
                 )
-                .replace('#include <color_fragment>', '#include <color_fragment>' + SPLAT_FRAGMENT + SHADE_FRAGMENT);
+                .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${SHADE_FRAGMENT}`);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
         return material;
@@ -531,7 +531,8 @@ export class View {
     /** Placed objects, from the model library (set by the app). */
     async updateObjects() {
         if (this.objectGroup) this.scene.remove(this.objectGroup);
-        const group = (this.objectGroup = new THREE.Group());
+        const group = new THREE.Group();
+        this.objectGroup = group;
         this.scene.add(group);
         if (!this.models) return;
         const size = this.area.sizeY;
@@ -676,7 +677,8 @@ export class View {
                 c.material?.dispose?.();
             });
         }
-        const group = (this.thingGroup = new THREE.Group());
+        const group = new THREE.Group();
+        this.thingGroup = group;
         this.scene.add(group);
         if (!this.area) return;
         const area = this.area,
@@ -1116,18 +1118,21 @@ export class View {
             pos.push(x0, l, size - y0, x1, l, size - y0, x1, l, size - y1, x0, l, size - y0, x1, l, size - y1, x0, l, size - y1);
         const wet = (i, j) => L[j * n + i];
         const lv = (a, b) => Math.max(Number.isNaN(a) ? -Infinity : a, Number.isNaN(b) ? -Infinity : b);
-        let l;
+        // A strip at the level l, when either of the two edge samples is wet.
+        const strip = (l, x0, y0, x1, y1) => {
+            if (l > -Infinity) quad(x0, y0, x1, y1, l);
+        };
         for (let k = 0; k < rows - 1; k++) {
             const t0 = k * SPACING,
                 t1 = t0 + SPACING;
-            if ((l = lv(wet(0, k), wet(0, k + 1))) > -Infinity) quad(-D, t0, 0, t1, l);
-            if ((l = lv(wet(n - 1, k), wet(n - 1, k + 1))) > -Infinity) quad(sx, t0, sx + D, t1, l);
+            strip(lv(wet(0, k), wet(0, k + 1)), -D, t0, 0, t1);
+            strip(lv(wet(n - 1, k), wet(n - 1, k + 1)), sx, t0, sx + D, t1);
         }
         for (let k = 0; k < n - 1; k++) {
             const t0 = k * SPACING,
                 t1 = t0 + SPACING;
-            if ((l = lv(wet(k, 0), wet(k + 1, 0))) > -Infinity) quad(t0, -D, t1, 0, l);
-            if ((l = lv(wet(k, rows - 1), wet(k + 1, rows - 1))) > -Infinity) quad(t0, size, t1, size + D, l);
+            strip(lv(wet(k, 0), wet(k + 1, 0)), t0, -D, t1, 0);
+            strip(lv(wet(k, rows - 1), wet(k + 1, rows - 1)), t0, size, t1, size + D);
         }
         for (const [i, j, x0, y0, x1, y1] of [
             [0, 0, -D, -D, 0, 0],
@@ -1345,7 +1350,7 @@ function makeLabel(text, color) {
     ctx.font = 'bold 40px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(20,22,26,0.85)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
     ctx.fillText(text, 12, 44);
     // A fixed size on screen, however near the camera is.
     const sprite = new THREE.Sprite(

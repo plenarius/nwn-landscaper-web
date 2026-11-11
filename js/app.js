@@ -560,7 +560,7 @@ async function showImportList() {
         const kind = s.kind ?? (s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors');
         const allowed = s.assigned !== false;
         const state = s.assigned === true ? ' · assigned to you' : allowed ? '' : ' · needs an assignment';
-        b.innerHTML = `<span><b>${areaTitle(s)}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ' · ' + s.from : ''}${state}</small>`;
+        b.innerHTML = `<span><b>${areaTitle(s)}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ` · ${s.from}` : ''}${state}</small>`;
         b.disabled = !allowed;
         if (!allowed) b.title = 'Ask an admin to assign this area to you';
         if (importChosen?.area === s.area && importChosen?.upload === s.upload) b.classList.add('selected');
@@ -637,7 +637,7 @@ $('importGo').onclick = async () => {
         $('importDialog').close();
         await openArea({ name });
         $('statusMsg').textContent =
-            `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ' Notes: ' + r.notes.join('; ') : ''}`;
+            `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
     } catch (err) {
         $('importStatus').textContent = `Couldn't import: ${err.message}`;
         setImporting(false);
@@ -742,7 +742,7 @@ async function reimport(a, button) {
         $('openDialog').close();
         await openArea({ name: a.name });
         $('statusMsg').textContent =
-            `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ' Notes: ' + r.notes.join('; ') : ''}`;
+            `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
     } catch (err) {
         $('openDialog').close();
         showError(`Couldn't import ${a.name} again: ${err.message}`);
@@ -979,23 +979,23 @@ function editSky(change) {
     skyChanged();
 }
 $('skyAmbient').oninput = e =>
-    editSky((a, s) => {
+    editSky((_a, s) => {
         s.ambient = e.target.value;
     });
 $('skyDiffuse').oninput = e =>
-    editSky((a, s) => {
+    editSky((_a, s) => {
         s.diffuse = e.target.value;
     });
 $('skyFog').oninput = e =>
-    editSky((a, s) => {
+    editSky((_a, s) => {
         s.fog = e.target.value;
     });
 $('skyFogAmount').oninput = e =>
-    editSky((a, s) => {
+    editSky((_a, s) => {
         s.fogAmount = +e.target.value;
     });
 $('skyShadows').onchange = e =>
-    editSky((a, s) => {
+    editSky((_a, s) => {
         s.shadows = e.target.checked;
     });
 $('skyClip').oninput = e =>
@@ -1556,14 +1556,14 @@ const endStroke = () => {
     stroke = null;
     saveSoon();
 };
-canvas.addEventListener('pointerup', e => {
+canvas.addEventListener('pointerup', () => {
     if (transformer.active && transformer.held) {
         transformer.confirm();
         return;
     }
     endStroke();
 });
-canvas.addEventListener('pointercancel', e => {
+canvas.addEventListener('pointercancel', () => {
     if (transformer.active && transformer.held) {
         transformer.cancel();
         return;
@@ -2463,7 +2463,7 @@ function areaRequest() {
         `&water=${encodeURIComponent(JSON.stringify(area.water))}` +
         `&shadow=${area.shadow}` +
         `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}` +
-        (area.enclosed() ? `&kind=${area.kind}&roof=${area.roof}` + (area.clearance > 0 ? `&clearance=${area.clearance}` : '') : '') +
+        (area.enclosed() ? `&kind=${area.kind}&roof=${area.roof}${area.clearance > 0 ? `&clearance=${area.clearance}` : ''}` : '') +
         `&module=${encodeURIComponent(area.module || area.name)}`;
     return { query, body };
 }

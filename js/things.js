@@ -159,7 +159,7 @@ const FRIENDLY = {
 const label = l =>
     FRIENDLY[l] ??
     l
-        .replace(/^(Script|On)/, m => m + ' ')
+        .replace(/^(Script|On)/, m => `${m} `)
         .replace(/([a-z])([A-Z])/g, '$1 $2')
         .trim();
 
@@ -374,7 +374,7 @@ export class ThingsTool {
         for (const b of list) {
             const e = document.createElement('button');
             e.type = 'button';
-            e.className = 'bp' + (this.blueprint?.resref === b.resref ? ' active' : '');
+            e.className = `bp${this.blueprint?.resref === b.resref ? ' active' : ''}`;
             e.innerHTML = `<span class="thumb"></span><span class="txt"><b></b><small></small></span>`;
             e.querySelector('b').textContent = b.name;
             e.querySelector('small').textContent = `${b.resref}${b.source === 'game' ? ' · stock' : b.source === 'mine' ? ' · mine' : ''}`;
@@ -1077,7 +1077,8 @@ export class ThingsTool {
             sum.textContent = set ? `${name} (${set} set)` : name;
             details.appendChild(sum);
             details.addEventListener('toggle', () => {
-                (this.openSections ??= new Set())[details.open ? 'add' : 'delete'](`${t.id}:${name}`);
+                this.openSections ??= new Set();
+                this.openSections[details.open ? 'add' : 'delete'](`${t.id}:${name}`);
             });
             box.appendChild(details);
             const into = (text, input) => {
@@ -1247,7 +1248,8 @@ ThingsTool.prototype.contentsSection = function (box, t, original = false) {
     box.appendChild(d);
     d.open = t[field] !== undefined || this.openSections?.has(`${t.id}:contents`);
     d.addEventListener('toggle', () => {
-        (this.openSections ??= new Set())[d.open ? 'add' : 'delete'](`${t.id}:contents`);
+        this.openSections ??= new Set();
+        this.openSections[d.open ? 'add' : 'delete'](`${t.id}:contents`);
     });
     // The blueprint's own list, fetched once (an original's is what it holds, sent with it).
     if (!original && !this.contentsCache.has(key)) {
@@ -1402,7 +1404,8 @@ ThingsTool.prototype.equipmentSection = function (box, t, original = false) {
     box.appendChild(d);
     d.open = t.equipment !== undefined || this.openSections?.has(`${t.id}:equipment`);
     d.addEventListener('toggle', () => {
-        (this.openSections ??= new Set())[d.open ? 'add' : 'delete'](`${t.id}:equipment`);
+        this.openSections ??= new Set();
+        this.openSections[d.open ? 'add' : 'delete'](`${t.id}:equipment`);
     });
     if (!original && !this.contentsCache.has(key)) {
         this.contentsCache.set(key, null);
@@ -1508,7 +1511,7 @@ ThingsTool.prototype.equipmentSection = function (box, t, original = false) {
     }
 };
 
-ThingsTool.prototype.destinationPicker = function (t, input) {
+ThingsTool.prototype.destinationPicker = function (t, _input) {
     // Leads to a waypoint of an existing area: search it, then pick one of its waypoints.
     const d = document.createElement('details');
     d.className = 'dest-picker';
@@ -1583,7 +1586,7 @@ const round = (v, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
 export function thingsForExport(things) {
     return things.map(({ label: _label, ...t }) => ({
         ...t,
-        vars: (t.vars ?? []).filter(v => v.name && v.name.trim()),
+        vars: (t.vars ?? []).filter(v => v.name?.trim()),
         fields: t.fields && Object.keys(t.fields).length ? t.fields : undefined,
     }));
 }

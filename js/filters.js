@@ -98,7 +98,6 @@ function erode(data, size, strength) {
                 // Find lowest neighbor within radius
                 let minH = h;
                 let minIdx = -1;
-                let neighborCount = 0;
                 const lowerNeighbors = [];
 
                 for (let dy = -radius; dy <= radius; dy++) {
@@ -106,7 +105,6 @@ function erode(data, size, strength) {
                         if (dx === 0 && dy === 0) continue;
                         if (dx * dx + dy * dy > radius * radius) continue;
                         const ni = idx(x + dx, y + dy, size);
-                        neighborCount++;
                         if (data[ni] < h) {
                             lowerNeighbors.push({ idx: ni, h: data[ni] });
                         }
@@ -142,7 +140,7 @@ function erode(data, size, strength) {
 /**
  * Terrace — quantizes heights into steps like rice paddies.
  */
-function terrace(data, size, strength) {
+function terrace(data, _size, strength) {
     const levels = Math.max(2, Math.round(3 + strength * 15));
     for (let i = 0; i < data.length; i++) {
         const original = data[i];
@@ -154,7 +152,7 @@ function terrace(data, size, strength) {
 /**
  * Ridged — creates sharp ridgelines from the noise (abs + invert).
  */
-function ridged(data, size, strength) {
+function ridged(data, _size, strength) {
     for (let i = 0; i < data.length; i++) {
         const original = data[i];
         // Map to [-1,1], take abs, invert, map back to [0,1]
@@ -167,7 +165,7 @@ function ridged(data, size, strength) {
 /**
  * Invert — flips heights (valleys become peaks).
  */
-function invert(data, size, strength) {
+function invert(data, _size, strength) {
     for (let i = 0; i < data.length; i++) {
         const inverted = 1 - data[i];
         data[i] = data[i] + (inverted - data[i]) * strength;
@@ -177,7 +175,7 @@ function invert(data, size, strength) {
 /**
  * Clamp extremes — pushes values toward mid-range, reducing extreme peaks/valleys.
  */
-function clamp(data, size, strength) {
+function clamp(data, _size, strength) {
     const low = strength * 0.3;
     const high = 1 - strength * 0.3;
     for (let i = 0; i < data.length; i++) {
@@ -192,7 +190,7 @@ function clamp(data, size, strength) {
 /**
  * Normalize — stretches the height range to fill full [0,1].
  */
-function normalize(data, size, strength) {
+function normalize(data, _size, strength) {
     let min = Infinity,
         max = -Infinity;
     for (let i = 0; i < data.length; i++) {
@@ -208,7 +206,7 @@ function normalize(data, size, strength) {
 
 // Mulberry32 seeded PRNG
 function mulberry32(seed) {
-    return function () {
+    return () => {
         seed |= 0;
         seed = (seed + 0x6d2b79f5) | 0;
         let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);

@@ -52,7 +52,8 @@ export class Transformer {
             this.group = null;
         }
         if (!o) return;
-        const g = (this.group = new THREE.Group());
+        const g = new THREE.Group();
+        this.group = g;
         const mat = color => new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.95 });
         const add = (mesh, kind, axis) => {
             mesh.renderOrder = 999;
@@ -177,7 +178,7 @@ export class Transformer {
             if (this.mods.ctrl) da = Math.round(da / SNAP_TURN) * SNAP_TURN;
             o.bearing = this.orig.bearing + da;
         } else {
-            let f = 1 + (Math.hypot(p.x - o.x, p.y - o.y) / this.startDist - 1) * k;
+            const f = 1 + (Math.hypot(p.x - o.x, p.y - o.y) / this.startDist - 1) * k;
             let s = this.orig.scale * f;
             if (this.mods.ctrl) s = Math.round(s / SNAP_SCALE) * SNAP_SCALE;
             o.scale = Math.min(SCALE_RANGE[1], Math.max(SCALE_RANGE[0], s));
@@ -234,7 +235,7 @@ export class Transformer {
             this.reapply();
             return true;
         }
-        return k.length === 1 || k.startsWith('Arrow') ? true : false; // nothing else while transforming
+        return k.length === 1 || k.startsWith('Arrow'); // nothing else while transforming
     }
 
     /** A typed value, or the pointer's again after the axis or the number changed. */
