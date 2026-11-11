@@ -1,0 +1,5 @@
+Files marked LicenseRef-Beamdog show material from Neverwinter Nights: Enhanced Edition: the screenshot in docs/ shows the
+game's textures and models, rendered by the editor from the game's own files. Beamdog owns that art.
+
+This repository grants no licence for that art. Its terms are Beamdog's. The rest of such a file (the editor's own interface)
+is MIT like the rest of this repository.

@@ -107,7 +107,7 @@ fi
 # --- Text: spelling, writing, Markdown, links ----------------------------------------------------------------------------
 mapfile -t md < <(ours '*.md')
 step "typos (spelling)"
-have typos && run typos typos --file-list <(ours)
+have typos && run typos typos --force-exclude --file-list <(ours)
 step "Vale (writing: Markdown and the comments in Rust and JavaScript)"
 mapfile -t prose < <(ours '*.md' '*.rs' '*.js')
 have vale && ((${#prose[@]})) && run vale vale --no-wrap "${prose[@]}"

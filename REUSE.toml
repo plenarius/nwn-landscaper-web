@@ -51,3 +51,11 @@ path = "vendor/codemirror/README.md"
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (C) 2026 plenarius"
 SPDX-License-Identifier = "MIT"
+
+# The README's screenshot: the editor's interface (ours, MIT) around an area drawn with the game's textures and models, which
+# are Beamdog's (LICENSES/LicenseRef-Beamdog.txt). The area shown is Dalos Lake from the Layonara module.
+[[annotations]]
+path = "docs/screenshot.png"
+precedence = "override"
+SPDX-FileCopyrightText = ["Copyright (C) 2026 plenarius", "Beamdog"]
+SPDX-License-Identifier = "MIT AND LicenseRef-Beamdog"
