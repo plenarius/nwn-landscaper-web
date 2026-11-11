@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // An NWN area being sculpted: its size in tiles and its heights in metres
 // on landscaper's walkmesh sample grid (0.625 m, 16 cells a 10 m tile).
 // Rows run from the south edge (NWN y = 0) north; each row west to east,
@@ -13,7 +16,7 @@ export const SAMPLES_PER_TILE = TILE / SPACING;
 // landscaper's slope limit: a sample is walkable if no neighbour rises more
 // than this over one spacing (normal z >= 0.64, about 50 degrees).
 const WALKABLE_NZ = 0.64;
-export const MAX_RISE = SPACING * Math.sqrt(1 - WALKABLE_NZ * WALKABLE_NZ) / WALKABLE_NZ;
+export const MAX_RISE = (SPACING * Math.sqrt(1 - WALKABLE_NZ * WALKABLE_NZ)) / WALKABLE_NZ;
 // Water deeper than this can't be walked (landscaper's SHALLOW).
 export const SHALLOW = 0.5;
 // A cave starts as rock this high over its floor; its tops (from VOID_BELOW
@@ -110,9 +113,16 @@ export class Area {
             const rough = start === 'rough';
             const n = Math.max(nx, ny);
             const noise = generateHeightMap({
-                seed: Math.floor(Math.random() * 100000), mapSize: n,
-                octaves: rough ? 6 : 4, persistence: rough ? 0.5 : 0.4, lacunarity: 2.1,
-                scale: (rough ? 70 : 140) / SPACING, panX: 0, panY: 0, blackLevel: 0, whiteLevel: 1,
+                seed: Math.floor(Math.random() * 100000),
+                mapSize: n,
+                octaves: rough ? 6 : 4,
+                persistence: rough ? 0.5 : 0.4,
+                lacunarity: 2.1,
+                scale: (rough ? 70 : 140) / SPACING,
+                panX: 0,
+                panY: 0,
+                blackLevel: 0,
+                whiteLevel: 1,
             });
             const amplitude = rough ? 14 : 6;
             for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) area.heights[j * nx + i] = base + noise[j * n + i] * amplitude;
@@ -120,15 +130,19 @@ export class Area {
         return area;
     }
 
-    index(i, j) { return j * this.nx + i; }
+    index(i, j) {
+        return j * this.nx + i;
+    }
 
     /** Height at area metres (bilinear, clamped). */
     heightAt(x, y) {
         const n = this.nx;
         const fx = Math.min(Math.max(x / SPACING, 0), n - 1);
         const fy = Math.min(Math.max(y / SPACING, 0), this.ny - 1);
-        const i = Math.min(Math.floor(fx), n - 2), j = Math.min(Math.floor(fy), this.ny - 2);
-        const tx = fx - i, ty = fy - j;
+        const i = Math.min(Math.floor(fx), n - 2),
+            j = Math.min(Math.floor(fy), this.ny - 2);
+        const tx = fx - i,
+            ty = fy - j;
         const h = this.heights;
         const a = h[j * n + i] + (h[j * n + i + 1] - h[j * n + i]) * tx;
         const b = h[(j + 1) * n + i] + (h[(j + 1) * n + i + 1] - h[(j + 1) * n + i]) * tx;
@@ -139,13 +153,17 @@ export class Area {
      *  lower than its level, within its bounds if it has them ([i0, j0, i1,
      *  j1]: an imported area's water stays where its tiles drew it). */
     flood(body) {
-        const n = this.nx, rows = this.ny, h = this.heights, wet = new Uint8Array(n * rows);
+        const n = this.nx,
+            rows = this.ny,
+            h = this.heights,
+            wet = new Uint8Array(n * rows);
         if (body.i < 0 || body.j < 0 || body.i >= n || body.j >= rows) return wet;
         const [i0, j0, i1, j1] = body.bounds ?? [0, 0, n - 1, rows - 1];
         const stack = [body.j * n + body.i];
         while (stack.length) {
             const k = stack.pop();
-            const x = k % n, y = (k / n) | 0;
+            const x = k % n,
+                y = (k / n) | 0;
             if (wet[k] || h[k] >= body.level || x < i0 || x > i1 || y < j0 || y > j1) continue;
             wet[k] = 1;
             if (x > 0) stack.push(k - 1);
@@ -177,7 +195,8 @@ export class Area {
 
     /** Water depth over sample (i, j) (0 when dry). */
     depth(i, j) {
-        const k = j * this.nx + i, l = this.waterLevel[k];
+        const k = j * this.nx + i,
+            l = this.waterLevel[k];
         return Number.isNaN(l) ? 0 : l - this.heights[k];
     }
 
@@ -192,19 +211,38 @@ export class Area {
      *  `shown` the heights with the rock cut down; null for one flat roof. */
     ceilingFit() {
         if (!this.enclosed() || !(this.clearance > 0)) return null;
-        const { nx, ny, heights: h } = this, n = nx * ny, roof = this.roof;
-        const from = new Int32Array(n).fill(-1), queue = new Int32Array(n);
-        let head = 0, tail = 0;
-        for (let k = 0; k < n; k++) if (h[k] < roof - VOID_BELOW) { from[k] = k; queue[tail++] = k; }
+        const { nx, ny, heights: h } = this,
+            n = nx * ny,
+            roof = this.roof;
+        const from = new Int32Array(n).fill(-1),
+            queue = new Int32Array(n);
+        let head = 0,
+            tail = 0;
+        for (let k = 0; k < n; k++)
+            if (h[k] < roof - VOID_BELOW) {
+                from[k] = k;
+                queue[tail++] = k;
+            }
         while (head < tail) {
-            const k = queue[head++], i = k % nx, j = (k - i) / nx;
-            for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) {
+            const k = queue[head++],
+                i = k % nx,
+                j = (k - i) / nx;
+            for (const [a, b] of [
+                [i + 1, j],
+                [i - 1, j],
+                [i, j + 1],
+                [i, j - 1],
+            ]) {
                 if (a < 0 || b < 0 || a >= nx || b >= ny) continue;
                 const m = b * nx + a;
-                if (from[m] < 0) { from[m] = from[k]; queue[tail++] = m; }
+                if (from[m] < 0) {
+                    from[m] = from[k];
+                    queue[tail++] = m;
+                }
             }
         }
-        const ceiling = new Float32Array(n), shown = new Float32Array(h);
+        const ceiling = new Float32Array(n),
+            shown = new Float32Array(h);
         for (let k = 0; k < n; k++) {
             ceiling[k] = from[k] < 0 ? roof : h[from[k]] + this.clearance;
             if (h[k] >= roof - VOID_BELOW) shown[k] = Math.min(ceiling[k], h[k]);
@@ -218,7 +256,9 @@ export class Area {
     }
 
     walkable(i, j) {
-        const n = this.nx, h = this.heights, z = h[j * n + i];
+        const n = this.nx,
+            h = this.heights,
+            z = h[j * n + i];
         if (this.depth(i, j) > SHALLOW || this.void(i, j)) return false;
         if (i > 0 && Math.abs(h[j * n + i - 1] - z) > MAX_RISE) return false;
         if (i < n - 1 && Math.abs(h[j * n + i + 1] - z) > MAX_RISE) return false;
@@ -228,8 +268,31 @@ export class Area {
     }
 
     // Undo: a snapshot of heights and paint before each stroke.
-    snapshot() { return { h: this.heights.slice(), m: this.materials.slice(), p: this.palette.slice(), w: this.water.map(b => ({ ...b })), e: this.entrances.map(e => ({ ...e })), o: this.objects.map(o => ({ ...o })), t: structuredClone(this.things), s: structuredClone(this.settings), r: structuredClone(this.originals) }; }
-    restore(s) { this.heights.set(s.h); this.materials.set(s.m); this.palette = s.p.slice(); this.water = s.w.map(b => ({ ...b })); this.entrances = s.e.map(e => ({ ...e })); this.objects = s.o.map(o => ({ ...o })); this.things = structuredClone(s.t ?? []); this.settings = structuredClone(s.s ?? null); this.originals = structuredClone(s.r ?? { removed: [], moved: {}, edited: {} }); this.floodWater(); }
+    snapshot() {
+        return {
+            h: this.heights.slice(),
+            m: this.materials.slice(),
+            p: this.palette.slice(),
+            w: this.water.map(b => ({ ...b })),
+            e: this.entrances.map(e => ({ ...e })),
+            o: this.objects.map(o => ({ ...o })),
+            t: structuredClone(this.things),
+            s: structuredClone(this.settings),
+            r: structuredClone(this.originals),
+        };
+    }
+    restore(s) {
+        this.heights.set(s.h);
+        this.materials.set(s.m);
+        this.palette = s.p.slice();
+        this.water = s.w.map(b => ({ ...b }));
+        this.entrances = s.e.map(e => ({ ...e }));
+        this.objects = s.o.map(o => ({ ...o }));
+        this.things = structuredClone(s.t ?? []);
+        this.settings = structuredClone(s.s ?? null);
+        this.originals = structuredClone(s.r ?? { removed: [], moved: {}, edited: {} });
+        this.floodWater();
+    }
 
     beginStroke() {
         this.undoStack.push(this.snapshot());
@@ -254,11 +317,26 @@ export class Area {
     // Saved in the browser between sessions.
     toJSON() {
         return {
-            name: this.name, tiles: this.tiles, tilesY: this.tilesY,
+            name: this.name,
+            tiles: this.tiles,
+            tilesY: this.tilesY,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
-            materials: toBase64(this.materials), palette: this.palette,
-            atmosphere: this.atmosphere, water: this.water, shadow: this.shadow, entrances: this.entrances, objects: this.objects, nextObjectId: this.nextObjectId, kind: this.kind, roof: this.roof, clearance: this.clearance, module: this.module,
-            things: this.things, nextThingId: this.nextThingId, settings: this.settings, originals: this.originals,
+            materials: toBase64(this.materials),
+            palette: this.palette,
+            atmosphere: this.atmosphere,
+            water: this.water,
+            shadow: this.shadow,
+            entrances: this.entrances,
+            objects: this.objects,
+            nextObjectId: this.nextObjectId,
+            kind: this.kind,
+            roof: this.roof,
+            clearance: this.clearance,
+            module: this.module,
+            things: this.things,
+            nextThingId: this.nextThingId,
+            settings: this.settings,
+            originals: this.originals,
         };
     }
 
@@ -270,14 +348,22 @@ export class Area {
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.entrances) area.entrances = o.entrances;
         if (o.objects) area.objects = o.objects;
-        if (o.kind) { area.kind = o.kind; area.roof = o.roof; area.clearance = o.clearance ?? null; }
+        if (o.kind) {
+            area.kind = o.kind;
+            area.roof = o.roof;
+            area.clearance = o.clearance ?? null;
+        }
         if (o.module) area.module = o.module;
         if (Array.isArray(o.things)) area.things = o.things;
         area.nextThingId = o.nextThingId ?? Math.max(0, ...area.things.map(x => x.id ?? 0)) + 1;
         if (o.settings) area.settings = o.settings;
-        if (o.originals) area.originals = { removed: o.originals.removed ?? [], moved: o.originals.moved ?? {}, edited: o.originals.edited ?? {} };
+        if (o.originals)
+            area.originals = { removed: o.originals.removed ?? [], moved: o.originals.moved ?? {}, edited: o.originals.edited ?? {} };
         area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;
-        if (o.water) { area.water = o.water; area.floodWater(); }
+        if (o.water) {
+            area.water = o.water;
+            area.floodWater();
+        }
         return area;
     }
 }

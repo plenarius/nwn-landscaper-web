@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // NWN Landscaper: sculpt an NWN area, export it with `landscaper serve`.
 
 import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW, CAVE_ROCK } from './area.js';
@@ -71,15 +74,29 @@ function updatePanels() {
     if (tool !== 'place' && view.selected && typeof selectObject === 'function') selectObject(null);
     if (tool === 'place' && !skyOpen) showPlaceables();
     $('thingsPanel').hidden = skyOpen || tool !== 'things';
-    if (tool === 'things' && !skyOpen) thingsTool.show(); else thingsTool.hide();
+    if (tool === 'things' && !skyOpen) thingsTool.show();
+    else thingsTool.hide();
     $('btnSky').classList.toggle('active', skyOpen);
 }
 // Creatures, waypoints, triggers, sounds...: the Things tool.
-const thingsTool = new ThingsTool({ $, area: () => area, view, readOnly: () => readOnly, saveSoon: () => saveSoon(), say: m => { $('statusMsg').textContent = m; } });
+const thingsTool = new ThingsTool({
+    $,
+    area: () => area,
+    view,
+    readOnly: () => readOnly,
+    saveSoon: () => saveSoon(),
+    say: m => {
+        $('statusMsg').textContent = m;
+    },
+});
 selectTool('raise');
 
-const sizeIn = $('brushSize'), strengthIn = $('brushStrength');
-const showSliders = () => { $('sizeOut').textContent = `${(+sizeIn.value).toFixed(1)} m`; $('strengthOut').textContent = `${Math.round(strengthIn.value * 100)}%`; };
+const sizeIn = $('brushSize'),
+    strengthIn = $('brushStrength');
+const showSliders = () => {
+    $('sizeOut').textContent = `${(+sizeIn.value).toFixed(1)} m`;
+    $('strengthOut').textContent = `${Math.round(strengthIn.value * 100)}%`;
+};
 sizeIn.oninput = strengthIn.oninput = showSliders;
 showSliders();
 
@@ -100,11 +117,13 @@ function buildPalette() {
     const body = $('paletteBody');
     body.textContent = '';
     if (!library.catalog.length) {
-        body.innerHTML = '<p>No texture library. Run the page from <code>landscaper serve</code>: it builds a starter library from your game files the first time (or run <code>landscaper textures init</code>).</p>';
+        body.innerHTML =
+            '<p>No texture library. Run the page from <code>landscaper serve</code>: it builds a starter library from your game files the first time (or run <code>landscaper textures init</code>).</p>';
         return;
     }
-    const categories = [...new Set(library.catalog.map(t => t.category))]
-        .sort((a, b) => (CATEGORY_ORDER.indexOf(a) + 1 || 99) - (CATEGORY_ORDER.indexOf(b) + 1 || 99));
+    const categories = [...new Set(library.catalog.map(t => t.category))].sort(
+        (a, b) => (CATEGORY_ORDER.indexOf(a) + 1 || 99) - (CATEGORY_ORDER.indexOf(b) + 1 || 99),
+    );
     for (const category of categories) {
         const h = document.createElement('h4');
         h.textContent = category;
@@ -147,7 +166,9 @@ function setPicking(on) {
 $('btnPick').onclick = () => setPicking(!picking);
 
 async function pickTexture(p) {
-    const say = m => { $('statusMsg').textContent = m; };
+    const say = m => {
+        $('statusMsg').textContent = m;
+    };
     const i = Math.min(Math.max(Math.round(p.x / SPACING), 0), area.nx - 1);
     const j = Math.min(Math.max(Math.round(p.y / SPACING), 0), area.ny - 1);
     const ground = area.palette[area.materials[j * area.nx + i]];
@@ -158,16 +179,27 @@ async function pickTexture(p) {
         say(`Picked ${library.byId.get(ground)?.name ?? ground}.`);
         return;
     }
-    if (readOnly) { say('You are looking at someone else\'s area: nothing can be picked up into the library.'); return; }
+    if (readOnly) {
+        say("You are looking at someone else's area: nothing can be picked up into the library.");
+        return;
+    }
     say('Picking up the ground texture…');
     let r = {};
     let ok = false;
     try {
-        const res = await fetch(`/api/pick-texture?name=${encodeURIComponent(ground.slice('@import:'.length))}&x=${p.x.toFixed(2)}&y=${p.y.toFixed(2)}`, { method: 'POST' });
+        const res = await fetch(
+            `/api/pick-texture?name=${encodeURIComponent(ground.slice('@import:'.length))}&x=${p.x.toFixed(2)}&y=${p.y.toFixed(2)}`,
+            { method: 'POST' },
+        );
         ok = res.ok;
         r = await res.json();
-    } catch { /* r stays empty */ }
-    if (!ok) { say(r.error ?? 'Could not pick up that texture.'); return; }
+    } catch {
+        /* r stays empty */
+    }
+    if (!ok) {
+        say(r.error ?? 'Could not pick up that texture.');
+        return;
+    }
     if (r.added) {
         await library.load();
         buildPalette();
@@ -185,8 +217,15 @@ const transformer = new Transformer({
     area: () => area,
     flat: o => models.flat(o.model),
     settle: (o, flat) => settle(o, flat),
-    say: msg => { $('statusMsg').textContent = msg; },
-    changed: (o, final) => { showObjectPanel(o); if (final) { area.objects.includes(o) && saveSoon(); } },
+    say: msg => {
+        $('statusMsg').textContent = msg;
+    },
+    changed: (o, final) => {
+        showObjectPanel(o);
+        if (final) {
+            area.objects.includes(o) && saveSoon();
+        }
+    },
 });
 view.models = models;
 let placeModel = null;
@@ -195,7 +234,10 @@ for (const q of QUICK) {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = q;
-    b.onclick = () => { $('placeSearch').value = q; showPlaceables(); };
+    b.onclick = () => {
+        $('placeSearch').value = q;
+        showPlaceables();
+    };
     $('placeChips').appendChild(b);
 }
 
@@ -211,7 +253,9 @@ async function modelResults(box, query, pick) {
         b.innerHTML = `<img class="thumb" alt=""><span>${p.name.replace(/</g, '&lt;')}</span>`;
         b.onclick = () => pick(p.model);
         box.appendChild(b);
-        models.thumbnail(p.model).then(url => { if (url) b.querySelector('img').src = url; });
+        models.thumbnail(p.model).then(url => {
+            if (url) b.querySelector('img').src = url;
+        });
     }
 }
 
@@ -228,12 +272,20 @@ function selectPlaceable(model) {
     for (const b of $('placeResults').children) b.classList.toggle('active', b.dataset.model === model);
 }
 let searchTimer = null;
-$('placeSearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(showPlaceables, 250); };
-const showScale = () => { $('placeScaleOut').textContent = `${Math.round($('placeScale').value * 100)}%`; };
+$('placeSearch').oninput = () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(showPlaceables, 250);
+};
+const showScale = () => {
+    $('placeScaleOut').textContent = `${Math.round($('placeScale').value * 100)}%`;
+};
 $('placeScale').oninput = () => {
     showScale();
     // The selected object takes the size too.
-    if (view.selected && tool === 'place') changeSelected(o => { o.scale = +$('placeScale').value; });
+    if (view.selected && tool === 'place')
+        changeSelected(o => {
+            o.scale = +$('placeScale').value;
+        });
 };
 showScale();
 
@@ -247,8 +299,15 @@ function settle(o, flat) {
 }
 
 function groundUnder(o, flat) {
-    const c = Math.cos(o.bearing), s = Math.sin(o.bearing);
-    const corners = [[flat.min[0], flat.min[1]], [flat.max[0], flat.min[1]], [flat.min[0], flat.max[1]], [flat.max[0], flat.max[1]], [0, 0]];
+    const c = Math.cos(o.bearing),
+        s = Math.sin(o.bearing);
+    const corners = [
+        [flat.min[0], flat.min[1]],
+        [flat.max[0], flat.min[1]],
+        [flat.min[0], flat.max[1]],
+        [flat.max[0], flat.max[1]],
+        [0, 0],
+    ];
     return Math.min(...corners.map(([x, y]) => area.heightAt(o.x + (c * x - s * y) * o.scale, o.y + (s * x + c * y) * o.scale)));
 }
 
@@ -269,11 +328,19 @@ for (const b of $('placeMode').children) {
     b.onclick = () => {
         showPlaceMode(b.dataset.baked === '1');
         // The selected object takes the mode too.
-        if (view.selected) changeSelected(o => { o.baked = b.dataset.baked === '1'; }).then(() => view.select(view.selected));
+        if (view.selected)
+            changeSelected(o => {
+                o.baked = b.dataset.baked === '1';
+            }).then(() => view.select(view.selected));
     };
 }
 
-$('placeSolid').onchange = () => { if (view.selected && tool === 'place') changeSelected(o => { o.solid = $('placeSolid').checked; }); };
+$('placeSolid').onchange = () => {
+    if (view.selected && tool === 'place')
+        changeSelected(o => {
+            o.solid = $('placeSolid').checked;
+        });
+};
 
 /** placeables.2da's row of a model (object mode's appearance). */
 const appearanceOf = model => models.list?.find(p => p.model === model)?.row;
@@ -287,7 +354,8 @@ function selectObject(o) {
         showScale();
         showPlaceMode(o.baked !== false);
         $('placeSolid').checked = o.solid !== false;
-        $('statusMsg').textContent = `${o.model} (${o.baked === false ? `object, tag ${area.name}_p${o.id}` : 'baked'}): drag to move · G move · R turn · S size (or the handles) · Q/E turn 15° · Delete removes · Esc deselects`;
+        $('statusMsg').textContent =
+            `${o.model} (${o.baked === false ? `object, tag ${area.name}_p${o.id}` : 'baked'}): drag to move · G move · R turn · S size (or the handles) · Q/E turn 15° · Delete removes · Esc deselects`;
     } else {
         $('statusMsg').textContent = '';
     }
@@ -296,25 +364,50 @@ function selectObject(o) {
 async function placeDown(e, p) {
     // On an object: Shift removes it, else select it and drag to move it.
     const hit = view.pickObject(e.clientX, e.clientY);
-    if (hit && e.shiftKey) { removeObject(hit); return null; }
+    if (hit && e.shiftKey) {
+        removeObject(hit);
+        return null;
+    }
     if (hit) {
         selectObject(hit);
         area.beginStroke();
         return { object: hit, flat: await models.flat(hit.model), from: p, move: { dx: hit.x - p.x, dy: hit.y - p.y } };
     }
     if (e.shiftKey) {
-        let best = null, bd = 2.5;
-        for (const o of area.objects) { const d = Math.hypot(o.x - p.x, o.y - p.y); if (d < bd) { best = o; bd = d; } }
+        let best = null,
+            bd = 2.5;
+        for (const o of area.objects) {
+            const d = Math.hypot(o.x - p.x, o.y - p.y);
+            if (d < bd) {
+                best = o;
+                bd = d;
+            }
+        }
         if (best) removeObject(best);
         return null;
     }
-    if (!placeModel) { $('statusMsg').textContent = 'Pick a placeable in the panel first.'; return null; }
+    if (!placeModel) {
+        $('statusMsg').textContent = 'Pick a placeable in the panel first.';
+        return null;
+    }
     let flat;
-    try { flat = await models.flat(placeModel); } catch { $('statusMsg').textContent = `${placeModel} can't be read.`; return null; }
+    try {
+        flat = await models.flat(placeModel);
+    } catch {
+        $('statusMsg').textContent = `${placeModel} can't be read.`;
+        return null;
+    }
     const o = {
-        id: area.nextObjectId++, model: placeModel, appearance: appearanceOf(placeModel), x: p.x, y: p.y, z: 0,
-        bearing: $('placeRandom').checked ? Math.random() * Math.PI * 2 : 0, scale: +$('placeScale').value,
-        solid: $('placeSolid').checked, baked: placeBaked(),
+        id: area.nextObjectId++,
+        model: placeModel,
+        appearance: appearanceOf(placeModel),
+        x: p.x,
+        y: p.y,
+        z: 0,
+        bearing: $('placeRandom').checked ? Math.random() * Math.PI * 2 : 0,
+        scale: +$('placeScale').value,
+        solid: $('placeSolid').checked,
+        baked: placeBaked(),
     };
     o.z = groundUnder(o, flat);
     area.beginStroke();
@@ -330,7 +423,8 @@ async function placeDown(e, p) {
 // Dragging a new object turns it (towards the pointer); dragging a
 // selected one moves it, kept on the ground.
 function placeDrag(e) {
-    const s = stroke.place, p = view.pick(e.clientX, e.clientY);
+    const s = stroke.place,
+        p = view.pick(e.clientX, e.clientY);
     if (!p) return;
     if (s.move) {
         s.object.x = Math.min(area.sizeX, Math.max(0, p.x + s.move.dx));
@@ -357,26 +451,46 @@ async function changeSelected(change) {
 
 // --- Moving, turning and sizing the selected placeable (G / R / S, handles, numbers) -----------
 
-
 /** The selected object's numbers in the Place panel (or hides them). */
 function showObjectPanel(o) {
     $('objPanel').hidden = !o;
     if (!o) return;
     $('objX').value = o.x.toFixed(2);
     $('objY').value = o.y.toFixed(2);
-    $('objAngle').value = (((o.bearing * 180 / Math.PI) % 360 + 360) % 360).toFixed(1);
+    $('objAngle').value = (((((o.bearing * 180) / Math.PI) % 360) + 360) % 360).toFixed(1);
     $('objScale').value = o.scale.toFixed(2);
 }
-$('objX').onchange = () => changeSelected(o => { o.x = Math.min(area.sizeX, Math.max(0, +$('objX').value)); }).then(() => showObjectPanel(view.selected));
-$('objY').onchange = () => changeSelected(o => { o.y = Math.min(area.sizeY, Math.max(0, +$('objY').value)); }).then(() => showObjectPanel(view.selected));
-$('objAngle').onchange = () => changeSelected(o => { o.bearing = +$('objAngle').value * Math.PI / 180; }).then(() => showObjectPanel(view.selected));
-$('objScale').onchange = () => changeSelected(o => { o.scale = Math.min(5, Math.max(0.1, +$('objScale').value || 1)); }).then(() => { showObjectPanel(view.selected); if (view.selected) { $('placeScale').value = view.selected.scale; showScale(); } });
+$('objX').onchange = () =>
+    changeSelected(o => {
+        o.x = Math.min(area.sizeX, Math.max(0, +$('objX').value));
+    }).then(() => showObjectPanel(view.selected));
+$('objY').onchange = () =>
+    changeSelected(o => {
+        o.y = Math.min(area.sizeY, Math.max(0, +$('objY').value));
+    }).then(() => showObjectPanel(view.selected));
+$('objAngle').onchange = () =>
+    changeSelected(o => {
+        o.bearing = (+$('objAngle').value * Math.PI) / 180;
+    }).then(() => showObjectPanel(view.selected));
+$('objScale').onchange = () =>
+    changeSelected(o => {
+        o.scale = Math.min(5, Math.max(0.1, +$('objScale').value || 1));
+    }).then(() => {
+        showObjectPanel(view.selected);
+        if (view.selected) {
+            $('placeScale').value = view.selected.scale;
+            showScale();
+        }
+    });
 
 // --- Import an NWN area ----------------------------------------------------------------
 // What a list shows for an area: the name the game shows for it (when the server knows it), else its tag.
-const areaTitle = s => String(s.name || s.tag || s.area).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const areaTitle = s => String(s.name || s.tag || s.area).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
 
-let importChosen = null, importing = false, importSeq = 0, importTimer = null;
+let importChosen = null,
+    importing = false,
+    importSeq = 0,
+    importTimer = null;
 $('btnImport').onclick = async () => {
     if (readOnly) return;
     $('openDialog').close();
@@ -388,11 +502,22 @@ $('btnImport').onclick = async () => {
     $('importFind').focus();
 };
 // The server searches (a builder can't be sent the whole module's list).
-$('importFind').oninput = () => { clearTimeout(importTimer); importTimer = setTimeout(showImportList, 250); };
+$('importFind').oninput = () => {
+    clearTimeout(importTimer);
+    importTimer = setTimeout(showImportList, 250);
+};
 // Not closed (Escape, Cancel) while an import runs: it opens the area when done.
-$('importDialog').addEventListener('cancel', e => { if (importing) e.preventDefault(); });
-$('importDialog').querySelector('button[value=cancel]').addEventListener('click', e => { if (importing) e.preventDefault(); });
-$('importName').oninput = () => { $('importGo').disabled = importing || !importChosen || !$('importName').checkValidity() || !$('importName').value; };
+$('importDialog').addEventListener('cancel', e => {
+    if (importing) e.preventDefault();
+});
+$('importDialog')
+    .querySelector('button[value=cancel]')
+    .addEventListener('click', e => {
+        if (importing) e.preventDefault();
+    });
+$('importName').oninput = () => {
+    $('importGo').disabled = importing || !importChosen || !$('importName').checkValidity() || !$('importName').value;
+};
 
 /** While an import runs: its button, the list and the fields can't change it. */
 function setImporting(on) {
@@ -408,25 +533,37 @@ async function showImportList() {
     const mine = ++importSeq;
     const box = $('importList');
     let r = { sources: [] };
-    try { r = await (await fetch(`/api/import-sources?q=${encodeURIComponent($('importFind').value.trim())}`)).json(); } catch { /* none */ }
+    try {
+        r = await (await fetch(`/api/import-sources?q=${encodeURIComponent($('importFind').value.trim())}`)).json();
+    } catch {
+        /* none */
+    }
     // Their own uploaded files come first, and stay while they search (filtered by the same words).
     let uploads = [];
-    try { uploads = (await (await fetch('/api/uploads')).json()).uploads ?? []; } catch { /* none */ }
+    try {
+        uploads = (await (await fetch('/api/uploads')).json()).uploads ?? [];
+    } catch {
+        /* none */
+    }
     if (mine !== importSeq) return; // a newer search is on its way
     box.textContent = '';
     const words = $('importFind').value.toLowerCase().split(/\s+/).filter(Boolean);
-    const own = uploads.flatMap(u => (u.areas ?? []).map(a => ({ ...a, upload: u.file, from: `your file ${u.file}` })))
+    const own = uploads
+        .flatMap(u => (u.areas ?? []).map(a => ({ ...a, upload: u.file, from: `your file ${u.file}` })))
         .filter(a => words.every(w => `${a.tag} ${a.area} ${a.tileset} ${a.upload}`.toLowerCase().includes(w)));
     const found = [...own, ...(r.sources ?? [])];
     for (const s of found) {
         const b = document.createElement('button');
         b.type = 'button';
-        if (s.upload) { b.dataset.upload = s.upload; b.dataset.area = s.area; }
+        if (s.upload) {
+            b.dataset.upload = s.upload;
+            b.dataset.area = s.area;
+        }
         // An admin's entries say what they come from; a builder's say whether it is theirs.
         const kind = s.kind ?? (s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors');
         const allowed = s.assigned !== false;
         const state = s.assigned === true ? ' · assigned to you' : allowed ? '' : ' · needs an assignment';
-        b.innerHTML = `<span><b>${areaTitle(s)}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ' · ' + s.from : ''}${state}</small>`;
+        b.innerHTML = `<span><b>${areaTitle(s)}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ` · ${s.from}` : ''}${state}</small>`;
         b.disabled = !allowed;
         if (!allowed) b.title = 'Ask an admin to assign this area to you';
         if (importChosen?.area === s.area && importChosen?.upload === s.upload) b.classList.add('selected');
@@ -434,14 +571,19 @@ async function showImportList() {
             importChosen = s;
             for (const o of box.children) o.classList.toggle('selected', o === b);
             // A name from its tag: lower case, letters, digits and _, 9 at most.
-            $('importName').value = (s.tag || s.area).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 9) || 'imported';
+            $('importName').value =
+                (s.tag || s.area)
+                    .toLowerCase()
+                    .replace(/[^a-z0-9_]/g, '')
+                    .slice(0, 9) || 'imported';
             $('importName').oninput();
         };
         box.appendChild(b);
     }
     if (!found.length) box.textContent = r.note || 'No area matches.';
     else if (r.note) box.insertAdjacentHTML('afterbegin', `<p class="note">${r.note}</p>`);
-    else if (r.total > found.length) box.insertAdjacentHTML('beforeend', `<p class="note">${r.total - found.length} more: narrow the search.</p>`);
+    else if (r.total > found.length)
+        box.insertAdjacentHTML('beforeend', `<p class="note">${r.total - found.length} more: narrow the search.</p>`);
 }
 
 // Their own file goes up as it is (the server checks it reads as a module); its areas then show in the list.
@@ -460,12 +602,19 @@ $('importFile').onchange = async () => {
         $('importFind').value = '';
         importChosen = null;
         await showImportList();
-        const only = r.areas.length === 1 ? [...$('importList').querySelectorAll('button')].find(b => b.dataset.upload === saveAs && b.dataset.area === r.areas[0].area) : null;
+        const only =
+            r.areas.length === 1
+                ? [...$('importList').querySelectorAll('button')].find(
+                      b => b.dataset.upload === saveAs && b.dataset.area === r.areas[0].area,
+                  )
+                : null;
         if (only) {
             only.click();
-            $('importStatus').textContent = `${file.name}: its area (${r.areas[0].tag || r.areas[0].area}) is chosen. Change the name if you like, then Import.`;
+            $('importStatus').textContent =
+                `${file.name}: its area (${r.areas[0].tag || r.areas[0].area}) is chosen. Change the name if you like, then Import.`;
         } else {
-            $('importStatus').textContent = `${file.name}: ${r.areas.length} area${r.areas.length === 1 ? '' : 's'}, at the top of the list. Pick one.`;
+            $('importStatus').textContent =
+                `${file.name}: ${r.areas.length} area${r.areas.length === 1 ? '' : 's'}, at the top of the list. Pick one.`;
         }
     } catch (err) {
         $('importStatus').textContent = `Couldn't use ${file.name}: ${err.message}`;
@@ -478,15 +627,20 @@ $('importGo').onclick = async () => {
     if (importing) return;
     const name = $('importName').value;
     setImporting(true);
-    $('importStatus').textContent = `Importing ${importChosen.tag || importChosen.area} as ${name}… (reading its tiles and the module's haks takes a little while)`;
+    $('importStatus').textContent =
+        `Importing ${importChosen.tag || importChosen.area} as ${name}… (reading its tiles and the module's haks takes a little while)`;
     try {
-        const res = await fetch(`/api/import?area=${encodeURIComponent(importChosen.area)}&name=${encodeURIComponent(name)}${importChosen.upload ? `&upload=${encodeURIComponent(importChosen.upload)}` : ''}`, { method: 'POST' });
+        const res = await fetch(
+            `/api/import?area=${encodeURIComponent(importChosen.area)}&name=${encodeURIComponent(name)}${importChosen.upload ? `&upload=${encodeURIComponent(importChosen.upload)}` : ''}`,
+            { method: 'POST' },
+        );
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
         setImporting(false);
         $('importDialog').close();
         await openArea({ name });
-        $('statusMsg').textContent = `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ' Notes: ' + r.notes.join('; ') : ''}`;
+        $('statusMsg').textContent =
+            `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
     } catch (err) {
         $('importStatus').textContent = `Couldn't import: ${err.message}`;
         setImporting(false);
@@ -500,22 +654,36 @@ $('btnOpen').onclick = async () => {
     list.textContent = 'Loading…';
     $('openDialog').showModal();
     let areas = [];
-    try { areas = (await (await fetch('/api/areas')).json()).areas; } catch { /* none */ }
+    try {
+        areas = (await (await fetch('/api/areas')).json()).areas;
+    } catch {
+        /* none */
+    }
     // An admin on a team server can look at anyone's workspace.
     const who = $('openWho');
     who.hidden = !(me.team && me.admin);
     if (!who.hidden && !who.firstChild) {
         let users = [];
-        try { users = (await (await fetch('/api/users')).json()).users; } catch { /* none */ }
+        try {
+            users = (await (await fetch('/api/users')).json()).users;
+        } catch {
+            /* none */
+        }
         const pick = document.createElement('select');
-        pick.innerHTML = `<option value="">My workspace</option>` + users.filter(u => u.user !== me.user)
-            .map(u => `<option value="${u.user}">${u.user}: ${u.areas} area${u.areas === 1 ? '' : 's'} (read-only)</option>`).join('');
+        pick.innerHTML =
+            `<option value="">My workspace</option>` +
+            users
+                .filter(u => u.user !== me.user)
+                .map(u => `<option value="${u.user}">${u.user}: ${u.areas} area${u.areas === 1 ? '' : 's'} (read-only)</option>`)
+                .join('');
         pick.value = me.viewing ?? '';
         pick.onchange = () => viewAs(pick.value);
         who.append('Workspace', pick);
     }
     // Areas only saved here (never exported) too.
-    const local = Object.keys(localStorage).filter(k => k.startsWith('landscaper.area.')).map(k => k.slice(16));
+    const local = Object.keys(localStorage)
+        .filter(k => k.startsWith('landscaper.area.'))
+        .map(k => k.slice(16));
     for (const name of local) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
     list.textContent = '';
     for (const a of areas) {
@@ -524,9 +692,14 @@ $('btnOpen').onclick = async () => {
         const b = document.createElement('button');
         b.type = 'button';
         const kind = a.kind === 'underground' ? ' cave' : a.kind === 'interior' ? ' interior' : '';
-        const what = a.local ? 'only in this browser' : `${a.tiles}×${a.tilesY ?? a.tiles}${kind} · module ${a.module}${a.exported ? '' : ' · not exported yet'}`;
+        const what = a.local
+            ? 'only in this browser'
+            : `${a.tiles}×${a.tilesY ?? a.tiles}${kind} · module ${a.module}${a.exported ? '' : ' · not exported yet'}`;
         b.innerHTML = `<span><b>${a.name}</b>${a.name === area.name ? ' (open)' : ''}</span><small>${what}</small>`;
-        b.onclick = () => { $('openDialog').close(); openArea(a); };
+        b.onclick = () => {
+            $('openDialog').close();
+            openArea(a);
+        };
         row.appendChild(b);
         if (a.imported && !readOnly) {
             // Import it again from the original it was imported from (with
@@ -554,7 +727,8 @@ async function reimport(a, button) {
     const yes = await ask({
         title: `Import ${a.name} again?`,
         text: `Your changes to it here are replaced (the last copy is kept as a backup).\n\nIts next export puts the original's placeables, creatures and lighting into the module again, replacing what was changed there in the toolset.`,
-        ok: 'Re-import', danger: true,
+        ok: 'Re-import',
+        danger: true,
     });
     if (!yes) return;
     // The whole dialog waits for it: every button off, no closing it.
@@ -570,7 +744,8 @@ async function reimport(a, button) {
         for (const b of $('openDialog').querySelectorAll('button')) b.disabled = false;
         $('openDialog').close();
         await openArea({ name: a.name });
-        $('statusMsg').textContent = `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ' Notes: ' + r.notes.join('; ') : ''}`;
+        $('statusMsg').textContent =
+            `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
     } catch (err) {
         $('openDialog').close();
         showError(`Couldn't import ${a.name} again: ${err.message}`);
@@ -580,10 +755,21 @@ async function reimport(a, button) {
     }
 }
 let reimporting = false;
-$('openDialog').addEventListener('cancel', e => { if (reimporting) e.preventDefault(); });
+$('openDialog').addEventListener('cancel', e => {
+    if (reimporting) e.preventDefault();
+});
 // (Escape itself too, wherever focus is with every button off: browsers let
 // it close a dialog regardless when there was no click since the last time.)
-document.addEventListener('keydown', e => { if ((reimporting || importing) && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } }, true);
+document.addEventListener(
+    'keydown',
+    e => {
+        if ((reimporting || importing) && e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    },
+    true,
+);
 
 /** Opens area `a`: from landscaper (its saved copy, else its last export),
  *  or from this browser if it only lives here (a save that failed). */
@@ -611,9 +797,16 @@ async function showEntrances() {
     // Only the latest of overlapping renders fills the panel.
     const mine = ++entranceRender;
     const box = $('entranceList');
-    if (!area.entrances.length) { box.innerHTML = '<p class="note">No entrances yet.</p>'; return; }
+    if (!area.entrances.length) {
+        box.innerHTML = '<p class="note">No entrances yet.</p>';
+        return;
+    }
     let doors = [];
-    try { doors = (await (await fetch(`/api/doors?module=${encodeURIComponent(area.module || area.name)}`)).json()).doors; } catch { /* none */ }
+    try {
+        doors = (await (await fetch(`/api/doors?module=${encodeURIComponent(area.module || area.name)}`)).json()).doors;
+    } catch {
+        /* none */
+    }
     if (mine !== entranceRender) return;
     box.textContent = '';
     area.entrances.forEach((e, k) => {
@@ -621,8 +814,9 @@ async function showEntrances() {
         const row = document.createElement('div');
         row.className = 'entrance-row';
         const others = doors.filter(d => !d.tag.startsWith(`${area.name}_ent`));
-        const options = ['<option value="">(not linked here: the toolset\'s link stays)</option>']
-            .concat(others.map(d => `<option value="${d.tag}"${e.link === d.tag ? ' selected' : ''}>${d.tag} (area ${d.area})</option>`));
+        const options = ['<option value="">(not linked here: the toolset\'s link stays)</option>'].concat(
+            others.map(d => `<option value="${d.tag}"${e.link === d.tag ? ' selected' : ''}>${d.tag} (area ${d.area})</option>`),
+        );
         if (e.link && !others.some(d => d.tag === e.link)) options.push(`<option value="${e.link}" selected>${e.link}</option>`);
         row.innerHTML = `<b>Entrance ${k + 1}</b><span>door <code>${tag}</code> leads to</span><select>${options.join('')}</select>`;
         row.querySelector('select').onchange = ev => {
@@ -632,7 +826,11 @@ async function showEntrances() {
         };
         box.appendChild(row);
     });
-    if (!doors.length) box.insertAdjacentHTML('beforeend', `<p class="note">No other entrance doors in module ${area.module} yet: export the other area into it first.</p>`);
+    if (!doors.length)
+        box.insertAdjacentHTML(
+            'beforeend',
+            `<p class="note">No other entrance doors in module ${area.module} yet: export the other area into it first.</p>`,
+        );
 }
 
 // --- Scatter --------------------------------------------------------------------------
@@ -642,7 +840,10 @@ for (const q of QUICK) {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = q;
-    b.onclick = () => { $('scatterSearch').value = q; showScatterables(); };
+    b.onclick = () => {
+        $('scatterSearch').value = q;
+        showScatterables();
+    };
     $('scatterChips').appendChild(b);
 }
 let scatterShown = null;
@@ -651,7 +852,8 @@ async function showScatterables() {
     if (query === scatterShown) return;
     scatterShown = query;
     await modelResults($('scatterResults'), query, model => {
-        if (scatterMix.has(model)) scatterMix.delete(model); else scatterMix.add(model);
+        if (scatterMix.has(model)) scatterMix.delete(model);
+        else scatterMix.add(model);
         markMix();
     });
     markMix();
@@ -659,7 +861,10 @@ async function showScatterables() {
 function markMix() {
     for (const b of $('scatterResults').children) b.classList.toggle('active', scatterMix.has(b.dataset.model));
 }
-$('scatterSearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(showScatterables, 250); };
+$('scatterSearch').oninput = () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(showScatterables, 250);
+};
 const showScatterSliders = () => {
     $('scatterDensityOut').textContent = `${$('scatterDensity').value} per 100 m²`;
     $('scatterMinOut').textContent = `${Math.round($('scatterMin').value * 100)}%`;
@@ -685,16 +890,31 @@ function scatterStamp(p, radius) {
     const mix = s.flats;
     if (!mix?.length) return;
     const spacing = Math.sqrt(100 / +$('scatterDensity').value);
-    const lo = Math.min(+$('scatterMin').value, +$('scatterMax').value), hi = Math.max(+$('scatterMin').value, +$('scatterMax').value);
+    const lo = Math.min(+$('scatterMin').value, +$('scatterMax').value),
+        hi = Math.max(+$('scatterMin').value, +$('scatterMax').value);
     for (let k = 0; k < 4; k++) {
-        const a = Math.random() * Math.PI * 2, d = radius * Math.sqrt(Math.random());
-        const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+        const a = Math.random() * Math.PI * 2,
+            d = radius * Math.sqrt(Math.random());
+        const x = p.x + Math.cos(a) * d,
+            y = p.y + Math.sin(a) * d;
         if (x < 0.5 || y < 0.5 || x > area.sizeX - 0.5 || y > area.sizeY - 0.5) continue;
         if (area.objects.some(o => Math.hypot(o.x - x, o.y - y) < spacing)) continue;
-        const i = Math.min(area.nx - 1, Math.round(x / SPACING)), j = Math.min(area.ny - 1, Math.round(y / SPACING));
+        const i = Math.min(area.nx - 1, Math.round(x / SPACING)),
+            j = Math.min(area.ny - 1, Math.round(y / SPACING));
         if ($('scatterSteep').checked && (!area.walkable(i, j) || area.depth(i, j) > 0)) continue;
         const [model, flat] = mix[Math.floor(Math.random() * mix.length)];
-        const o = { id: area.nextObjectId++, model, appearance: appearanceOf(model), x, y, z: 0, bearing: Math.random() * Math.PI * 2, scale: lo + Math.random() * (hi - lo), solid: $('scatterSolid').checked, baked: true };
+        const o = {
+            id: area.nextObjectId++,
+            model,
+            appearance: appearanceOf(model),
+            x,
+            y,
+            z: 0,
+            bearing: Math.random() * Math.PI * 2,
+            scale: lo + Math.random() * (hi - lo),
+            solid: $('scatterSolid').checked,
+            baked: true,
+        };
         o.z = groundUnder(o, flat);
         area.objects.push(o);
         view.addObject(o);
@@ -724,7 +944,8 @@ for (const p of PRESETS) {
 const currentSky = () => (skyNight ? area.atmosphere.moon : area.atmosphere.sun);
 
 function showSky() {
-    const a = area.atmosphere, s = currentSky();
+    const a = area.atmosphere,
+        s = currentSky();
     for (const b of $('skyPresets').children) b.classList.toggle('active', b.dataset.preset === a.preset);
     for (const b of $('dayNight').children) b.classList.toggle('active', (b.dataset.night === '1') === skyNight);
     for (const r of document.querySelectorAll('[name=skyTime]')) r.checked = r.value === a.time;
@@ -733,7 +954,14 @@ function showSky() {
     $('skyDiffuse').value = s.diffuse;
     $('skyFog').value = s.fog;
     $('skyFogAmount').value = s.fogAmount;
-    $('skyFogOut').textContent = s.fogAmount === 0 ? 'light' : s.fogAmount < 10 ? `${s.fogAmount} · some` : s.fogAmount < 20 ? `${s.fogAmount} · heavy` : `${s.fogAmount} · thick`;
+    $('skyFogOut').textContent =
+        s.fogAmount === 0
+            ? 'light'
+            : s.fogAmount < 10
+              ? `${s.fogAmount} · some`
+              : s.fogAmount < 20
+                ? `${s.fogAmount} · heavy`
+                : `${s.fogAmount} · thick`;
     $('skyShadows').checked = s.shadows;
     $('shadowStrength').value = area.shadow;
     $('shadowOut').textContent = area.shadow > 0 ? `${Math.round(area.shadow * 100)}%` : 'off';
@@ -753,12 +981,30 @@ function editSky(change) {
     area.atmosphere.preset = 'custom';
     skyChanged();
 }
-$('skyAmbient').oninput = e => editSky((a, s) => { s.ambient = e.target.value; });
-$('skyDiffuse').oninput = e => editSky((a, s) => { s.diffuse = e.target.value; });
-$('skyFog').oninput = e => editSky((a, s) => { s.fog = e.target.value; });
-$('skyFogAmount').oninput = e => editSky((a, s) => { s.fogAmount = +e.target.value; });
-$('skyShadows').onchange = e => editSky((a, s) => { s.shadows = e.target.checked; });
-$('skyClip').oninput = e => editSky(a => { a.fogClip = +e.target.value; });
+$('skyAmbient').oninput = e =>
+    editSky((_a, s) => {
+        s.ambient = e.target.value;
+    });
+$('skyDiffuse').oninput = e =>
+    editSky((_a, s) => {
+        s.diffuse = e.target.value;
+    });
+$('skyFog').oninput = e =>
+    editSky((_a, s) => {
+        s.fog = e.target.value;
+    });
+$('skyFogAmount').oninput = e =>
+    editSky((_a, s) => {
+        s.fogAmount = +e.target.value;
+    });
+$('skyShadows').onchange = e =>
+    editSky((_a, s) => {
+        s.shadows = e.target.checked;
+    });
+$('skyClip').oninput = e =>
+    editSky(a => {
+        a.fogClip = +e.target.value;
+    });
 // Not part of the .are's settings: baked into the tiles.
 let shadeTimer = null;
 $('shadowStrength').oninput = e => {
@@ -769,13 +1015,18 @@ $('shadowStrength').oninput = e => {
     saveSoon();
 };
 for (const r of document.querySelectorAll('[name=skyTime]')) {
-    r.onchange = () => editSky(a => {
-        a.time = r.value;
-        // Show what the game will.
-        if (r.value !== 'cycle') skyNight = r.value === 'night';
-    });
+    r.onchange = () =>
+        editSky(a => {
+            a.time = r.value;
+            // Show what the game will.
+            if (r.value !== 'cycle') skyNight = r.value === 'night';
+        });
 }
-for (const b of $('dayNight').children) b.onclick = () => { skyNight = b.dataset.night === '1'; showSky(); };
+for (const b of $('dayNight').children)
+    b.onclick = () => {
+        skyNight = b.dataset.night === '1';
+        showSky();
+    };
 // Whether the view shows the area's light and fog (else a plain working
 // light, no fog), remembered.
 $('skyPreview').checked = localStorage.getItem('landscaper.skyPreview') !== 'off';
@@ -791,7 +1042,8 @@ function closeMenus() {
     }
 }
 for (const m of document.querySelectorAll('.menu')) {
-    const btn = m.querySelector('.menu-btn'), list = m.querySelector('.menu-list');
+    const btn = m.querySelector('.menu-btn'),
+        list = m.querySelector('.menu-list');
     btn.addEventListener('click', e => {
         e.stopPropagation();
         const open = list.hidden;
@@ -800,13 +1052,24 @@ for (const m of document.querySelectorAll('.menu')) {
         btn.classList.toggle('active', open);
     });
     // (A menu whose items are ticked stays open: its items say `data-stay`.)
-    list.addEventListener('click', e => { if (e.target.closest('[data-stay]')) e.stopPropagation(); else closeMenus(); });
+    list.addEventListener('click', e => {
+        if (e.target.closest('[data-stay]')) e.stopPropagation();
+        else closeMenus();
+    });
 }
 document.addEventListener('click', closeMenus);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMenus();
+});
 
-$('btnSky').onclick = () => { skyOpen = !skyOpen; updatePanels(); };
-$('skyClose').onclick = () => { skyOpen = false; updatePanels(); };
+$('btnSky').onclick = () => {
+    skyOpen = !skyOpen;
+    updatePanels();
+};
+$('skyClose').onclick = () => {
+    skyOpen = false;
+    updatePanels();
+};
 
 // --- Sculpting ---------------------------------------------------------------
 
@@ -815,25 +1078,31 @@ const debug = new URLSearchParams(location.search).has('debug');
 const dbg = { last: '-', downs: 0, strokes: 0, stamps: 0, note: '' };
 function showDebug() {
     if (!debug) return;
-    $('statusMsg').textContent = `[debug] last: ${dbg.last} · downs ${dbg.downs} · strokes ${dbg.strokes} · stamps ${dbg.stamps} ${dbg.note}`;
+    $('statusMsg').textContent =
+        `[debug] last: ${dbg.last} · downs ${dbg.downs} · strokes ${dbg.strokes} · stamps ${dbg.stamps} ${dbg.note}`;
 }
 if (debug) {
     for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'lostpointercapture']) {
-        view.renderer.domElement.addEventListener(type, e => {
-            dbg.last = `${type} button=${e.button} buttons=${e.buttons} type=${e.pointerType ?? '-'}${e.ctrlKey ? ' ctrl' : ''}${e.altKey ? ' alt' : ''}`;
-            if (type === 'pointerdown') dbg.downs++;
-            showDebug();
-        }, true);
+        view.renderer.domElement.addEventListener(
+            type,
+            e => {
+                dbg.last = `${type} button=${e.button} buttons=${e.buttons} type=${e.pointerType ?? '-'}${e.ctrlKey ? ' ctrl' : ''}${e.altKey ? ' alt' : ''}`;
+                if (type === 'pointerdown') dbg.downs++;
+                showDebug();
+            },
+            true,
+        );
     }
 }
 
 // ?debug: the editor's state for test scripts.
-if (debug) window.landscaper = { area: () => area, view, live: () => live, select: o => selectObject(o), transformer, ask, things: thingsTool };
+if (debug)
+    window.landscaper = { area: () => area, view, live: () => live, select: o => selectObject(o), transformer, ask, things: thingsTool };
 
 const canvas = view.renderer.domElement;
 let stroke = null; // { flattenTo, last }
 const live = { on: localStorage.getItem('landscaper.live') !== 'off', timer: null, running: false, again: false, edits: 0 };
-let mouse = null;  // last client position over the canvas
+let mouse = null; // last client position over the canvas
 
 // Water: a press starts a body (or takes the one clicked) and dragging up
 // or down sets its level; Shift drains the one clicked.
@@ -864,7 +1133,8 @@ function waterDrag(e) {
     const w = stroke.water;
     w.body.level = Math.max(w.ground + 0.05, w.startLevel + (w.startY - e.clientY) * LEVEL_PER_PIXEL);
     waterChanged();
-    $('statusMsg').textContent = `Water level ${w.body.level.toFixed(2)} m (${(w.body.level - w.ground).toFixed(1)} m deep where you clicked)`;
+    $('statusMsg').textContent =
+        `Water level ${w.body.level.toFixed(2)} m (${(w.body.level - w.ground).toFixed(1)} m deep where you clicked)`;
 }
 
 function waterChanged() {
@@ -880,12 +1150,16 @@ function waterChanged() {
  *  or more above the floor there) within 5 m, or null. */
 function nearestWall(p) {
     const floor = area.heightAt(p.x, p.y);
-    let best = null, bestD = Infinity;
+    let best = null,
+        bestD = Infinity;
     for (let k = 0; k < 32; k++) {
-        const a = k * Math.PI / 16;
+        const a = (k * Math.PI) / 16;
         for (let d = 0.3; d <= 5; d += 0.3) {
             if (area.heightAt(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d) > floor + 1) {
-                if (d < bestD) { bestD = d; best = a; }
+                if (d < bestD) {
+                    bestD = d;
+                    best = a;
+                }
                 break;
             }
         }
@@ -906,7 +1180,8 @@ function entranceDown(e, p) {
         return;
     }
     // In a cave: on the floor beside a wall, not on the rock (the void).
-    const ci = Math.min(area.nx - 1, Math.round(p.x / SPACING)), cj = Math.min(area.ny - 1, Math.round(p.y / SPACING));
+    const ci = Math.min(area.nx - 1, Math.round(p.x / SPACING)),
+        cj = Math.min(area.ny - 1, Math.round(p.y / SPACING));
     if (area.void(ci, cj)) {
         $('statusMsg').textContent = 'In a cave, click the floor right beside a wall: the entrance is carved into that wall.';
         return;
@@ -921,7 +1196,7 @@ function entranceDown(e, p) {
         dir = Math.atan2(gy, gx);
     } else {
         const c = view.camera.position;
-        dir = Math.atan2((area.sizeY - c.z) - p.y, c.x - p.x) + Math.PI;
+        dir = Math.atan2(area.sizeY - c.z - p.y, c.x - p.x) + Math.PI;
     }
     const ent = { x: p.x, y: p.y, dir, width: Math.min(8, Math.max(2.5, +sizeIn.value)), depth: 4, floor: 0 };
     // Inside one tile, for the game's pathfinding; the floor where it lands.
@@ -929,9 +1204,10 @@ function entranceDown(e, p) {
     ent.floor = area.heightAt(ent.x, ent.y);
     area.beginStroke();
     area.entrances.push(ent);
-    // Rock that suits the slope: what's painted just behind the mouth.
+    // Rock that suits the slope: what's painted right behind the mouth.
     const [bx, by] = entranceAt(ent, ent.depth + 2, 0);
-    const bi = Math.min(area.nx - 1, Math.max(0, Math.round(bx / SPACING))), bj = Math.min(area.ny - 1, Math.max(0, Math.round(by / SPACING)));
+    const bi = Math.min(area.nx - 1, Math.max(0, Math.round(bx / SPACING))),
+        bj = Math.min(area.ny - 1, Math.max(0, Math.round(by / SPACING)));
     const ground = area.palette[area.materials[bj * area.nx + bi]];
     ent.rock = rockFor(library.byId.get(ground)?.category, ground, id => library.byId.has(id));
     const rock = ent.rock ? area.materialIndex(ent.rock) : undefined;
@@ -941,8 +1217,9 @@ function entranceDown(e, p) {
     view.updateEntrances();
     view.updateShade();
     showEntrances();
-    $('statusMsg').textContent = `Entrance ${area.entrances.length}: its door will be tagged ${area.name}_ent${area.entrances.length}`
-        + (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '');
+    $('statusMsg').textContent =
+        `Entrance ${area.entrances.length}: its door will be tagged ${area.name}_ent${area.entrances.length}` +
+        (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '');
     saveSoon();
 }
 
@@ -950,7 +1227,8 @@ canvas.addEventListener('pointerdown', e => {
     // Moving, turning or sizing the selected object: a click keeps it, a right click cancels.
     if (transformer.active) {
         e.preventDefault();
-        if (e.button === 0) transformer.confirm(); else if (e.button === 2) transformer.cancel();
+        if (e.button === 0) transformer.confirm();
+        else if (e.button === 2) transformer.cancel();
         return;
     }
     if (e.button === 0 && area && tool === 'place' && view.selected) {
@@ -959,25 +1237,46 @@ canvas.addEventListener('pointerdown', e => {
             const p = view.pick(e.clientX, e.clientY);
             transformer.last = { clientX: e.clientX, clientY: e.clientY };
             if (transformer.begin(h.kind, h.axis, true, p ? { x: p.x, y: p.y } : null)) {
-                try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
+                try {
+                    canvas.setPointerCapture(e.pointerId);
+                } catch {
+                    /* fine */
+                }
             }
             return;
         }
     }
-    if (e.button !== 0 || !area) { dbg.note = `(ignored: button ${e.button})`; showDebug(); return; }
+    if (e.button !== 0 || !area) {
+        dbg.note = `(ignored: button ${e.button})`;
+        showDebug();
+        return;
+    }
     // A click on a marker that shows (the Show menu) selects it, from any tool: its properties open in the Things tool, as the
     // right-click menu does. (The Place tool has its own objects to pick.)
     // (Not when picking a texture up: a marker over the ground is not what is being asked about.)
     if (tool !== 'things' && tool !== 'place' && !readOnly && !(tool === 'paint' && (picking || e.altKey))) {
         const hit = view.pickThing(e.clientX, e.clientY, true);
-        if (hit != null) { e.preventDefault(); selectTool('things'); thingsTool.pick(hit); return; }
+        if (hit != null) {
+            e.preventDefault();
+            selectTool('things');
+            thingsTool.pick(hit);
+            return;
+        }
     }
     mouse = { x: e.clientX, y: e.clientY };
     const p = view.pick(e.clientX, e.clientY);
-    if (!p) { dbg.note = '(down missed the terrain)'; showDebug(); return; }
+    if (!p) {
+        dbg.note = '(down missed the terrain)';
+        showDebug();
+        return;
+    }
     if (tool === 'things') {
         if (!readOnly && thingsTool.down(e, p)) {
-            try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
+            try {
+                canvas.setPointerCapture(e.pointerId);
+            } catch {
+                /* fine */
+            }
         }
         return;
     }
@@ -986,13 +1285,28 @@ canvas.addEventListener('pointerdown', e => {
         return;
     }
     if (tool === 'scatter') {
-        if (!e.shiftKey && !scatterMix.size) { $('statusMsg').textContent = 'Add models to the mix in the panel first.'; return; }
+        if (!e.shiftKey && !scatterMix.size) {
+            $('statusMsg').textContent = 'Add models to the mix in the panel first.';
+            return;
+        }
         area.beginStroke();
         const scatter = { erase: e.shiftKey, flats: null };
         stroke = { scatter, last: 0 };
-        Promise.all([...scatterMix].map(m => models.flat(m).then(f => [m, f], () => null)))
-            .then(list => { scatter.flats = list.filter(Boolean); });
-        try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
+        Promise.all(
+            [...scatterMix].map(m =>
+                models.flat(m).then(
+                    f => [m, f],
+                    () => null,
+                ),
+            ),
+        ).then(list => {
+            scatter.flats = list.filter(Boolean);
+        });
+        try {
+            canvas.setPointerCapture(e.pointerId);
+        } catch {
+            /* fine */
+        }
         return;
     }
     if (tool === 'place') {
@@ -1003,7 +1317,11 @@ canvas.addEventListener('pointerdown', e => {
         placeDown(e, p).then(s => {
             if (s && placePointer === pointerId) {
                 stroke = { place: s };
-                try { canvas.setPointerCapture(pointerId); } catch { /* fine */ }
+                try {
+                    canvas.setPointerCapture(pointerId);
+                } catch {
+                    /* fine */
+                }
             }
         });
         return;
@@ -1012,7 +1330,11 @@ canvas.addEventListener('pointerdown', e => {
         const w = waterDown(e, p);
         if (w) {
             stroke = { water: w };
-            try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ }
+            try {
+                canvas.setPointerCapture(e.pointerId);
+            } catch {
+                /* fine */
+            }
         }
         return;
     }
@@ -1044,7 +1366,11 @@ canvas.addEventListener('pointerdown', e => {
         let start = Infinity;
         for (let dy = -2; dy <= 2; dy += 0.5) {
             for (let dx = -2; dx <= 2; dx += 0.5) {
-                if (dx * dx + dy * dy <= 4) start = Math.min(start, area.heightAt(Math.min(area.sizeX, Math.max(0, p.x + dx)), Math.min(area.sizeY, Math.max(0, p.y + dy))));
+                if (dx * dx + dy * dy <= 4)
+                    start = Math.min(
+                        start,
+                        area.heightAt(Math.min(area.sizeX, Math.max(0, p.x + dx)), Math.min(area.sizeY, Math.max(0, p.y + dy))),
+                    );
             }
         }
         stroke.room = { from: p, to: p, floor: area.enclosed() && start >= area.roof - 0.5 ? area.roof - CAVE_ROCK : start };
@@ -1063,21 +1389,35 @@ canvas.addEventListener('pointerdown', e => {
     dbg.strokes++;
     dbg.note = '';
     showDebug();
-    try { canvas.setPointerCapture(e.pointerId); } catch (err) { dbg.note = `(capture failed: ${err.message})`; showDebug(); }
+    try {
+        canvas.setPointerCapture(e.pointerId);
+    } catch (err) {
+        dbg.note = `(capture failed: ${err.message})`;
+        showDebug();
+    }
 });
 // A right-click that doesn't move (a drag turns the view) on a marker: its menu, from any tool.
 let rmb = null;
-canvas.addEventListener('pointerdown', e => { if (e.button === 2) rmb = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+canvas.addEventListener('pointerdown', e => {
+    if (e.button === 2) rmb = { x: e.clientX, y: e.clientY, t: performance.now() };
+});
 canvas.addEventListener('pointerup', e => {
     if (e.button !== 2 || !rmb) return;
-    const moved = Math.hypot(e.clientX - rmb.x, e.clientY - rmb.y), quick = performance.now() - rmb.t < 600;
+    const moved = Math.hypot(e.clientX - rmb.x, e.clientY - rmb.y),
+        quick = performance.now() - rmb.t < 600;
     rmb = null;
     if (moved > 4 || !quick || !area || readOnly) return;
     const hit = view.pickThing(e.clientX, e.clientY, true);
-    if (hit == null) { closeCtx(); return; }
+    if (hit == null) {
+        closeCtx();
+        return;
+    }
     openCtx(e.clientX, e.clientY, hit);
 });
-function closeCtx() { const m = $('ctxMenu'); if (m) m.hidden = true; }
+function closeCtx() {
+    const m = $('ctxMenu');
+    if (m) m.hidden = true;
+}
 function openCtx(x, y, hit) {
     const items = thingsTool.menuFor(hit);
     if (!items.length) return;
@@ -1088,22 +1428,39 @@ function openCtx(x, y, hit) {
         b.type = 'button';
         b.className = 'menu-item';
         b.textContent = it.label;
-        b.onclick = () => { closeCtx(); selectTool('things'); thingsTool.pick(hit); it.run(); };
+        b.onclick = () => {
+            closeCtx();
+            selectTool('things');
+            thingsTool.pick(hit);
+            it.run();
+        };
         m.appendChild(b);
     }
     m.style.left = `${Math.min(x, window.innerWidth - 190)}px`;
     m.style.top = `${Math.min(y, window.innerHeight - items.length * 44 - 12)}px`;
     m.hidden = false;
 }
-document.addEventListener('pointerdown', e => { if (!e.target.closest('#ctxMenu')) closeCtx(); }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtx(); });
+document.addEventListener(
+    'pointerdown',
+    e => {
+        if (!e.target.closest('#ctxMenu')) closeCtx();
+    },
+    true,
+);
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeCtx();
+});
 
 canvas.addEventListener('pointermove', e => {
     mouse = { x: e.clientX, y: e.clientY };
     // A marker you can click shows a pointer, whichever tool is on.
-    if (tool !== 'things' && tool !== 'place' && !stroke && !transformer.active && area && !readOnly && e.buttons === 0) canvas.style.cursor = view.pickThing(e.clientX, e.clientY, true) != null ? 'pointer' : '';
+    if (tool !== 'things' && tool !== 'place' && !stroke && !transformer.active && area && !readOnly && e.buttons === 0)
+        canvas.style.cursor = view.pickThing(e.clientX, e.clientY, true) != null ? 'pointer' : '';
     transformer.move(e);
-    if (thingsTool.drag) { const p = view.pick(e.clientX, e.clientY); if (p) thingsTool.move(p); }
+    if (thingsTool.drag) {
+        const p = view.pick(e.clientX, e.clientY);
+        if (p) thingsTool.move(p);
+    }
     if (stroke?.water) waterDrag(e);
     if (stroke?.place) placeDrag(e);
     if (stroke?.ramp) {
@@ -1113,7 +1470,8 @@ canvas.addEventListener('pointermove', e => {
             const plan = rampPlan(area, stroke.ramp.from, p, rampOptions());
             view.setRampPreview(plan, rampWidth());
             const dir = plan.dh > 0.05 ? 'up' : plan.dh < -0.05 ? 'down' : 'level';
-            $('statusMsg').textContent = `Ramp ${plan.len.toFixed(1)} m long, ${dir} ${Math.abs(plan.dh).toFixed(2)} m: ${plan.degrees.toFixed(0)}°${plan.eased ? ' (eased: it was too steep or too high)' : ''}`;
+            $('statusMsg').textContent =
+                `Ramp ${plan.len.toFixed(1)} m long, ${dir} ${Math.abs(plan.dh).toFixed(2)} m: ${plan.degrees.toFixed(0)}°${plan.eased ? ' (eased: it was too steep or too high)' : ''}`;
         }
     }
     if (stroke?.descent) {
@@ -1122,7 +1480,9 @@ canvas.addEventListener('pointermove', e => {
             stroke.descent.to = p;
             const plan = descentPlan(area, stroke.descent.from, p, descentOptions());
             view.setDescentPreview(plan);
-            $('statusMsg').textContent = plan.error ?? `${plan.floors} floors, ${plan.drop} m apart: ramps of ${plan.pitch.toFixed(0)} m at ${plan.degrees.toFixed(0)}°, the lowest at ${plan.bottom.toFixed(1)} m`;
+            $('statusMsg').textContent =
+                plan.error ??
+                `${plan.floors} floors, ${plan.drop} m apart: ramps of ${plan.pitch.toFixed(0)} m at ${plan.degrees.toFixed(0)}°, the lowest at ${plan.bottom.toFixed(1)} m`;
         }
     }
     if (stroke?.room) {
@@ -1135,24 +1495,38 @@ canvas.addEventListener('pointermove', e => {
         }
     }
 });
-canvas.addEventListener('pointerleave', () => { mouse = null; view.setCursor(null); $('statusPos').textContent = ''; });
+canvas.addEventListener('pointerleave', () => {
+    mouse = null;
+    view.setCursor(null);
+    $('statusPos').textContent = '';
+});
 /** The ramp tool's settings: the rise you typed (blank: to where the button comes up), and whether to keep it walkable. */
 const rampOptions = () => ({ rise: $('rampRise').value === '' ? null : +$('rampRise').value, keepWalkable: $('rampWalkable').checked });
 /** A ramp is twice the brush size wide, and at least as wide as the narrowest passage NWN's pathfinding keeps open. */
 const rampWidth = () => Math.max(+sizeIn.value, DIG_MIN) * 2;
 /** The descent tool's settings. */
-const descentOptions = () => ({ floors: Math.round(+$('descentFloors').value), drop: +$('descentDrop').value, flip: $('descentFlip').checked });
+const descentOptions = () => ({
+    floors: Math.round(+$('descentFloors').value),
+    drop: +$('descentDrop').value,
+    flip: $('descentFlip').checked,
+});
 let placePointer = null;
 const endStroke = () => {
     placePointer = null;
-    if (thingsTool.drag) { thingsTool.up(); return; }
+    if (thingsTool.drag) {
+        thingsTool.up();
+        return;
+    }
     if (!stroke) return;
     if (stroke.ramp) {
         const plan = rampPlan(area, stroke.ramp.from, stroke.ramp.to, rampOptions());
         const rect = cutRamp(area, plan, rampWidth(), $('rampStairs').checked ? +$('rampStep').value : null, $('rampCarve').checked);
         if (rect) view.markDirty(rect);
         view.setRampPreview(null);
-        $('statusMsg').textContent = area.enclosed() && rect && rect.changed < 20 ? 'Nothing to lay it on there: dig or make a room first (or tick "Cut through rock").' : '';
+        $('statusMsg').textContent =
+            area.enclosed() && rect && rect.changed < 20
+                ? 'Nothing to lay it on there: dig or make a room first (or tick "Cut through rock").'
+                : '';
     }
     if (stroke.descent) {
         const plan = descentPlan(area, stroke.descent.from, stroke.descent.to, descentOptions());
@@ -1185,8 +1559,20 @@ const endStroke = () => {
     stroke = null;
     saveSoon();
 };
-canvas.addEventListener('pointerup', e => { if (transformer.active && transformer.held) { transformer.confirm(); return; } endStroke(); });
-canvas.addEventListener('pointercancel', e => { if (transformer.active && transformer.held) { transformer.cancel(); return; } endStroke(); });
+canvas.addEventListener('pointerup', () => {
+    if (transformer.active && transformer.held) {
+        transformer.confirm();
+        return;
+    }
+    endStroke();
+});
+canvas.addEventListener('pointercancel', () => {
+    if (transformer.active && transformer.held) {
+        transformer.cancel();
+        return;
+    }
+    endStroke();
+});
 
 view.onFrame = () => {
     if (view.selected) transformer.place(view.selected);
@@ -1195,12 +1581,24 @@ view.onFrame = () => {
     const radius = +sizeIn.value;
     view.setCursor(p, radius);
     if (p) {
-        const tx = Math.floor(p.x / TILE), ty = Math.floor(p.y / TILE);
-        const i = Math.round(p.x / 0.625), j = Math.round(p.y / 0.625);
-        const ci = Math.min(i, area.nx - 1), cj = Math.min(j, area.ny - 1);
-        const walk = area.walkable(ci, cj), deep = area.depth(ci, cj);
-        const what = deep > SHALLOW ? `water ${deep.toFixed(1)} m deep: too deep to walk` : deep > 0 ? `shallow water ${deep.toFixed(1)} m: wading` : walk ? 'walkable' : 'too steep to walk';
-        $('statusPos').textContent = `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
+        const tx = Math.floor(p.x / TILE),
+            ty = Math.floor(p.y / TILE);
+        const i = Math.round(p.x / 0.625),
+            j = Math.round(p.y / 0.625);
+        const ci = Math.min(i, area.nx - 1),
+            cj = Math.min(j, area.ny - 1);
+        const walk = area.walkable(ci, cj),
+            deep = area.depth(ci, cj);
+        const what =
+            deep > SHALLOW
+                ? `water ${deep.toFixed(1)} m deep: too deep to walk`
+                : deep > 0
+                  ? `shallow water ${deep.toFixed(1)} m: wading`
+                  : walk
+                    ? 'walkable'
+                    : 'too steep to walk';
+        $('statusPos').textContent =
+            `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
     }
     if (stroke?.scatter && p) {
         scatterStamp(p, radius);
@@ -1220,21 +1618,46 @@ view.onFrame = () => {
 // The Show menu: which kinds of thing are on the map out of the Things tool.
 {
     const boxes = [...document.querySelectorAll('#menuShow input[data-kind]')];
-    const label = () => { $('btnShow').textContent = `Show (${thingsTool.shown.size})`; };
+    const label = () => {
+        $('btnShow').textContent = `Show (${thingsTool.shown.size})`;
+    };
     for (const cb of boxes) {
         cb.checked = thingsTool.shown.has(cb.dataset.kind);
         cb.closest('label').style.setProperty('--kind', css(THING_COLOURS[cb.dataset.kind] ?? 0xffffff));
-        cb.onchange = () => { thingsTool.setShown(cb.dataset.kind, cb.checked); label(); };
+        cb.onchange = () => {
+            thingsTool.setShown(cb.dataset.kind, cb.checked);
+            label();
+        };
     }
-    const all = on => { for (const cb of boxes) { cb.checked = on; thingsTool.setShown(cb.dataset.kind, on); } label(); };
+    const all = on => {
+        for (const cb of boxes) {
+            cb.checked = on;
+            thingsTool.setShown(cb.dataset.kind, on);
+        }
+        label();
+    };
     // Imported buildings: cut the roofs and upper floors away to see inside (the height is kept in this browser).
-    const cutOn = $('showCut'), cutH = $('cutHeight'), cutOut = $('cutOut');
-    try { const k = JSON.parse(localStorage.getItem('landscaper.cut') ?? 'null'); if (k) { cutOn.checked = !!k.on; cutH.value = k.h ?? 3; } } catch { /* default */ }
+    const cutOn = $('showCut'),
+        cutH = $('cutHeight'),
+        cutOut = $('cutOut');
+    try {
+        const k = JSON.parse(localStorage.getItem('landscaper.cut') ?? 'null');
+        if (k) {
+            cutOn.checked = !!k.on;
+            cutH.value = k.h ?? 3;
+        }
+    } catch {
+        /* default */
+    }
     const cut = () => {
         cutOut.textContent = `${cutH.value} m`;
         $('cutRow').style.opacity = cutOn.checked ? '1' : '0.5';
         view.setCut(cutOn.checked ? +cutH.value : null);
-        try { localStorage.setItem('landscaper.cut', JSON.stringify({ on: cutOn.checked, h: +cutH.value })); } catch { /* not kept */ }
+        try {
+            localStorage.setItem('landscaper.cut', JSON.stringify({ on: cutOn.checked, h: +cutH.value }));
+        } catch {
+            /* not kept */
+        }
     };
     cutOn.onchange = cut;
     cutH.oninput = cut;
@@ -1268,8 +1691,11 @@ async function loadMe() {
     try {
         const res = await fetch('/api/me');
         if (res.ok) me = await res.json();
-        else if (res.status === 401 || res.status === 403) showError((await res.json().catch(() => ({}))).error || 'You are not signed in.');
-    } catch { /* not served: a plain page */ }
+        else if (res.status === 401 || res.status === 403)
+            showError((await res.json().catch(() => ({}))).error || 'You are not signed in.');
+    } catch {
+        /* not served: a plain page */
+    }
     readOnly = !!me.viewing;
     showWho();
 }
@@ -1287,7 +1713,6 @@ function showButtons() {
     $('btnPublish').disabled = readOnly;
     $('btnTest').disabled = readOnly;
     $('btnVersion').disabled = readOnly;
-
 }
 
 function showWho() {
@@ -1315,10 +1740,19 @@ async function showActivity() {
     rows.textContent = '';
     const q = `limit=300&user=${encodeURIComponent($('actUser').value.trim())}&action=${encodeURIComponent($('actAction').value)}`;
     let events = [];
-    try { events = (await (await fetch(`/api/audit?${q}`)).json()).events ?? []; } catch { /* none */ }
+    try {
+        events = (await (await fetch(`/api/audit?${q}`)).json()).events ?? [];
+    } catch {
+        /* none */
+    }
     for (const e of events) {
         const tr = document.createElement('tr');
-        const cell = (text, cls) => { const td = document.createElement('td'); td.textContent = text ?? ''; if (cls) td.className = cls; tr.appendChild(td); };
+        const cell = (text, cls) => {
+            const td = document.createElement('td');
+            td.textContent = text ?? '';
+            if (cls) td.className = cls;
+            tr.appendChild(td);
+        };
         cell(new Date(e.t * 1000).toLocaleString());
         cell((e.user ?? '(not signed in)') + (e.admin ? ' (admin)' : ''));
         cell(e.action);
@@ -1337,7 +1771,9 @@ $('btnActivity').onclick = showActivity;
 async function publishCall(dry) {
     const note = encodeURIComponent($('pubNote').value.trim());
     const whole = $('pubWhole').checked;
-    const url = whole ? `/api/publish-module?module=${encodeURIComponent(area.module || area.name)}` : `/api/publish?name=${encodeURIComponent(area.name)}`;
+    const url = whole
+        ? `/api/publish-module?module=${encodeURIComponent(area.module || area.name)}`
+        : `/api/publish?name=${encodeURIComponent(area.name)}`;
     // (No review service: a package to download. Its check is the same call with `dry`; the download is a separate one.)
     if (me.package) {
         const res = await fetch(`/api/package?name=${encodeURIComponent(area.name)}&whole=${whole ? 1 : 0}`, { method: 'POST' });
@@ -1361,7 +1797,9 @@ function pubShow(text, mode = '') {
     $('pubTime').hidden = mode !== 'work';
     if (mode === 'work') {
         const t0 = Date.now();
-        const tick = () => { $('pubTime').textContent = `${Math.round((Date.now() - t0) / 1000)} s`; };
+        const tick = () => {
+            $('pubTime').textContent = `${Math.round((Date.now() - t0) / 1000)} s`;
+        };
         tick();
         pubClock = setInterval(tick, 500);
     }
@@ -1382,18 +1820,26 @@ async function pubCheck() {
         const errors = findings.filter(f => f.level === 'error').length;
         showFindings(findings);
         const files = `${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'}`;
-        const what = whole ? `the ${plan.areas.length} areas ${plan.areas.join(', ')}` : `${area.name} as ${plan.new ? 'a new area' : `a rework of ${plan.area}`}`;
+        const what = whole
+            ? `the ${plan.areas.length} areas ${plan.areas.join(', ')}`
+            : `${area.name} as ${plan.new ? 'a new area' : `a rework of ${plan.area}`}`;
         const reviewers = me.reviewers || 'your reviewers';
-        pubShow(me.package
-            ? `This packages ${what}: ${files}${plan.library ? ' (including the shared texture library)' : ''}, in the layout of your module's source, with a MANIFEST.md saying where each goes. It is what your last export built, so export first if you have changed anything.`
-                + (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : '')
-            : `This sends ${what}: ${files}${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; ${reviewers} review the pull requests.`
-                + (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : ''));
+        pubShow(
+            me.package
+                ? `This packages ${what}: ${files}${plan.library ? ' (including the shared texture library)' : ''}, in the layout of your module's source, with a MANIFEST.md saying where each goes. It is what your last export built, so export first if you have changed anything.` +
+                      (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : '')
+                : `This sends ${what}: ${files}${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; ${reviewers} review the pull requests.` +
+                      (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : ''),
+        );
         $('pubGo').textContent = me.package ? 'Download the package' : 'Open the pull requests';
         $('pubNoteRow').hidden = !!me.package;
         $('pubGo').hidden = errors > 0;
         $('pubNote').disabled = errors > 0;
-        if (errors) pubShow(`${errors} problem${errors === 1 ? '' : 's'} to fix before this can be published (listed below). Fix them, export again, and check again.`, 'err');
+        if (errors)
+            pubShow(
+                `${errors} problem${errors === 1 ? '' : 's'} to fix before this can be published (listed below). Fix them, export again, and check again.`,
+                'err',
+            );
     } catch (err) {
         showFindings([]);
         $('pubReviewBox').hidden = true;
@@ -1409,7 +1855,11 @@ function showFindings(findings) {
     for (const f of findings) {
         const li = document.createElement('li');
         li.className = `finding ${f.level}`;
-        if (f.what) { const b = document.createElement('b'); b.textContent = `${f.what} `; li.appendChild(b); }
+        if (f.what) {
+            const b = document.createElement('b');
+            b.textContent = `${f.what} `;
+            li.appendChild(b);
+        }
         li.appendChild(document.createTextNode(f.msg));
         box.appendChild(li);
     }
@@ -1420,7 +1870,7 @@ $('btnPublish').onclick = async () => {
     const dlg = $('publishDialog');
     $('pubLinks').textContent = '';
     $('pubGo').disabled = false;
-    // A module of several exported areas can go as one set.
+    // A module of two or more exported areas can go as one set.
     $('pubWhole').checked = false;
     $('pubWholeRow').hidden = true;
     try {
@@ -1430,7 +1880,9 @@ $('btnPublish').onclick = async () => {
             $('pubWholeRow').hidden = false;
             $('pubWholeNames').textContent = `(${same.map(a => a.name).join(', ')})`;
         }
-    } catch { /* just the one area */ }
+    } catch {
+        /* the list fails to load: publish only this area */
+    }
     dlg.showModal();
     await pubCheck();
 };
@@ -1444,8 +1896,13 @@ $('pubGo').onclick = async () => {
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
             const file = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `${area.name}-package.zip`;
             const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: file });
-            document.body.appendChild(a); a.click(); a.remove();
-            pubShow(`Downloaded ${file}. Unzip it into your module's repository (MANIFEST.md says what goes where), build the haks, and commit.`, 'ok');
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            pubShow(
+                `Downloaded ${file}. Unzip it into your module's repository (MANIFEST.md says what goes where), build the haks, and commit.`,
+                'ok',
+            );
         } catch (err) {
             pubShow(`Couldn't build the package: ${err.message}`, 'err');
         }
@@ -1459,10 +1916,18 @@ $('pubGo').onclick = async () => {
         const { pr_urls } = await publishCall(false);
         pubShow('Done. Two pull requests were opened, linked to each other:', 'ok');
         $('pubGo').hidden = true;
-        for (const [label, url] of [['nwn-module', pr_urls.nwn_module], ['nwn-haks', pr_urls.nwn_haks]]) {
+        for (const [label, url] of [
+            ['nwn-module', pr_urls.nwn_module],
+            ['nwn-haks', pr_urls.nwn_haks],
+        ]) {
             const a = document.createElement('a');
-            a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = `${label}: ${url}`;
-            const p = document.createElement('p'); p.appendChild(a); $('pubLinks').appendChild(p);
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.textContent = `${label}: ${url}`;
+            const p = document.createElement('p');
+            p.appendChild(a);
+            $('pubLinks').appendChild(p);
         }
     } catch (err) {
         pubShow(`Publishing failed: ${err.message}`, 'err');
@@ -1475,12 +1940,20 @@ $('pubGo').onclick = async () => {
 // One holder at a time (the ops API keeps the claim). The dialog says who has it, loads your last export of this
 // module with a temporary way in from an existing area, and gives it back.
 
-let testPoll = null, testState = null, testPicked = null, testSeq = 0, testTimer = null;
+let testPoll = null,
+    testState = null,
+    testPicked = null,
+    testSeq = 0,
+    testTimer = null;
 const testSaysMinutes = secs => `${Math.max(1, Math.round(secs / 60))} minute${Math.round(secs / 60) === 1 ? '' : 's'}`;
 
 async function testRefresh(touch = true) {
     let r;
-    try { r = await (await fetch(`/api/dev-test${touch ? '?touch=1' : ''}`)).json(); } catch { r = { error: 'the server did not answer' }; }
+    try {
+        r = await (await fetch(`/api/dev-test${touch ? '?touch=1' : ''}`)).json();
+    } catch {
+        r = { error: 'the server did not answer' };
+    }
     const st = $('testStatus');
     if (r.error || !r.status) {
         st.textContent = `Can't reach the dev test service: ${r.error ?? 'no answer'}`;
@@ -1489,7 +1962,8 @@ async function testRefresh(touch = true) {
         return;
     }
     testState = r;
-    const claim = r.status.claim, busy = r.status.busy ?? [];
+    const claim = r.status.claim,
+        busy = r.status.busy ?? [];
     const mine = claim && claim.user === r.me;
     st.className = 'note';
     $('testTakeRow').hidden = !(claim && !mine && r.admin);
@@ -1510,7 +1984,8 @@ async function testRefresh(touch = true) {
 }
 
 function testCanGo() {
-    const claim = testState?.status?.claim, busy = testState?.status?.busy ?? [];
+    const claim = testState?.status?.claim,
+        busy = testState?.status?.busy ?? [];
     const free = !claim || claim.user === testState.me || ($('testTake').checked && testState.admin);
     $('testGo').disabled = !(free && !busy.length && testPicked && $('testWp').value);
     $('testGo').textContent = claim && claim.user !== testState?.me ? 'Take over and load' : 'Load on the dev server';
@@ -1522,7 +1997,11 @@ async function testPickArea(name, waypoint = '') {
     const sel = $('testWp');
     sel.textContent = '';
     let wp = [];
-    try { wp = (await (await fetch(`/api/dev-test/waypoints?area=${encodeURIComponent(name)}`)).json()).waypoints ?? []; } catch { /* none */ }
+    try {
+        wp = (await (await fetch(`/api/dev-test/waypoints?area=${encodeURIComponent(name)}`)).json()).waypoints ?? [];
+    } catch {
+        /* none */
+    }
     for (const w of wp) sel.add(new Option(`${w.tag}  (${Math.round(w.x)}, ${Math.round(w.y)})`, w.tag));
     if (!wp.length) sel.add(new Option('this area has no waypoints: pick another', ''));
     if (waypoint && wp.some(w => w.tag === waypoint)) sel.value = waypoint;
@@ -1533,11 +2012,17 @@ async function testPickArea(name, waypoint = '') {
 const testWayKey = () => `landscaper.testway.${area?.module || area?.name}`;
 
 async function testAreas() {
-    const mine = ++testSeq, box = $('testAreas'), q = $('testFind').value.trim();
+    const mine = ++testSeq,
+        box = $('testAreas'),
+        q = $('testFind').value.trim();
     box.textContent = '';
     if (q.length < 3) return;
     let r = { sources: [] };
-    try { r = await (await fetch(`/api/import-sources?q=${encodeURIComponent(q)}`)).json(); } catch { /* none */ }
+    try {
+        r = await (await fetch(`/api/import-sources?q=${encodeURIComponent(q)}`)).json();
+    } catch {
+        /* none */
+    }
     if (mine !== testSeq) return;
     for (const s of (r.sources ?? []).slice(0, 12)) {
         const b = document.createElement('button');
@@ -1567,8 +2052,11 @@ $('btnTest').onclick = async () => {
     entry.add(new Option('the first area', ''));
     try {
         const mine = (await (await fetch('/api/areas')).json()).areas ?? [];
-        for (const a of mine.filter(a => a.exported && (a.module || a.name) === (area.module || area.name))) entry.add(new Option(a.name, a.name));
-    } catch { /* just the first */ }
+        for (const a of mine.filter(a => a.exported && (a.module || a.name) === (area.module || area.name)))
+            entry.add(new Option(a.name, a.name));
+    } catch {
+        /* the list fails to load: offer only "the first area" */
+    }
     $('testStatus').textContent = 'Checking the dev server…';
     $('testDialog').showModal();
     // The way in used last time for this module, ready to go.
@@ -1584,13 +2072,18 @@ $('btnTest').onclick = async () => {
             $('testAreas').appendChild(b);
             await testPickArea(last.area, last.waypoint);
         }
-    } catch { /* nothing remembered */ }
+    } catch {
+        /* nothing remembered */
+    }
     await testRefresh(false);
     clearInterval(testPoll);
     testPoll = setInterval(() => testRefresh(true), 10000);
 };
 $('testDialog').addEventListener('close', () => clearInterval(testPoll));
-$('testFind').oninput = () => { clearTimeout(testTimer); testTimer = setTimeout(testAreas, 300); };
+$('testFind').oninput = () => {
+    clearTimeout(testTimer);
+    testTimer = setTimeout(testAreas, 300);
+};
 $('testWp').onchange = testCanGo;
 $('testTake').onchange = testCanGo;
 $('testGo').onclick = async () => {
@@ -1627,7 +2120,12 @@ $('testRelease').onclick = async () => {
 // Keeps this version of the area in the team's history (a commit in Gitea).
 $('btnVersion').onclick = async () => {
     if (readOnly || !area) return;
-    const note = await ask({ title: `Save a version of ${area.name}`, text: 'Keeps this copy in the team\'s history. Autosave never does.', ok: 'Save version', input: { label: 'A short note (optional)', placeholder: 'what changed' } });
+    const note = await ask({
+        title: `Save a version of ${area.name}`,
+        text: "Keeps this copy in the team's history. Autosave never does.",
+        ok: 'Save version',
+        input: { label: 'A short note (optional)', placeholder: 'what changed' },
+    });
     if (note === null) return;
     const btn = $('btnVersion');
     btn.disabled = true;
@@ -1646,7 +2144,12 @@ $('btnVersion').onclick = async () => {
     }
 };
 $('actRefresh').onclick = showActivity;
-$('actUser').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); showActivity(); } };
+$('actUser').onkeydown = e => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        showActivity();
+    }
+};
 $('actAction').onchange = showActivity;
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
@@ -1674,21 +2177,29 @@ async function saveArea(a) {
         await putArea(a.name, json);
         localStorage.removeItem(`landscaper.area.${a.name}`);
         localStorage.removeItem(`landscaper.saved.${a.name}`);
-        if ($('statusMsg').dataset.saveFailed) { $('statusMsg').textContent = 'Saved.'; delete $('statusMsg').dataset.saveFailed; }
+        if ($('statusMsg').dataset.saveFailed) {
+            $('statusMsg').textContent = 'Saved.';
+            delete $('statusMsg').dataset.saveFailed;
+        }
     } catch (err) {
         try {
             localStorage.setItem(`landscaper.area.${a.name}`, json);
             localStorage.setItem(`landscaper.saved.${a.name}`, String(Date.now()));
             $('statusMsg').textContent = `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`;
         } catch {
-            $('statusMsg').textContent = `Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`;
+            $('statusMsg').textContent =
+                `Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`;
         }
         $('statusMsg').dataset.saveFailed = '1';
     }
 }
 
 async function putArea(name, json) {
-    const res = await fetch(`/api/save?name=${encodeURIComponent(name)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: json });
+    const res = await fetch(`/api/save?name=${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: json,
+    });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
 }
 
@@ -1696,10 +2207,16 @@ async function putArea(name, json) {
  *  save failed) go to landscaper when newer than its copy, then leave the
  *  browser. */
 async function moveBrowserAreas() {
-    const names = Object.keys(localStorage).filter(k => k.startsWith('landscaper.area.')).map(k => k.slice(16));
+    const names = Object.keys(localStorage)
+        .filter(k => k.startsWith('landscaper.area.'))
+        .map(k => k.slice(16));
     if (!names.length) return;
     let known = [];
-    try { known = (await (await fetch('/api/areas')).json()).areas; } catch { return; }
+    try {
+        known = (await (await fetch('/api/areas')).json()).areas;
+    } catch {
+        return;
+    }
     let moved = 0;
     for (const name of names) {
         const json = localStorage.getItem(`landscaper.area.${name}`);
@@ -1707,10 +2224,15 @@ async function moveBrowserAreas() {
         const there = known.find(a => a.name === name);
         const theirs = Math.max(there?.saved ?? 0, there?.exported ?? 0) * 1000;
         try {
-            if (!there || at > theirs) { await putArea(name, json); moved++; }
+            if (!there || at > theirs) {
+                await putArea(name, json);
+                moved++;
+            }
             localStorage.removeItem(`landscaper.area.${name}`);
             localStorage.removeItem(`landscaper.saved.${name}`);
-        } catch (err) { console.warn(`couldn't move ${name} to disk`, err); }
+        } catch (err) {
+            console.warn(`couldn't move ${name} to disk`, err);
+        }
     }
     if (moved) $('statusMsg').textContent = `Moved ${moved} area${moved > 1 ? 's' : ''} from this browser to landscaper's folder.`;
 }
@@ -1739,24 +2261,42 @@ function checkSoon() {
 async function liveCheck() {
     if (!live.on || !area) return;
     if (stroke) return; // its end schedules one
-    if (live.running) { live.again = true; return; }
+    if (live.running) {
+        live.again = true;
+        return;
+    }
     live.running = true;
-    const edits = live.edits, checked = area;
+    const edits = live.edits,
+        checked = area;
     showLive('busy', 'Checking…', 'Checking how NWN will path this area.');
-    let report = null, error = null;
-    try { report = await sendArea('check'); } catch (err) { error = err; }
+    let report = null,
+        error = null;
+    try {
+        report = await sendArea('check');
+    } catch (err) {
+        error = err;
+    }
     live.running = false;
     if (live.again || edits !== live.edits || checked !== area) {
         live.again = false;
         if (live.on && area) live.timer = setTimeout(liveCheck, LIVE_DELAY);
         return;
     }
-    if (error) { showLive('bad', 'Live: error', error.message); return; }
+    if (error) {
+        showLive('bad', 'Live: error', error.message);
+        return;
+    }
     view.setMarkers(report.warnings || []);
     const { ok, total } = report.routes;
-    const failed = total - ok, others = report.warnings.length - report.warnings.filter(w => w.kind === 'failed_route').length;
+    const failed = total - ok,
+        others = report.warnings.length - report.warnings.filter(w => w.kind === 'failed_route').length;
     if (failed) showLive('bad', `${failed} blocked`, `${ok} of ${total} test routes reach their goal; red pillars mark where they stop.`);
-    else if (others) showLive('warn', `${others} spot${others > 1 ? 's' : ''}`, `All ${total} test routes work; orange pillars mark ${others} spot(s) to look at (Check paths explains).`);
+    else if (others)
+        showLive(
+            'warn',
+            `${others} spot${others > 1 ? 's' : ''}`,
+            `All ${total} test routes work; orange pillars mark ${others} spot(s) to look at (Check paths explains).`,
+        );
     else showLive('ok', 'Paths OK', `All ${total} test routes work.`);
 }
 
@@ -1774,7 +2314,11 @@ $('btnLive').onclick = () => {
     live.on = !live.on;
     localStorage.setItem('landscaper.live', live.on ? 'on' : 'off');
     if (live.on) checkSoon();
-    else { clearTimeout(live.timer); view.setMarkers([]); showLive('off'); }
+    else {
+        clearTimeout(live.timer);
+        view.setMarkers([]);
+        showLive('off');
+    }
 };
 showLive('off');
 
@@ -1793,17 +2337,27 @@ let areaLists = null;
 $('btnSettings').onclick = async () => {
     if (!area || readOnly) return;
     const meta = await thingsTool.loadMeta();
-    areaLists ??= await fetch('/api/area-lists').then(r => r.json()).catch(() => ({}));
-    openSettings(area, meta.template, areaLists, () => { saveSoon(); $('statusMsg').textContent = 'Area settings kept.'; });
+    areaLists ??= await fetch('/api/area-lists')
+        .then(r => r.json())
+        .catch(() => ({}));
+    openSettings(area, meta.template, areaLists, () => {
+        saveSoon();
+        $('statusMsg').textContent = 'Area settings kept.';
+    });
 };
-$('menuArea').querySelector('.menu-btn').addEventListener('click', () => { $('btnCeiling').hidden = !area?.enclosed(); });
+$('menuArea')
+    .querySelector('.menu-btn')
+    .addEventListener('click', () => {
+        $('btnCeiling').hidden = !area?.enclosed();
+    });
 $('btnCeiling').onclick = async () => {
     if (!area?.enclosed() || readOnly) return;
     const text = await ask({
         title: 'Ceiling height',
         text: 'How many metres of headroom to keep over the floor everywhere, so a passage that descends keeps the same ceiling. Leave empty for one flat roof (the walls grow as the floor drops).',
-        ok: 'Set', input: { label: 'Metres (2 to 20)', value: area.clearance ?? '', placeholder: 'flat roof' },
-        submit: v => (v === '' || (+v >= 2 && +v <= 20)) ? undefined : 'Between 2 and 20 metres, or empty.',
+        ok: 'Set',
+        input: { label: 'Metres (2 to 20)', value: area.clearance ?? '', placeholder: 'flat roof' },
+        submit: v => (v === '' || (+v >= 2 && +v <= 20) ? undefined : 'Between 2 and 20 metres, or empty.'),
     });
     if (text === null) return;
     area.clearance = text === '' ? null : +text;
@@ -1811,20 +2365,28 @@ $('btnCeiling').onclick = async () => {
     saveSoon();
     $('statusMsg').textContent = area.clearance ? `The ceiling stays ${area.clearance} m over the floor.` : 'One flat roof.';
 };
-$('btnUndo').onclick = () => { if (area?.undo()) refreshAll(); };
-$('btnRedo').onclick = () => { if (area?.redo()) refreshAll(); };
+$('btnUndo').onclick = () => {
+    if (area?.undo()) refreshAll();
+};
+$('btnRedo').onclick = () => {
+    if (area?.redo()) refreshAll();
+};
 
 // Square sizes to pick, or any width and height (2 to 32 tiles each).
 const SIZES = [4, 8, 12, 16, 20, 24, 28, 32];
 const showSize = () => {
-    for (const o of $('sizeChoices').children) o.classList.toggle('active', +o.dataset.size === +$('newW').value && +o.dataset.size === +$('newH').value);
+    for (const o of $('sizeChoices').children)
+        o.classList.toggle('active', +o.dataset.size === +$('newW').value && +o.dataset.size === +$('newH').value);
 };
 for (const s of SIZES) {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.size = s;
     b.innerHTML = `${s}×${s}<small>${s * TILE} m</small>`;
-    b.onclick = () => { $('newW').value = $('newH').value = s; showSize(); };
+    b.onclick = () => {
+        $('newW').value = $('newH').value = s;
+        showSize();
+    };
     $('sizeChoices').appendChild(b);
 }
 $('newW').oninput = $('newH').oninput = showSize;
@@ -1839,14 +2401,21 @@ const DESCENT_STARTERS = {
 function seedDescent(created, starter) {
     const floors = Math.min(starter.floors, Math.floor(Math.min(created.tiles, created.tilesY) / 2));
     const plan = descentPlan(created, { x: 0, y: 0 }, { x: created.sizeX, y: created.sizeY }, { floors, drop: starter.drop });
-    if (plan.error) { $('statusMsg').textContent = `Too small for the sample descent (${plan.error}); started empty.`; return; }
+    if (plan.error) {
+        $('statusMsg').textContent = `Too small for the sample descent (${plan.error}); started empty.`;
+        return;
+    }
     cutDescent(created, plan, created.materialIndex(starter.floor));
     created.clearance = starter.ceiling;
 }
 for (const radio of document.querySelectorAll('input[name=start]')) {
     radio.addEventListener('change', () => {
         const size = DESCENT_STARTERS[radio.value]?.size;
-        if (size && radio.checked) { $('newW').value = size[0]; $('newH').value = size[1]; showSize(); }
+        if (size && radio.checked) {
+            $('newW').value = size[0];
+            $('newH').value = size[1];
+            showSize();
+        }
     });
 }
 $('btnNew').onclick = () => {
@@ -1859,7 +2428,13 @@ $('newDialog').addEventListener('close', () => {
     const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
     const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
     const starter = DESCENT_STARTERS[start];
-    const created = Area.create($('newName').value.trim().toLowerCase(), tiles($('newW').value), starter?.from ?? start, base, tiles($('newH').value));
+    const created = Area.create(
+        $('newName').value.trim().toLowerCase(),
+        tiles($('newW').value),
+        starter?.from ?? start,
+        base,
+        tiles($('newH').value),
+    );
     if (starter) seedDescent(created, starter);
     created.module = $('newModule').value.trim().toLowerCase() || created.name;
     // A new area starts with the project's template (the standard scripts and so on; the server's, or a plain one).
@@ -1878,18 +2453,21 @@ $('newDialog').addEventListener('close', () => {
  *  sample's palette index (u8), then JSON too long for the query (the
  *  objects); the rest in the query. */
 function areaRequest() {
-    const extra = new TextEncoder().encode(JSON.stringify({ objects: area.objects, things: thingsForExport(area.things), settings: area.settings, originals: area.originals }));
+    const extra = new TextEncoder().encode(
+        JSON.stringify({ objects: area.objects, things: thingsForExport(area.things), settings: area.settings, originals: area.originals }),
+    );
     const body = new Uint8Array(area.heights.byteLength + area.materials.byteLength + extra.byteLength);
     body.set(new Uint8Array(area.heights.buffer, area.heights.byteOffset, area.heights.byteLength));
     body.set(area.materials, area.heights.byteLength);
     body.set(extra, area.heights.byteLength + area.materials.byteLength);
-    const query = `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&tilesY=${area.tilesY}&palette=${encodeURIComponent(area.palette.join(','))}`
-        + `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}`
-        + `&water=${encodeURIComponent(JSON.stringify(area.water))}`
-        + `&shadow=${area.shadow}`
-        + `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}`
-        + (area.enclosed() ? `&kind=${area.kind}&roof=${area.roof}` + (area.clearance > 0 ? `&clearance=${area.clearance}` : '') : '')
-        + `&module=${encodeURIComponent(area.module || area.name)}`;
+    const query =
+        `name=${encodeURIComponent(area.name)}&tiles=${area.tiles}&tilesY=${area.tilesY}&palette=${encodeURIComponent(area.palette.join(','))}` +
+        `&atmosphere=${encodeURIComponent(JSON.stringify(area.atmosphere))}` +
+        `&water=${encodeURIComponent(JSON.stringify(area.water))}` +
+        `&shadow=${area.shadow}` +
+        `&entrances=${encodeURIComponent(JSON.stringify(area.entrances))}` +
+        (area.enclosed() ? `&kind=${area.kind}&roof=${area.roof}${area.clearance > 0 ? `&clearance=${area.clearance}` : ''}` : '') +
+        `&module=${encodeURIComponent(area.module || area.name)}`;
     return { query, body };
 }
 
@@ -1952,15 +2530,31 @@ function showReport(r, checkOnly = false) {
         <h3>${checkOnly ? 'Path check' : `Exported ${r.name}`}</h3>
         <div class="big ${level}">${r.routes.ok} of ${r.routes.total} routes work</div>
         <p>NWN's pathfinding, simulated on random routes between places your ground joins.</p>
-        ${failed ? `<p class="bad">● ${failed} route(s) stop short: red markers, where the walker stops.</p>
-            ${explain(`The ground joins the two ends, but NWN's pathfinding finds no way through, so a player clicking past there stops short. NWN only crosses from one 10 m tile to the next at a few fixed points on each tile edge, so the usual causes are a passage the tiles can't use (see closed passages), a steep step between tile heights, or a narrow way along a tile edge or corner. Widen or straighten the way there, soften the slope, or keep openings away from tile edges and corners (every 10 m on the grid).`)}` : ''}
-        ${closed ? `<p class="warn">● ${closed} passage(s) closed: orange markers.</p>
-            ${explain(`Ground you can walk through, but no NWN tile layout can use it (a gap between obstacles at a tile corner, a strip along a tile edge), so the export made that bit unwalkable. Harmless where nobody needs to pass: a sliver beside a wall, a corner behind rocks. Where players should get through, move or widen the gap, away from tile corners and edges; if it cut a way off, routes through it show as red too.`)}` : ''}
-        ${winding ? `<p class="warn">● ${winding} tile(s) too winding: orange markers.</p>
-            ${explain(`NWN searches inside each tile with a time limit. Ground that twists within one tile (U-bends, zigzags, many small pockets) can take too long, so creatures there sometimes give up or go the long way. Usually it still works; if creatures misbehave there, straighten or widen the passages in that tile.`)}` : ''}
+        ${
+            failed
+                ? `<p class="bad">● ${failed} route(s) stop short: red markers, where the walker stops.</p>
+            ${explain(`The ground joins the two ends, but NWN's pathfinding finds no way through, so a player clicking past there stops short. NWN only crosses from one 10 m tile to the next at a few fixed points on each tile edge, so the usual causes are a passage the tiles can't use (see closed passages), a steep step between tile heights, or a narrow way along a tile edge or corner. Widen or straighten the way there, soften the slope, or keep openings away from tile edges and corners (every 10 m on the grid).`)}`
+                : ''
+        }
+        ${
+            closed
+                ? `<p class="warn">● ${closed} passage(s) closed: orange markers.</p>
+            ${explain(`Ground you can walk through, but no NWN tile layout can use it (a gap between obstacles at a tile corner, a strip along a tile edge), so the export made that bit unwalkable. Harmless where nobody needs to pass: a sliver beside a wall, a corner behind rocks. Where players should get through, move or widen the gap, away from tile corners and edges; if it cut a way off, routes through it show as red too.`)}`
+                : ''
+        }
+        ${
+            winding
+                ? `<p class="warn">● ${winding} tile(s) too winding: orange markers.</p>
+            ${explain(`NWN searches inside each tile with a time limit. Ground that twists within one tile (U-bends, zigzags, many small pockets) can take too long, so creatures there sometimes give up or go the long way. Usually it still works; if creatures misbehave there, straighten or widen the passages in that tile.`)}`
+                : ''
+        }
         <p>Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%</p>
-        ${checkOnly ? '<p class="note">Nothing was exported: this only checks.</p>' : `${updated(r.updated)}${r.added_to_module ? `<p>Added to module <b>${r.added_to_module.module}</b> as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).</p>` : ''}
-        <p>Ready to play: <b>${r.name}</b> is in your NWN modules list.<br><code>${r.installed_module || r.module}</code></p>`}`;
+        ${
+            checkOnly
+                ? '<p class="note">Nothing was exported: this only checks.</p>'
+                : `${updated(r.updated)}${r.added_to_module ? `<p>Added to module <b>${r.added_to_module.module}</b> as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).</p>` : ''}
+        <p>Ready to play: <b>${r.name}</b> is in your NWN modules list.<br><code>${r.installed_module || r.module}</code></p>`
+        }`;
     $('report').hidden = false;
 }
 
@@ -1969,13 +2563,21 @@ function updated(u) {
     if (!u) return '';
     const esc = t => String(t).replace(/</g, '&lt;');
     let html = `<p>Updated your module: new ground, everything you placed kept (${u.objects} object${u.objects === 1 ? '' : 's'}`;
-    html += u.ground_known ? `, ${u.moved} moved up or down with the ground).</p>` : `; the last ground wasn't found, so none were raised or lowered).</p>`;
+    html += u.ground_known
+        ? `, ${u.moved} moved up or down with the ground).</p>`
+        : `; the last ground wasn't found, so none were raised or lowered).</p>`;
     if (u.outside.length) {
-        html += `<p class="warn">● ${u.outside.length} now outside the area: ${u.outside.slice(0, 5).map(o => `${esc(o.tag || '(no tag)')} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`).join('; ')}${u.outside.length > 5 ? '…' : ''}</p>`;
+        html += `<p class="warn">● ${u.outside.length} now outside the area: ${u.outside
+            .slice(0, 5)
+            .map(o => `${esc(o.tag || '(no tag)')} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`)
+            .join('; ')}${u.outside.length > 5 ? '…' : ''}</p>`;
     }
-    if (u.placeables_added || u.placeables_removed) html += `<p>Placeables (objects): ${u.placeables_added} added, ${u.placeables_removed} removed; the others moved where you put them, keeping what the toolset gave them.</p>`;
+    if (u.placeables_added || u.placeables_removed)
+        html += `<p>Placeables (objects): ${u.placeables_added} added, ${u.placeables_removed} removed; the others moved where you put them, keeping what the toolset gave them.</p>`;
     if (u.doors_added) html += `<p>${u.doors_added} new entrance door(s) added: link their transitions in the toolset.</p>`;
-    html += u.atmosphere ? '<p>Light and fog: set from the editor.</p>' : '<p>Light and fog: unchanged in the editor, so the module keeps its own.</p>';
+    html += u.atmosphere
+        ? '<p>Light and fog: set from the editor.</p>'
+        : '<p>Light and fog: unchanged in the editor, so the module keeps its own.</p>';
     html += `<p class="note">Close the module in the toolset before exporting, or saving there will overwrite this update.</p>`;
     return html;
 }
@@ -1984,11 +2586,13 @@ function showError(msg) {
     $('reportBody').innerHTML = `<h3 class="bad">Export failed</h3><p>${msg.replace(/</g, '&lt;')}</p>`;
     $('report').hidden = false;
 }
-$('reportClose').onclick = () => { $('report').hidden = true; };
+$('reportClose').onclick = () => {
+    $('report').hidden = true;
+};
 
 // --- Keys -------------------------------------------------------------------------
 
-const STEP = Math.PI / 36;   // 5 degrees
+const STEP = Math.PI / 36; // 5 degrees
 function cameraKey(e) {
     const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
     if (arrow) {
@@ -1996,38 +2600,86 @@ function cameraKey(e) {
         else view.panBy(arrow[0], arrow[1]);
         return true;
     }
-    if (e.key === '+' || e.key === '=') { view.zoomBy(0.88); return true; }
-    if (e.key === '-' || e.key === '_') { view.zoomBy(1 / 0.88); return true; }
-    if (e.key === 'Home') { view.topDown(); return true; }
+    if (e.key === '+' || e.key === '=') {
+        view.zoomBy(0.88);
+        return true;
+    }
+    if (e.key === '-' || e.key === '_') {
+        view.zoomBy(1 / 0.88);
+        return true;
+    }
+    if (e.key === 'Home') {
+        view.topDown();
+        return true;
+    }
     return false;
 }
 
 window.addEventListener('keydown', e => {
     // F5 / Ctrl+R reload, as in a browser (the app's window has no such keys).
-    if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) { e.preventDefault(); location.reload(); return; }
+    if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+        e.preventDefault();
+        location.reload();
+        return;
+    }
     if (e.target.closest('input, dialog')) return;
     // The camera: arrows move along the ground, Shift+arrows turn the view, + and - zoom, Home looks straight down (F frames).
-    if (!transformer.active && !e.ctrlKey && !e.metaKey && !e.altKey && cameraKey(e)) { e.preventDefault(); return; }
-    if (tool === 'things' && !readOnly && thingsTool.key(e)) { e.preventDefault(); return; }
-    if (transformer.active) { if (transformer.key(e)) e.preventDefault(); return; }
+    if (!transformer.active && !e.ctrlKey && !e.metaKey && !e.altKey && cameraKey(e)) {
+        e.preventDefault();
+        return;
+    }
+    if (tool === 'things' && !readOnly && thingsTool.key(e)) {
+        e.preventDefault();
+        return;
+    }
+    if (transformer.active) {
+        if (transformer.key(e)) e.preventDefault();
+        return;
+    }
     // The selected placeable (Place tool).
     if (tool === 'place' && view.selected) {
         const start = { g: 'move', r: 'rotate', s: 'scale' }[e.key.toLowerCase()];
-        if (start && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); transformer.begin(start); return; }
+        if (start && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            transformer.begin(start);
+            return;
+        }
         const turn = { q: Math.PI / 12, e: -Math.PI / 12 }[e.key.toLowerCase()];
-        if (turn) { changeSelected(o => { o.bearing += turn; }); return; }
-        if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeObject(view.selected); return; }
-        if (e.key === 'Escape') { selectObject(null); return; }
+        if (turn) {
+            changeSelected(o => {
+                o.bearing += turn;
+            });
+            return;
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault();
+            removeObject(view.selected);
+            return;
+        }
+        if (e.key === 'Escape') {
+            selectObject(null);
+            return;
+        }
     }
     const t = Object.entries(TOOLS).find(([, v]) => v.key === e.key);
     if (e.key === 'Escape' && picking) setPicking(false);
-    else if (e.key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) { selectTool('paint'); setPicking(true); }
-    else if (t) selectTool(t[0]);
-    else if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); $('btnUndo').click(); }
-    else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); $('btnRedo').click(); }
-    else if (e.key === '[') { sizeIn.value = +sizeIn.value - 1; showSliders(); }
-    else if (e.key === ']') { sizeIn.value = +sizeIn.value + 1; showSliders(); }
-    else if (e.key === 'w') $('btnWalk').click();
+    else if (e.key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        selectTool('paint');
+        setPicking(true);
+    } else if (t) selectTool(t[0]);
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        $('btnUndo').click();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+        e.preventDefault();
+        $('btnRedo').click();
+    } else if (e.key === '[') {
+        sizeIn.value = +sizeIn.value - 1;
+        showSliders();
+    } else if (e.key === ']') {
+        sizeIn.value = +sizeIn.value + 1;
+        showSliders();
+    } else if (e.key === 'w') $('btnWalk').click();
     else if (e.key === 'l') $('btnSky').click();
     else if (e.key === 'n') $('btnNew').click();
     else if (e.key === 'o') $('btnOpen').click();
@@ -2049,7 +2701,7 @@ let reviewArea = null;
             sessionStorage.setItem('landscaper.review', '1');
             await fetch(`/api/view-as?user=${encodeURIComponent(who)}`, { method: 'POST' });
             location.reload();
-            await new Promise(() => {});   // (the page is reloading)
+            await new Promise(() => {}); // (the page is reloading)
         }
         sessionStorage.removeItem('landscaper.review');
         if (me.viewing === who) reviewArea = name;
@@ -2065,8 +2717,14 @@ if (!readOnly) await moveBrowserAreas();
         try {
             const res = await fetch(`/api/area?name=${encodeURIComponent(current)}`);
             if (res.ok) opened = Area.fromJSON(await res.json());
-        } catch { /* not served */ }
+        } catch {
+            /* not served */
+        }
     }
-    try { opened ??= local ? Area.fromJSON(JSON.parse(local)) : null; } catch { opened = null; }
+    try {
+        opened ??= local ? Area.fromJSON(JSON.parse(local)) : null;
+    } catch {
+        opened = null;
+    }
     setArea(opened ?? Area.create('untitled', 8, 'hills'));
 }

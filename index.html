@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<!-- SPDX-FileCopyrightText: Copyright (C) 2026 plenarius -->
+<!-- SPDX-License-Identifier: MIT -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -21,29 +23,29 @@
         <div class="menu" id="menuFile">
             <button class="top-btn menu-btn" type="button" aria-haspopup="true">File</button>
             <div class="menu-list" hidden>
-                <button class="menu-item" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span><span>New area</span><kbd>N</kbd></button>
-                <button class="menu-item" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span><span>Open…</span><kbd>O</kbd></button>
-                <button class="menu-item" id="btnVersion" hidden title="Keep this version of the area in the team's history (autosave doesn't)"><span>Save version</span></button>
+                <button type="button" class="menu-item" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span><span>New area</span><kbd>N</kbd></button>
+                <button type="button" class="menu-item" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span><span>Open…</span><kbd>O</kbd></button>
+                <button type="button" class="menu-item" id="btnVersion" hidden title="Keep this version of the area in the team's history (autosave doesn't)"><span>Save version</span></button>
                 <hr class="menu-sep" id="sepFile" hidden>
-                <button class="menu-item" id="btnActivity" hidden title="Who searched, imported and exported what (admins)"><span>Activity (admins)</span></button>
+                <button type="button" class="menu-item" id="btnActivity" hidden title="Who searched, imported and exported what (admins)"><span>Activity (admins)</span></button>
             </div>
         </div>
         <div id="areaInfo"></div>
         <div class="menu" id="menuArea">
             <button class="top-btn menu-btn" type="button" aria-haspopup="true">Area</button>
             <div class="menu-list" hidden>
-                <button class="menu-item" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span><span>Sky &amp; fog</span><kbd>L</kbd></button>
-                <button class="menu-item" id="btnCeiling" hidden title="How high the ceiling stays over the floor in a cave or interior"><span>Ceiling height…</span></button>
-                <button class="menu-item" id="btnSettings" title="Name, tag, scripts, weather, music... of this area"><span>Area settings…</span></button>
+                <button type="button" class="menu-item" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span><span>Sky &amp; fog</span><kbd>L</kbd></button>
+                <button type="button" class="menu-item" id="btnCeiling" hidden title="How high the ceiling stays over the floor in a cave or interior"><span>Ceiling height…</span></button>
+                <button type="button" class="menu-item" id="btnSettings" title="Name, tag, scripts, weather, music... of this area"><span>Area settings…</span></button>
             </div>
         </div>
         <div class="spacer"></div>
-        <button class="top-btn icon-only" id="btnUndo" title="Undo (Ctrl+Z)"><span class="icon" data-icon="undo"></span><span class="lbl">Undo</span></button>
-        <button class="top-btn icon-only" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span><span class="lbl">Redo</span></button>
+        <button type="button" class="top-btn icon-only" id="btnUndo" title="Undo (Ctrl+Z)"><span class="icon" data-icon="undo"></span><span class="lbl">Undo</span></button>
+        <button type="button" class="top-btn icon-only" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span><span class="lbl">Redo</span></button>
         <span class="group-sep"></span>
-        <button class="top-btn" id="btnCheck" title="Check how NWN will path this area (nothing is exported)"><span class="icon" data-icon="check"></span>Check paths</button>
-        <button class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
-        <button class="top-btn active" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on">Markers</button>
+        <button type="button" class="top-btn" id="btnCheck" title="Check how NWN will path this area (nothing is exported)"><span class="icon" data-icon="check"></span>Check paths</button>
+        <button type="button" class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
+        <button type="button" class="top-btn active" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on">Markers</button>
         <div class="menu" id="menuShow">
             <button class="top-btn menu-btn" type="button" id="btnShow" title="Which things show on the map when the Things tool isn't selected">Show</button>
             <div class="menu-list" hidden>
@@ -59,18 +61,18 @@
                 <label class="menu-item" data-stay><input type="checkbox" data-kind="placeable"><span class="dot"></span><span>Placeables</span></label>
                 <hr class="menu-sep">
                 <label class="menu-item" data-stay title="For an imported building: hide what is above this height, to look inside"><input type="checkbox" id="showCut"><span>Cut away roofs and upper floors</span></label>
-                <label class="menu-item" data-stay id="cutRow"><span>Cut at</span><input type="range" id="cutHeight" min="1" max="8" step="0.25" value="3"><output id="cutOut">3 m</output></label>
+                <div class="menu-item" data-stay id="cutRow"><label for="cutHeight">Cut at</label><input type="range" id="cutHeight" min="1" max="8" step="0.25" value="3"><output id="cutOut">3 m</output></div>
                 <hr class="menu-sep">
                 <div class="menu-row" data-stay><button type="button" id="showAll">All</button><button type="button" id="showNone">None</button></div>
             </div>
         </div>
         <span class="group-sep"></span>
-        <button class="top-btn primary" id="btnExport" title="Export to Neverwinter Nights"><span class="icon" data-icon="exportNwn"></span>Export to NWN</button>
+        <button type="button" class="top-btn primary" id="btnExport" title="Export to Neverwinter Nights"><span class="icon" data-icon="exportNwn"></span>Export to NWN</button>
         <div class="menu menu-right" id="menuShare">
             <button class="top-btn menu-btn" type="button" aria-haspopup="true">Share</button>
             <div class="menu-list" hidden>
-                <button class="menu-item" id="btnTest" hidden title="Put your exported module on the dev server and walk it in the game"><span>Test on the dev server…</span></button>
-                <button class="menu-item" id="btnPublish" hidden title="Send your last export to the team for review as pull requests (or, where there is no review service, build a package of its files to download)"><span>Publish to the team…</span></button>
+                <button type="button" class="menu-item" id="btnTest" hidden title="Put your exported module on the dev server and walk it in the game"><span>Test on the dev server…</span></button>
+                <button type="button" class="menu-item" id="btnPublish" hidden title="Send your last export to the team for review as pull requests (or, where there is no review service, build a package of its files to download)"><span>Publish to the team…</span></button>
             </div>
         </div>
     </header>
@@ -83,12 +85,12 @@
             <label>Strength <output id="strengthOut"></output></label>
             <input type="range" id="brushStrength" min="0.05" max="1" step="0.05" value="0.5">
         </div>
-        <button class="tool toggle on" id="btnWalk" title="Show where NWN won't let creatures walk (W)"><span class="icon" data-icon="walk"></span><span>Walkable</span></button>
+        <button type="button" class="tool toggle on" id="btnWalk" title="Show where NWN won't let creatures walk (W)"><span class="icon" data-icon="walk"></span><span>Walkable</span></button>
     </nav>
 
     <main id="viewport">
         <section id="skyPanel" class="side-panel" hidden>
-            <button class="panel-close" id="skyClose" title="Close">×</button>
+            <button type="button" class="panel-close" id="skyClose" title="Close">×</button>
             <h3>Sky &amp; fog</h3>
             <div class="segmented" id="dayNight">
                 <button type="button" data-night="0" class="active">☀ Day</button>
@@ -109,15 +111,15 @@
                 <label><input type="color" id="skyDiffuse"> Light <small>(diffuse)</small></label>
                 <label><input type="color" id="skyFog"> Fog colour</label>
             </div>
-            <label class="slider">Fog <output id="skyFogOut"></output>
-                <input type="range" id="skyFogAmount" min="0" max="40" step="1"></label>
+            <div class="slider"><label for="skyFogAmount">Fog</label> <output id="skyFogOut"></output>
+                <input type="range" id="skyFogAmount" min="0" max="40" step="1"></div>
             <label class="check"><input type="checkbox" id="skyShadows"> Shadows</label>
             <h4>Shadows</h4>
-            <label class="slider">Baked shadows <output id="shadowOut"></output>
-                <input type="range" id="shadowStrength" min="0" max="1" step="0.05"></label>
+            <div class="slider"><label for="shadowStrength">Baked shadows</label> <output id="shadowOut"></output>
+                <input type="range" id="shadowStrength" min="0" max="1" step="0.05"></div>
             <h4>View</h4>
-            <label class="slider">View distance <output id="skyClipOut"></output>
-                <input type="range" id="skyClip" min="20" max="200" step="5"></label>
+            <div class="slider"><label for="skyClip">View distance</label> <output id="skyClipOut"></output>
+                <input type="range" id="skyClip" min="20" max="200" step="5"></div>
         </section>
         <section id="placePanel" class="side-panel" hidden>
             <h3>Place</h3>
@@ -133,8 +135,8 @@
             </div>
             <input id="placeSearch" type="search" placeholder="Search placeables…" autocomplete="off">
             <div class="chips" id="placeChips"></div>
-            <label class="slider">Size <output id="placeScaleOut"></output>
-                <input type="range" id="placeScale" min="0.5" max="2" step="0.05" value="1"></label>
+            <div class="slider"><label for="placeScale">Size</label> <output id="placeScaleOut"></output>
+                <input type="range" id="placeScale" min="0.5" max="2" step="0.05" value="1"></div>
             <label class="check"><input type="checkbox" id="placeRandom" checked> Random turn</label>
             <label class="check"><input type="checkbox" id="placeSolid" checked> Blocks walking</label>
             <div class="segmented" id="placeMode">
@@ -149,12 +151,12 @@
             <input id="scatterSearch" type="search" placeholder="Search placeables…" autocomplete="off">
             <div class="chips" id="scatterChips"></div>
             <p class="note">Click models to add them to the mix (click again to take one out). Drag to scatter; Shift-drag to erase.</p>
-            <label class="slider">Density <output id="scatterDensityOut"></output>
-                <input type="range" id="scatterDensity" min="1" max="60" step="1" value="12"></label>
-            <label class="slider">Smallest <output id="scatterMinOut"></output>
-                <input type="range" id="scatterMin" min="0.4" max="2" step="0.05" value="0.8"></label>
-            <label class="slider">Largest <output id="scatterMaxOut"></output>
-                <input type="range" id="scatterMax" min="0.4" max="2" step="0.05" value="1.25"></label>
+            <div class="slider"><label for="scatterDensity">Density</label> <output id="scatterDensityOut"></output>
+                <input type="range" id="scatterDensity" min="1" max="60" step="1" value="12"></div>
+            <div class="slider"><label for="scatterMin">Smallest</label> <output id="scatterMinOut"></output>
+                <input type="range" id="scatterMin" min="0.4" max="2" step="0.05" value="0.8"></div>
+            <div class="slider"><label for="scatterMax">Largest</label> <output id="scatterMaxOut"></output>
+                <input type="range" id="scatterMax" min="0.4" max="2" step="0.05" value="1.25"></div>
             <label class="check"><input type="checkbox" id="scatterSolid" checked> Blocks walking</label>
             <label class="check"><input type="checkbox" id="scatterSteep" checked> Not on steep ground or water</label>
             <div class="swatches" id="scatterResults"></div>
@@ -173,7 +175,7 @@
         </section>
         <!-- The selected thing's properties, on the right so the list on the left and the form don't share one scroll. -->
         <section id="inspector" class="side-panel right" hidden>
-            <button class="panel-close" id="inspectorClose" title="Close (Esc)">×</button>
+            <button type="button" class="panel-close" id="inspectorClose" title="Close (Esc)">×</button>
             <h3>Properties</h3>
             <div id="thingProps" class="thingprops" hidden></div>
             <button type="button" id="thingDelete" class="danger" hidden>Delete it</button>
@@ -208,7 +210,7 @@
     </main>
 
     <aside id="report" hidden>
-        <button id="reportClose" title="Close">×</button>
+        <button type="button" id="reportClose" title="Close">×</button>
         <div id="reportBody"></div>
     </aside>
 
@@ -223,39 +225,39 @@
         <p class="note">Your own script. It is saved and checked by the game's own compiler as you type, and goes to review with what uses it.</p>
         <div id="scriptHost" class="scripthost"></div>
         <p id="scriptStatus" class="note"></p>
-        <menu>
+        <div class="dialog-buttons">
             <button type="button" id="scriptCopy" hidden>Make my own copy</button>
             <button type="button" id="scriptDelete" class="danger">Delete it</button>
             <button type="button" onclick="document.getElementById('scriptDialog').close()">Close</button>
-        </menu>
+        </div>
     </dialog>
     <dialog id="dlgDialog">
         <h2 id="dlgTitle">Conversation</h2>
         <p class="note" id="dlgNote">Your own conversation. Changes are saved as you make them and go to review with what uses it.</p>
         <div id="dlgTree" class="dlgtree"></div>
         <p id="dlgStatus" class="note"></p>
-        <menu>
+        <div class="dialog-buttons">
             <button type="button" id="dlgCopy" hidden>Make my own copy</button>
             <button type="button" onclick="document.getElementById('dlgDialog').close()">Close</button>
-        </menu>
+        </div>
     </dialog>
     <dialog id="bpDialog">
         <h2 id="bpTitle">Blueprint</h2>
         <p class="note">Your own blueprint. Changes are saved as you make them and go to review with the area that uses it.</p>
         <div id="bpBody" class="bpbody"></div>
         <p id="bpStatus" class="note"></p>
-        <menu>
+        <div class="dialog-buttons">
             <button type="button" id="bpDelete" class="danger">Delete it</button>
             <button type="button" onclick="document.getElementById('bpDialog').close()">Close</button>
-        </menu>
+        </div>
     </dialog>
     <dialog id="newDialog">
         <form method="dialog">
             <h2>New area</h2>
             <label>Name <small>1–9 letters, digits or _ (prefixes every resref)</small>
-                <input id="newName" required pattern="[a-z0-9_]{1,9}" maxlength="9" value="myarea"></label>
+                <input type="text" id="newName" required pattern="[a-z0-9_]{1,9}" maxlength="9" value="myarea"></label>
             <label>Module <small>its NWN module; another area's to link to it (a cave beside its surface). Empty: its own</small>
-                <input id="newModule" pattern="[a-z0-9_]{0,16}" maxlength="16" placeholder="same as the name"></label>
+                <input type="text" id="newModule" pattern="[a-z0-9_]{0,16}" maxlength="16" placeholder="same as the name"></label>
             <label>Size <small>NWN tiles of 10 m</small></label>
             <div class="size-choices" id="sizeChoices"></div>
             <div class="size-free"><label>Across <input id="newW" type="number" min="3" max="32" step="1" value="8"></label>
@@ -273,10 +275,10 @@
             </div>
             <label>Start height <small>metres; start high (a plateau) to dig valleys and canyons down into it</small>
                 <input id="newBase" type="number" min="0" max="100" step="1" value="5"></label>
-            <menu>
-                <button value="cancel" formnovalidate>Cancel</button>
-                <button value="ok" class="primary">Create</button>
-            </menu>
+            <div class="dialog-buttons">
+                <button type="submit" value="cancel" formnovalidate>Cancel</button>
+                <button type="submit" value="ok" class="primary">Create</button>
+            </div>
         </form>
     </dialog>
 
@@ -285,7 +287,7 @@
             <h2>Open an area</h2>
             <div id="openWho" class="open-who" hidden></div>
             <div id="openList" class="open-list"></div>
-            <menu><button type="button" id="btnImport">Import an NWN area…</button><button value="cancel">Cancel</button></menu>
+            <div class="dialog-buttons"><button type="button" id="btnImport">Import an NWN area…</button><button type="submit" value="cancel">Cancel</button></div>
         </form>
     </dialog>
 
@@ -299,9 +301,9 @@
             <p class="elapsed" id="pubTime" hidden></p>
             <label class="check" id="pubWholeRow" hidden><input type="checkbox" id="pubWhole"> Publish the whole module <small id="pubWholeNames"></small></label>
             <label id="pubNoteRow">Note for the reviewers <small>(optional)</small>
-                <input id="pubNote" maxlength="300" autocomplete="off"></label>
+                <input type="text" id="pubNote" maxlength="300" autocomplete="off"></label>
             <div id="pubLinks"></div>
-            <menu><button type="button" id="pubGo">Open the pull requests</button><button value="cancel" id="pubClose">Close</button></menu>
+            <div class="dialog-buttons"><button type="button" id="pubGo">Open the pull requests</button><button type="submit" value="cancel" id="pubClose">Close</button></div>
         </form>
     </dialog>
 
@@ -312,17 +314,17 @@
             <div id="testForm">
                 <p class="note">Puts your last export of this module on the dev server, with a temporary way in from an existing area. One person tests at a time; it frees itself after an hour of nothing.</p>
                 <label>Enter from an existing area <small>3 letters of its name or tag</small>
-                    <input id="testFind" autocomplete="off" placeholder="e.g. bay"></label>
+                    <input type="text" id="testFind" autocomplete="off" placeholder="e.g. bay"></label>
                 <div id="testAreas" class="open-list import-list"></div>
                 <label>At its waypoint <select id="testWp"><option value="">Pick an area first</option></select></label>
                 <label>Leads to <select id="testEntry"></select></label>
                 <label class="check" id="testTakeRow" hidden><input type="checkbox" id="testTake"> Take it from the person testing now</label>
             </div>
-            <menu>
+            <div class="dialog-buttons">
                 <button type="button" id="testGo" class="primary" disabled>Load on the dev server</button>
                 <button type="button" id="testRelease" hidden>Give it back</button>
-                <button value="cancel">Close</button>
-            </menu>
+                <button type="submit" value="cancel">Close</button>
+            </div>
         </form>
     </dialog>
 
@@ -330,7 +332,7 @@
         <form method="dialog">
             <h2>Activity</h2>
             <div class="activity-filters">
-                <label>Who <input id="actUser" placeholder="anyone" autocomplete="off"></label>
+                <label>Who <input type="text" id="actUser" placeholder="anyone" autocomplete="off"></label>
                 <label>What <select id="actAction">
                     <option value="">everything</option><option>search</option><option>import</option><option>reimport</option><option>export</option>
                     <option>assign</option><option>revoke</option><option>denied</option><option>refused</option><option>view_as</option>
@@ -338,7 +340,7 @@
                 <button type="button" id="actRefresh">Refresh</button>
             </div>
             <div class="activity-table"><table><thead><tr><th>When</th><th>Who</th><th>What</th><th>Area</th><th></th><th>Detail</th><th>From</th></tr></thead><tbody id="actRows"></tbody></table></div>
-            <menu><button value="cancel">Close</button></menu>
+            <div class="dialog-buttons"><button type="submit" value="cancel">Close</button></div>
         </form>
     </dialog>
 
@@ -346,17 +348,17 @@
         <form method="dialog">
             <h2>Area settings</h2>
             <div id="settingsBody" class="settingsbody"></div>
-            <menu><button type="submit" value="ok" id="settingsOk">OK</button><button type="submit" value="cancel">Cancel</button></menu>
+            <div class="dialog-buttons"><button type="submit" value="ok" id="settingsOk">OK</button><button type="submit" value="cancel">Cancel</button></div>
         </form>
     </dialog>
 
     <dialog id="askDialog">
         <form method="dialog">
-            <h2 id="askTitle"></h2>
+            <h2 id="askTitle">Question</h2>
             <div id="askText" class="note"></div>
-            <label id="askLabel" hidden><span id="askLabelText"></span><input id="askInput" maxlength="200" autocomplete="off"></label>
+            <label id="askLabel" hidden><span id="askLabelText"></span><input type="text" id="askInput" maxlength="200" autocomplete="off"></label>
             <p id="askError" class="note err" hidden></p>
-            <menu><button type="submit" value="ok" id="askOk">OK</button><button type="submit" value="cancel" id="askCancel">Cancel</button></menu>
+            <div class="dialog-buttons"><button type="submit" value="ok" id="askOk">OK</button><button type="submit" value="cancel" id="askCancel">Cancel</button></div>
         </form>
     </dialog>
 
@@ -367,7 +369,7 @@
             <section class="import-src">
                 <h3>From the module</h3>
                 <label>Find <small>by name, tag, resref or tileset</small>
-                    <input id="importFind" placeholder="e.g. forest of fog, ttr01, bay" autocomplete="off"></label>
+                    <input type="text" id="importFind" placeholder="e.g. forest of fog, ttr01, bay" autocomplete="off"></label>
                 <div id="importList" class="open-list import-list"></div>
             </section>
             <div class="import-or"><span>or</span></div>
@@ -379,12 +381,12 @@
                 <label class="file-pick"><input type="file" id="importFile" accept=".mod,.erf">Choose a .mod or .erf…</label>
             </section>
             <label class="import-name">Name <small>1–9 letters, digits or _ for the new area (prefixes every resref)</small>
-                <input id="importName" pattern="[a-z0-9_]{1,9}" maxlength="9"></label>
+                <input type="text" id="importName" pattern="[a-z0-9_]{1,9}" maxlength="9"></label>
             <p id="importStatus" class="note"></p>
-            <menu>
-                <button value="cancel" formnovalidate>Cancel</button>
+            <div class="dialog-buttons">
+                <button type="submit" value="cancel" formnovalidate>Cancel</button>
                 <button type="button" id="importGo" class="primary" disabled>Import</button>
-            </menu>
+            </div>
         </form>
     </dialog>
 

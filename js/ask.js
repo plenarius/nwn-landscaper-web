@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The app's own question dialog (`#askDialog`): a title, some text, optionally one text box, and OK / Cancel. Used instead of the
 // browser's prompt/confirm/alert so it looks like the rest of the app.
 //
@@ -12,25 +15,41 @@ export function ask({ title, text, ok = 'OK', danger = false, input = null, subm
     const dlg = $('askDialog');
     $('askTitle').textContent = title;
     $('askText').textContent = '';
-    for (const para of text.split('\n\n')) { const p = document.createElement('p'); p.textContent = para; $('askText').appendChild(p); }
+    for (const para of text.split('\n\n')) {
+        const p = document.createElement('p');
+        p.textContent = para;
+        $('askText').appendChild(p);
+    }
     $('askLabel').hidden = !input;
-    if (input) { $('askLabelText').textContent = input.label; $('askInput').value = input.value ?? ''; $('askInput').placeholder = input.placeholder ?? ''; }
+    if (input) {
+        $('askLabelText').textContent = input.label;
+        $('askInput').value = input.value ?? '';
+        $('askInput').placeholder = input.placeholder ?? '';
+    }
     $('askError').hidden = true;
     $('askOk').textContent = ok;
     $('askOk').classList.toggle('danger', danger);
     $('askOk').disabled = false;
-    $('askOk').onclick = submit ? async e => {
-        e.preventDefault();
-        $('askOk').disabled = true;
-        $('askError').hidden = true;
-        const problem = await submit(input ? $('askInput').value.trim() : true);
-        $('askOk').disabled = false;
-        if (problem) { $('askError').textContent = problem; $('askError').hidden = false; return; }
-        dlg.close('ok');
-    } : null;
+    $('askOk').onclick = submit
+        ? async e => {
+              e.preventDefault();
+              $('askOk').disabled = true;
+              $('askError').hidden = true;
+              const problem = await submit(input ? $('askInput').value.trim() : true);
+              $('askOk').disabled = false;
+              if (problem) {
+                  $('askError').textContent = problem;
+                  $('askError').hidden = false;
+                  return;
+              }
+              dlg.close('ok');
+          }
+        : null;
     return new Promise(resolve => {
         dlg.returnValue = '';
-        dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok' ? (input ? $('askInput').value.trim() : true) : null), { once: true });
+        dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok' ? (input ? $('askInput').value.trim() : true) : null), {
+            once: true,
+        });
         dlg.showModal();
         (input ? $('askInput') : $('askCancel')).focus();
     });

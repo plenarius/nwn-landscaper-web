@@ -1,0 +1,52 @@
+# REUSE (https://reuse.software/): who owns each file and under which licence (STYLE.md, "Licences and REUSE"). Source code says
+# it in its first lines; this file covers everything that is not source code, and the vendored packages.
+#
+# Everything here is MIT (James, 2026-11-11), the licence of ergin3d/heightmap-generator, which this was forked from.
+# js/noise.js is still ergin3d's file and carries ergin3d's copyright line above ours.
+version = 1
+SPDX-PackageName = "landscaper-web"
+SPDX-PackageDownloadLocation = "https://github.com/plenarius/landscaper-web"
+
+[[annotations]]
+path = [
+    "**/*.md",
+    "**/*.json",
+    "**/*.jsonc",
+    "**/*.toml",
+    "**/*.yml",
+    "**/.gitignore",
+    ".editorconfig",
+    ".vale.ini",
+    ".vale/**",
+    # Shared word for word with repositories under other licences, so it carries no header.
+    "scripts/check.sh",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright (C) 2026 plenarius"
+SPDX-License-Identifier = "MIT"
+
+# Vendored packages, unmodified (STYLE.md, "Vendored code"). Each keeps its own LICENSE file.
+[[annotations]]
+path = "vendor/three/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright 2010-2024 three.js authors"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "vendor/simplex-noise/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 2018 Jonas Wagner"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "vendor/codemirror/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (C) 2018-2021 by Marijn Haverbeke and others"
+SPDX-License-Identifier = "MIT"
+
+# Our note on the bundle above: its versions and how to rebuild it.
+[[annotations]]
+path = "vendor/codemirror/README.md"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (C) 2026 plenarius"
+SPDX-License-Identifier = "MIT"

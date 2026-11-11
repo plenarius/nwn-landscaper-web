@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Baked shadows, as landscaper bakes them into each tile's shadow map
 // (landscaper src/shade.rs): cast shadows along the game's fixed sun
 // direction, towards (4000, 4500, 7000), and ambient occlusion from the
@@ -13,7 +16,9 @@ const SUN = (() => {
 
 function castShadow(x, y, z, height) {
     const horizontal = Math.hypot(SUN[0], SUN[1]);
-    const dx = SUN[0] / horizontal, dy = SUN[1] / horizontal, rise = SUN[2] / horizontal;
+    const dx = SUN[0] / horizontal,
+        dy = SUN[1] / horizontal,
+        rise = SUN[2] / horizontal;
     let dark = 0;
     for (let t = 0.3; t < 80; t += t < 4 ? 0.25 : 0.5) {
         const above = height(x + dx * t, y + dy * t) - (z + 0.05 + rise * t);
@@ -30,7 +35,9 @@ const STEPS = [0.5, 1, 1.75, 2.75, 4, 6, 9, 13];
 function occlusion(x, y, z, height) {
     let sum = 0;
     for (let k = 0; k < 8; k++) {
-        const a = k * Math.PI / 4, dx = Math.cos(a), dy = Math.sin(a);
+        const a = (k * Math.PI) / 4,
+            dx = Math.cos(a),
+            dy = Math.sin(a);
         let slope = 0;
         for (const t of STEPS) slope = Math.max(slope, (height(x + dx * t, y + dy * t) - z) / t);
         sum += slope / Math.sqrt(1 + slope * slope);
@@ -53,14 +60,16 @@ export const SHADE_STEP = 1.25;
 /** The area's shadows on a grid SHADE_STEP apart: mx across, my rows
  *  from the south. */
 export function shadeArea(area, strength) {
-    const mx = Math.round(area.sizeX / SHADE_STEP) + 1, my = Math.round(area.sizeY / SHADE_STEP) + 1;
+    const mx = Math.round(area.sizeX / SHADE_STEP) + 1,
+        my = Math.round(area.sizeY / SHADE_STEP) + 1;
     const out = new Uint8Array(mx * my).fill(255);
     // No shadow maps at 0 (landscaper writes none), so no dark entrances either.
     if (strength <= 0) return { mx, my, data: out };
     const height = (x, y) => area.heightAt(x, y);
     for (let j = 0; j < my; j++) {
         for (let i = 0; i < mx; i++) {
-            const x = i * SHADE_STEP, y = j * SHADE_STEP;
+            const x = i * SHADE_STEP,
+                y = j * SHADE_STEP;
             const s = shade(x, y, strength, height, !area.enclosed());
             out[j * mx + i] = Math.round(255 * s * darkness(area.entrances, x, y));
         }
