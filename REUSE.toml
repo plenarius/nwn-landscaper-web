@@ -29,7 +29,7 @@ SPDX-License-Identifier = "MIT"
 [[annotations]]
 path = "vendor/three/**"
 precedence = "override"
-SPDX-FileCopyrightText = "Copyright 2010-2024 three.js authors"
+SPDX-FileCopyrightText = "Copyright 2010-2026 three.js authors"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]

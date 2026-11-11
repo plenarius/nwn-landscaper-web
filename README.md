@@ -75,8 +75,8 @@ still ergin3d's file.
 
 Vendored, unmodified, each with its own `LICENSE`:
 
-- `vendor/three`: [three.js](https://threejs.org/) r170 (npm `three` 0.170.0: `build/three.module.js` and
-  `examples/jsm/controls/OrbitControls.js`), MIT.
+- `vendor/three`: [three.js](https://threejs.org/) r186 (npm `three` 0.186.1: `build/three.module.js`, the
+  `build/three.core.js` it imports, and `examples/jsm/controls/OrbitControls.js`), MIT.
 - `vendor/simplex-noise`: [simplex-noise](https://github.com/jwagner/simplex-noise.js) 4.0.3 (`dist/esm/simplex-noise.js`), MIT.
 - `vendor/codemirror`: [CodeMirror](https://codemirror.net/) 6 for the script editor, all MIT. It is one file that esbuild 0.28.2
   bundled from `codemirror` 6.0.2, `@codemirror/view` 6.43.15, `@codemirror/state` 6.7.6, `@codemirror/lint` 6.9.7,
