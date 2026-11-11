@@ -61,8 +61,7 @@
                 <label class="menu-item" data-stay><input type="checkbox" data-kind="placeable"><span class="dot"></span><span>Placeables</span></label>
                 <hr class="menu-sep">
                 <label class="menu-item" data-stay title="For an imported building: hide what is above this height, to look inside"><input type="checkbox" id="showCut"><span>Cut away roofs and upper floors</span></label>
-                <!-- [html-validate-disable-next multiple-labeled-controls -- the readout and the slider share a label; changing that changes what a click on its text does (left for James)] -->
-                <label class="menu-item" data-stay id="cutRow"><span>Cut at</span><input type="range" id="cutHeight" min="1" max="8" step="0.25" value="3"><output id="cutOut">3 m</output></label>
+                <div class="menu-item" data-stay id="cutRow"><label for="cutHeight">Cut at</label><input type="range" id="cutHeight" min="1" max="8" step="0.25" value="3"><output id="cutOut">3 m</output></div>
                 <hr class="menu-sep">
                 <div class="menu-row" data-stay><button type="button" id="showAll">All</button><button type="button" id="showNone">None</button></div>
             </div>
@@ -112,18 +111,15 @@
                 <label><input type="color" id="skyDiffuse"> Light <small>(diffuse)</small></label>
                 <label><input type="color" id="skyFog"> Fog colour</label>
             </div>
-            <!-- [html-validate-disable-next multiple-labeled-controls -- the readout and the slider share a label; changing that changes what a click on its text does (left for James)] -->
-            <label class="slider">Fog <output id="skyFogOut"></output>
-                <input type="range" id="skyFogAmount" min="0" max="40" step="1"></label>
+            <div class="slider"><label for="skyFogAmount">Fog</label> <output id="skyFogOut"></output>
+                <input type="range" id="skyFogAmount" min="0" max="40" step="1"></div>
             <label class="check"><input type="checkbox" id="skyShadows"> Shadows</label>
             <h4>Shadows</h4>
-            <!-- [html-validate-disable-next multiple-labeled-controls -- the readout and the slider share a label; changing that changes what a click on its text does (left for James)] -->
-            <label class="slider">Baked shadows <output id="shadowOut"></output>
-                <input type="range" id="shadowStrength" min="0" max="1" step="0.05"></label>
+            <div class="slider"><label for="shadowStrength">Baked shadows</label> <output id="shadowOut"></output>
+                <input type="range" id="shadowStrength" min="0" max="1" step="0.05"></div>
             <h4>View</h4>
-            <!-- [html-validate-disable-next multiple-labeled-controls -- the readout and the slider share a label; changing that changes what a click on its text does (left for James)] -->
-            <label class="slider">View distance <output id="skyClipOut"></output>
-                <input type="range" id="skyClip" min="20" max="200" step="5"></label>
+            <div class="slider"><label for="skyClip">View distance</label> <output id="skyClipOut"></output>
+                <input type="range" id="skyClip" min="20" max="200" step="5"></div>
         </section>
         <section id="placePanel" class="side-panel" hidden>
             <h3>Place</h3>
@@ -139,9 +135,8 @@
             </div>
             <input id="placeSearch" type="search" placeholder="Search placeables…" autocomplete="off">
             <div class="chips" id="placeChips"></div>
-            <!-- [html-validate-disable-next multiple-labeled-controls -- the readout and the slider share a label; changing that changes what a click on its text does (left for James)] -->
-            <label class="slider">Size <output id="placeScaleOut"></output>
-                <input type="range" id="placeScale" min="0.5" max="2" step="0.05" value="1"></label>
+            <div class="slider"><label for="placeScale">Size</label> <output id="placeScaleOut"></output>
+                <input type="range" id="placeScale" min="0.5" max="2" step="0.05" value="1"></div>
             <label class="check"><input type="checkbox" id="placeRandom" checked> Random turn</label>
             <label class="check"><input type="checkbox" id="placeSolid" checked> Blocks walking</label>
             <div class="segmented" id="placeMode">
@@ -156,15 +151,12 @@
             <input id="scatterSearch" type="search" placeholder="Search placeables…" autocomplete="off">
             <div class="chips" id="scatterChips"></div>
             <p class="note">Click models to add them to the mix (click again to take one out). Drag to scatter; Shift-drag to erase.</p>
-            <!-- [html-validate-disable-next multiple-labeled-controls -- the readout and the slider share a label; changing that changes what a click on its text does (left for James)] -->
-            <label class="slider">Density <output id="scatterDensityOut"></output>
-                <input type="range" id="scatterDensity" min="1" max="60" step="1" value="12"></label>
-            <!-- [html-validate-disable-next multiple-labeled-controls -- the readout and the slider share a label; changing that changes what a click on its text does (left for James)] -->
-            <label class="slider">Smallest <output id="scatterMinOut"></output>
-                <input type="range" id="scatterMin" min="0.4" max="2" step="0.05" value="0.8"></label>
-            <!-- [html-validate-disable-next multiple-labeled-controls -- the readout and the slider share a label; changing that changes what a click on its text does (left for James)] -->
-            <label class="slider">Largest <output id="scatterMaxOut"></output>
-                <input type="range" id="scatterMax" min="0.4" max="2" step="0.05" value="1.25"></label>
+            <div class="slider"><label for="scatterDensity">Density</label> <output id="scatterDensityOut"></output>
+                <input type="range" id="scatterDensity" min="1" max="60" step="1" value="12"></div>
+            <div class="slider"><label for="scatterMin">Smallest</label> <output id="scatterMinOut"></output>
+                <input type="range" id="scatterMin" min="0.4" max="2" step="0.05" value="0.8"></div>
+            <div class="slider"><label for="scatterMax">Largest</label> <output id="scatterMaxOut"></output>
+                <input type="range" id="scatterMax" min="0.4" max="2" step="0.05" value="1.25"></div>
             <label class="check"><input type="checkbox" id="scatterSolid" checked> Blocks walking</label>
             <label class="check"><input type="checkbox" id="scatterSteep" checked> Not on steep ground or water</label>
             <div class="swatches" id="scatterResults"></div>

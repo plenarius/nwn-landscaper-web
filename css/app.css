@@ -547,6 +547,13 @@ input[type="color"] {
     border-radius: 6px;
     background: none;
 }
+/* A slider row: its <label> (pointed at the slider), the readout and the slider. The row was the <label> once; the cursor and
+   unicode-bidi are what a <label> has, so the row looks and behaves as before. */
+.side-panel .slider,
+#cutRow {
+    cursor: default;
+    unicode-bidi: normal;
+}
 .side-panel .slider {
     display: flex;
     flex-direction: column;
