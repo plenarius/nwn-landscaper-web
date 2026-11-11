@@ -8,19 +8,24 @@ import { View } from './view.js';
 import { TOOLS, stamp, roomRect, cutRoom, rampPlan, cutRamp, descentPlan, cutDescent, DIG_MIN } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
-import { PRESETS, copyPreset } from './atmosphere.js';
 import { carve, fitInTile, rockFor, at as entranceAt, nearest as nearestEntrance } from './entrance.js';
 import { ModelLibrary } from './models.js';
 import { Transformer } from './transform.js';
 import { ThingsTool, thingsForExport } from './things.js';
-import './newbp.js';
+import './newbp.js'; // (adds the builder's own blueprints to ThingsTool)
 import { ask } from './ask.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
 import { api, engine, failure, NEEDS_ENGINE } from './api.js';
-import { el } from './dom.js';
-
-const $ = id => document.getElementById(id);
+import { $, el } from './dom.js';
+import { initImport, reimport } from './import.js';
+import { initSky, showAreaSky } from './sky.js';
+import { initMenus } from './menus.js';
+import { initActivity } from './activity.js';
+import { initPublish } from './publish.js';
+import { initDevTest } from './devtest.js';
+import { initReport, showReport, showError } from './report.js';
+import { initNewArea } from './newarea.js';
 
 /** An icon from icons.js: fixed SVG markup, written in this repository (no data reaches it). */
 function setIcon(e, name) {
@@ -40,6 +45,10 @@ if (!(probe.getContext('webgl2') || probe.getContext('webgl'))) {
 const view = new View($('viewport'));
 let area = null;
 let tool = 'raise';
+
+/** What the feature files (import.js, sky.js, publish.js, devtest.js, newarea.js) read of the editor. `area`, `me` and `readOnly` change
+ *  (another area opened, /api/me answered), so they are getters, read each time they are needed. */
+const editor = { area: () => area, me: () => me, readOnly: () => readOnly, view };
 
 // --- Tools -----------------------------------------------------------------
 
@@ -299,7 +308,6 @@ $('placeScale').oninput = () => {
 };
 showScale();
 
-/** Ground under an object: the lowest point under its outline, so it doesn't float on a slope. */
 /** Where object `o` sits: on the ground under it; an imported thing (a
  *  tree, a rock) on the ground at its middle, as the import stood it; an
  *  imported tile's cliffs and blocked ground (heights built in) where it is. */
@@ -308,6 +316,7 @@ function settle(o, flat) {
     return o.model.startsWith('@import:') ? area.heightAt(o.x, o.y) : groundUnder(o, flat);
 }
 
+/** Ground under an object: the lowest point under its outline, so it doesn't float on a slope. */
 function groundUnder(o, flat) {
     const c = Math.cos(o.bearing),
         s = Math.sin(o.bearing);
@@ -493,174 +502,8 @@ $('objScale').onchange = () =>
         }
     });
 
-// --- Import an NWN area ----------------------------------------------------------------
-// What a list shows for an area: the name the game shows for it (when the server knows it), else its tag.
-const areaTitle = s => String(s.name || s.tag || s.area);
-/** An area's row in a list: its title in bold, its resref small beside it, then `small` below. */
-const areaRow = (s, small) => [
-    el('span', {}, el('b', { textContent: areaTitle(s) }), ' ', el('small', { textContent: s.area })),
-    el('small', { textContent: small }),
-];
-
-let importChosen = null,
-    importing = false,
-    importSeq = 0,
-    importTimer = null;
-$('btnImport').onclick = async () => {
-    if (readOnly) return;
-    $('openDialog').close();
-    $('importStatus').textContent = '';
-    $('importDialog').showModal();
-    $('importFind').value = '';
-    importChosen = null;
-    showImportList();
-    $('importFind').focus();
-};
-// The server searches (a builder can't be sent the whole module's list).
-$('importFind').oninput = () => {
-    clearTimeout(importTimer);
-    importTimer = setTimeout(showImportList, 250);
-};
-// Not closed (Escape, Cancel) while an import runs: it opens the area when done.
-$('importDialog').addEventListener('cancel', e => {
-    if (importing) e.preventDefault();
-});
-$('importDialog')
-    .querySelector('button[value=cancel]')
-    .addEventListener('click', e => {
-        if (importing) e.preventDefault();
-    });
-$('importName').oninput = () => {
-    $('importGo').disabled = importing || !importChosen || !$('importName').checkValidity() || !$('importName').value;
-};
-
-/** While an import runs: its button, the list and the fields can't change it. */
-function setImporting(on) {
-    importing = on;
-    $('importGo').textContent = on ? 'Importing…' : 'Import';
-    $('importGo').classList.toggle('busy', on);
-    for (const id of ['importFind', 'importName', 'importFile']) $(id).disabled = on;
-    for (const b of $('importList').querySelectorAll('button')) b.disabled = on;
-    $('importName').oninput();
-}
-
-async function showImportList() {
-    const mine = ++importSeq;
-    const box = $('importList');
-    let r = { sources: [] };
-    try {
-        r = await (await api(`/api/import-sources?q=${encodeURIComponent($('importFind').value.trim())}`)).json();
-    } catch {
-        /* none */
-    }
-    // Their own uploaded files come first, and stay while they search (filtered by the same words).
-    let uploads = [];
-    try {
-        uploads = (await (await api('/api/uploads')).json()).uploads ?? [];
-    } catch {
-        /* none */
-    }
-    if (mine !== importSeq) return; // a newer search is on its way
-    box.textContent = '';
-    const words = $('importFind').value.toLowerCase().split(/\s+/).filter(Boolean);
-    const own = uploads
-        .flatMap(u => (u.areas ?? []).map(a => ({ ...a, upload: u.file, from: `your file ${u.file}` })))
-        .filter(a => words.every(w => `${a.tag} ${a.area} ${a.tileset} ${a.upload}`.toLowerCase().includes(w)));
-    const found = [...own, ...(r.sources ?? [])];
-    for (const s of found) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        if (s.upload) {
-            b.dataset.upload = s.upload;
-            b.dataset.area = s.area;
-        }
-        // An admin's entries say what they come from; a builder's say whether it is theirs.
-        const kind = s.kind ?? (s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors');
-        const allowed = s.assigned !== false;
-        const state = s.assigned === true ? ' · assigned to you' : allowed ? '' : ' · needs an assignment';
-        b.append(...areaRow(s, `${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ` · ${s.from}` : ''}${state}`));
-        b.disabled = !allowed;
-        if (!allowed) b.title = 'Ask an admin to assign this area to you';
-        if (importChosen?.area === s.area && importChosen?.upload === s.upload) b.classList.add('selected');
-        b.onclick = () => {
-            importChosen = s;
-            for (const o of box.children) o.classList.toggle('selected', o === b);
-            // A name from its tag: lower case, letters, digits and _, 9 at most.
-            $('importName').value =
-                (s.tag || s.area)
-                    .toLowerCase()
-                    .replace(/[^a-z0-9_]/g, '')
-                    .slice(0, 9) || 'imported';
-            $('importName').oninput();
-        };
-        box.appendChild(b);
-    }
-    if (!found.length) box.textContent = engine.up ? r.note || 'No area matches.' : NEEDS_ENGINE;
-    else if (r.note) box.prepend(el('p', { className: 'note', textContent: r.note }));
-    else if (r.total > found.length)
-        box.append(el('p', { className: 'note', textContent: `${r.total - found.length} more: narrow the search.` }));
-}
-
-// Their own file goes up as it is (the server checks it reads as a module); its areas then show in the list.
-$('importFile').onchange = async () => {
-    const file = $('importFile').files[0];
-    if (!file || importing) return;
-    // The server keeps letters, digits and _ . - (a toolset file is often called "My Cave.erf").
-    const kept = file.name.replace(/[^A-Za-z0-9_.-]/g, '_').replace(/^\.+/, '_');
-    const ext = /\.(mod|erf)$/i.exec(kept)?.[0] ?? '';
-    const saveAs = kept.slice(0, kept.length - ext.length).slice(0, 64 - ext.length) + ext;
-    $('importStatus').textContent = `Uploading ${file.name}…`;
-    try {
-        const res = await api(`/api/upload?file=${encodeURIComponent(saveAs)}`, { method: 'POST', body: file });
-        const r = await res.json();
-        if (!res.ok) throw new Error(r.error || res.statusText);
-        $('importFind').value = '';
-        importChosen = null;
-        await showImportList();
-        const only =
-            r.areas.length === 1
-                ? [...$('importList').querySelectorAll('button')].find(
-                      b => b.dataset.upload === saveAs && b.dataset.area === r.areas[0].area,
-                  )
-                : null;
-        if (only) {
-            only.click();
-            $('importStatus').textContent =
-                `${file.name}: its area (${r.areas[0].tag || r.areas[0].area}) is chosen. Change the name if you like, then Import.`;
-        } else {
-            $('importStatus').textContent =
-                `${file.name}: ${r.areas.length} area${r.areas.length === 1 ? '' : 's'}, at the top of the list. Pick one.`;
-        }
-    } catch (err) {
-        $('importStatus').textContent = `Couldn't use ${file.name}: ${err.message}`;
-    }
-    $('importFile').value = '';
-};
-
-$('importGo').onclick = async () => {
-    if (!importChosen) return;
-    if (importing) return;
-    const name = $('importName').value;
-    setImporting(true);
-    $('importStatus').textContent =
-        `Importing ${importChosen.tag || importChosen.area} as ${name}… (reading its tiles and the module's haks takes a little while)`;
-    try {
-        const res = await api(
-            `/api/import?area=${encodeURIComponent(importChosen.area)}&name=${encodeURIComponent(name)}${importChosen.upload ? `&upload=${encodeURIComponent(importChosen.upload)}` : ''}`,
-            { method: 'POST' },
-        );
-        const r = await res.json();
-        if (!res.ok) throw new Error(r.error || res.statusText);
-        setImporting(false);
-        $('importDialog').close();
-        await openArea({ name });
-        $('statusMsg').textContent =
-            `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
-    } catch (err) {
-        $('importStatus').textContent = `Couldn't import: ${err.message}`;
-        setImporting(false);
-    }
-};
+// --- Import an NWN area (import.js) -----------------------------------------------------
+initImport({ ...editor, openArea });
 
 // --- Open, and where entrances lead ---------------------------------------------------
 
@@ -729,60 +572,6 @@ $('btnOpen').onclick = async () => {
     if (!areas.length) list.textContent = 'No areas yet: export one first.';
 };
 
-/**
- * Asks the person something in the page's own dialog. Resolves to true (OK), or with `input` the
- * typed text ('' allowed), or null if they cancel (Cancel, Esc). `text` paragraphs split on blank lines.
- */
-/** Imports area `a` again from its kept original, then opens it. */
-async function reimport(a, button) {
-    if (readOnly) return;
-    const yes = await ask({
-        title: `Import ${a.name} again?`,
-        text: `Your changes to it here are replaced (the last copy is kept as a backup).\n\nIts next export puts the original's placeables, creatures and lighting into the module again, replacing what was changed there in the toolset.`,
-        ok: 'Re-import',
-        danger: true,
-    });
-    if (!yes) return;
-    // The whole dialog waits for it: every button off, no closing it.
-    reimporting = true;
-    for (const b of $('openDialog').querySelectorAll('button')) b.disabled = true;
-    button.textContent = 'Importing…';
-    button.classList.add('busy');
-    try {
-        const res = await api(`/api/reimport?name=${encodeURIComponent(a.name)}`, { method: 'POST' });
-        const r = await res.json();
-        if (!res.ok) throw new Error(r.error || res.statusText);
-        reimporting = false;
-        for (const b of $('openDialog').querySelectorAll('button')) b.disabled = false;
-        $('openDialog').close();
-        await openArea({ name: a.name });
-        $('statusMsg').textContent =
-            `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
-    } catch (err) {
-        $('openDialog').close();
-        showError(`Couldn't import ${a.name} again: ${err.message}`, 'Import failed');
-    } finally {
-        reimporting = false;
-        for (const b of $('openDialog').querySelectorAll('button')) b.disabled = false;
-    }
-}
-let reimporting = false;
-$('openDialog').addEventListener('cancel', e => {
-    if (reimporting) e.preventDefault();
-});
-// (Escape itself too, wherever focus is with every button off: browsers let
-// it close a dialog regardless when there was no click since the last time.)
-document.addEventListener(
-    'keydown',
-    e => {
-        if ((reimporting || importing) && e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    },
-    true,
-);
-
 /** Opens area `a`: from landscaper (its saved copy, else its last export),
  *  or from this browser if it only lives here (a save that failed). */
 async function openArea(a) {
@@ -803,8 +592,8 @@ async function openArea(a) {
     }
 }
 
-/** The Entrance panel: this area's entrances and where each leads. */
 let entranceRender = 0;
+/** The Entrance panel: this area's entrances and where each leads. */
 async function showEntrances() {
     // Only the latest of overlapping renders fills the panel.
     const mine = ++entranceRender;
@@ -938,185 +727,10 @@ function scatterStamp(p, radius) {
     }
 }
 
-// --- Sky & fog -------------------------------------------------------------------
+// --- Sky & fog (sky.js), the top bar's menus (menus.js) --------------------------------
 
-let skyNight = false;
-
-for (const p of PRESETS) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'preset';
-    b.dataset.preset = p.id;
-    const s = p.time === 'night' ? p.moon : p.sun;
-    const look = el('span', { className: 'look' });
-    look.style.background = `linear-gradient(${s.diffuse}, ${s.fog} 70%, ${s.ambient})`;
-    b.append(look, el('span', { textContent: p.name }));
-    b.onclick = () => {
-        area.atmosphere = copyPreset(p);
-        skyNight = p.time === 'night';
-        skyChanged();
-    };
-    $('skyPresets').appendChild(b);
-}
-
-/** The sun's settings by day, the moon's by night. */
-const currentSky = () => (skyNight ? area.atmosphere.moon : area.atmosphere.sun);
-
-function showSky() {
-    const a = area.atmosphere,
-        s = currentSky();
-    for (const b of $('skyPresets').children) b.classList.toggle('active', b.dataset.preset === a.preset);
-    for (const b of $('dayNight').children) b.classList.toggle('active', (b.dataset.night === '1') === skyNight);
-    for (const r of document.querySelectorAll('[name=skyTime]')) r.checked = r.value === a.time;
-    $('skyWhich').textContent = skyNight ? 'Moon (night)' : 'Sun (day)';
-    $('skyAmbient').value = s.ambient;
-    $('skyDiffuse').value = s.diffuse;
-    $('skyFog').value = s.fog;
-    $('skyFogAmount').value = s.fogAmount;
-    $('skyFogOut').textContent =
-        s.fogAmount === 0
-            ? 'light'
-            : s.fogAmount < 10
-              ? `${s.fogAmount} · some`
-              : s.fogAmount < 20
-                ? `${s.fogAmount} · heavy`
-                : `${s.fogAmount} · thick`;
-    $('skyShadows').checked = s.shadows;
-    $('shadowStrength').value = area.shadow;
-    $('shadowOut').textContent = area.shadow > 0 ? `${Math.round(area.shadow * 100)}%` : 'off';
-    $('skyClip').value = a.fogClip;
-    $('skyClipOut').textContent = `${a.fogClip} m`;
-    view.setAtmosphere($('skyPreview').checked ? a : null, skyNight);
-}
-
-function skyChanged() {
-    showSky();
-    saveSoon();
-}
-
-// Hand edits make it the area's own look.
-function editSky(change) {
-    change(area.atmosphere, currentSky());
-    area.atmosphere.preset = 'custom';
-    skyChanged();
-}
-$('skyAmbient').oninput = e =>
-    editSky((_a, s) => {
-        s.ambient = e.target.value;
-    });
-$('skyDiffuse').oninput = e =>
-    editSky((_a, s) => {
-        s.diffuse = e.target.value;
-    });
-$('skyFog').oninput = e =>
-    editSky((_a, s) => {
-        s.fog = e.target.value;
-    });
-$('skyFogAmount').oninput = e =>
-    editSky((_a, s) => {
-        s.fogAmount = +e.target.value;
-    });
-$('skyShadows').onchange = e =>
-    editSky((_a, s) => {
-        s.shadows = e.target.checked;
-    });
-$('skyClip').oninput = e =>
-    editSky(a => {
-        a.fogClip = +e.target.value;
-    });
-// Not part of the .are's settings: baked into the tiles.
-let shadeTimer = null;
-$('shadowStrength').oninput = e => {
-    area.shadow = +e.target.value;
-    showSky();
-    clearTimeout(shadeTimer);
-    shadeTimer = setTimeout(() => view.updateShade(), 150);
-    saveSoon();
-};
-for (const r of document.querySelectorAll('[name=skyTime]')) {
-    r.onchange = () =>
-        editSky(a => {
-            a.time = r.value;
-            // Show what the game will.
-            if (r.value !== 'cycle') skyNight = r.value === 'night';
-        });
-}
-for (const b of $('dayNight').children)
-    b.onclick = () => {
-        skyNight = b.dataset.night === '1';
-        showSky();
-    };
-// Whether the view shows the area's light and fog (else a plain working
-// light, no fog), remembered.
-$('skyPreview').checked = localStorage.getItem('landscaper.skyPreview') !== 'off';
-$('skyPreview').onchange = () => {
-    localStorage.setItem('landscaper.skyPreview', $('skyPreview').checked ? 'on' : 'off');
-    showSky();
-};
-// The top bar's menus (File, Area, Show, Share): one open at a time, closed by a pick, a click elsewhere or Escape.
-// From the keyboard: Enter, Space or the down arrow opens one at its first item, the arrows (and Home, End) move through
-// its items, Escape closes it and gives the focus back to its button, and Tab out of it closes it.
-function closeMenus() {
-    for (const m of document.querySelectorAll('.menu')) {
-        m.querySelector('.menu-list').hidden = true;
-        const btn = m.querySelector('.menu-btn');
-        btn.classList.remove('active');
-        btn.setAttribute('aria-expanded', 'false');
-    }
-}
-/** A menu's items that can take the focus now: its buttons and ticks, shown and not off. */
-const menuItems = list =>
-    [...list.querySelectorAll('button, input')].filter(i => !i.disabled && !i.closest('[hidden]') && i.getClientRects().length);
-for (const m of document.querySelectorAll('.menu')) {
-    const btn = m.querySelector('.menu-btn'),
-        list = m.querySelector('.menu-list');
-    const open = focus => {
-        closeMenus();
-        list.hidden = false;
-        btn.classList.add('active');
-        btn.setAttribute('aria-expanded', 'true');
-        if (focus) menuItems(list)[0]?.focus();
-    };
-    btn.addEventListener('click', e => {
-        e.stopPropagation();
-        if (list.hidden)
-            open(e.detail === 0); // (detail 0: Enter or Space, not a click)
-        else closeMenus();
-    });
-    btn.addEventListener('keydown', e => {
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            e.stopPropagation(); // (not the camera's arrow too)
-            open(true);
-        }
-    });
-    list.addEventListener('keydown', e => {
-        const items = menuItems(list),
-            at = items.indexOf(document.activeElement);
-        const to = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1 }[e.key];
-        if (to !== undefined && items.length) {
-            e.preventDefault();
-            e.stopPropagation();
-            items[(to + items.length) % items.length].focus();
-        } else if (e.key === 'Escape') {
-            e.stopPropagation();
-            closeMenus();
-            btn.focus();
-        }
-    });
-    m.addEventListener('focusout', e => {
-        if (!list.hidden && e.relatedTarget && !m.contains(e.relatedTarget)) closeMenus();
-    });
-    // (A menu whose items are ticked stays open: its items say `data-stay`.)
-    list.addEventListener('click', e => {
-        if (e.target.closest('[data-stay]')) e.stopPropagation();
-        else closeMenus();
-    });
-}
-document.addEventListener('click', closeMenus);
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeMenus();
-});
+initSky({ ...editor, saveSoon });
+initMenus();
 
 $('btnSky').onclick = () => {
     skyOpen = !skyOpen;
@@ -1733,8 +1347,7 @@ function setArea(a) {
     thingsTool.refresh();
     $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
     $('report').hidden = true;
-    skyNight = a.atmosphere.time === 'night';
-    showSky();
+    showAreaSky(a);
     checkSoon();
 }
 
@@ -1804,388 +1417,11 @@ function showWho() {
     }
 }
 
-// What happened, for admins on a team server (searches, imports, exports, refusals...).
-async function showActivity() {
-    $('activityDialog').showModal();
-    const rows = $('actRows');
-    rows.textContent = '';
-    const q = `limit=300&user=${encodeURIComponent($('actUser').value.trim())}&action=${encodeURIComponent($('actAction').value)}`;
-    let events = [];
-    try {
-        events = (await (await api(`/api/audit?${q}`)).json()).events ?? [];
-    } catch {
-        /* none */
-    }
-    for (const e of events) {
-        const tr = document.createElement('tr');
-        const cell = (text, cls) => {
-            const td = document.createElement('td');
-            td.textContent = text ?? '';
-            if (cls) td.className = cls;
-            tr.appendChild(td);
-        };
-        cell(new Date(e.t * 1000).toLocaleString());
-        cell((e.user ?? '(not signed in)') + (e.admin ? ' (admin)' : ''));
-        cell(e.action);
-        cell(e.area);
-        cell(e.ok ? '✓' : '✗', e.ok ? 'ok' : 'bad');
-        cell(e.detail);
-        cell(e.ip);
-        rows.appendChild(tr);
-    }
-    if (!events.length) rows.innerHTML = '<tr><td colspan="7">Nothing recorded yet.</td></tr>';
-}
-$('btnActivity').onclick = showActivity;
+// --- Activity (activity.js), Publish (publish.js), Test on the dev server (devtest.js) ----------
 
-// Publish: checks the last export with the publishing service, says what the pull requests would
-// hold, and opens them when asked. Only what the last export built is sent.
-async function publishCall(dry) {
-    const note = encodeURIComponent($('pubNote').value.trim());
-    const whole = $('pubWhole').checked;
-    const url = whole
-        ? `/api/publish-module?module=${encodeURIComponent(area.module || area.name)}`
-        : `/api/publish?name=${encodeURIComponent(area.name)}`;
-    // (No review service: a package to download. Its check is the same call with `dry`; the download is a separate one.)
-    if (me.package) {
-        const res = await api(`/api/package?name=${encodeURIComponent(area.name)}&whole=${whole ? 1 : 0}`, { method: 'POST' });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || res.statusText);
-        return body;
-    }
-    const res = await api(`${url}&dry=${dry ? 1 : 0}&note=${note}`, { method: 'POST' });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || res.statusText);
-    return body;
-}
-
-/** The dialog's text and look: 'work' shows a moving bar and the seconds so far, 'err' red, 'ok' green. */
-let pubClock = null;
-function pubShow(text, mode = '') {
-    clearInterval(pubClock);
-    $('pubText').textContent = text;
-    $('pubText').className = `note ${mode}`.trim();
-    $('pubBar').hidden = mode !== 'work';
-    $('pubTime').hidden = mode !== 'work';
-    if (mode === 'work') {
-        const t0 = Date.now();
-        const tick = () => {
-            $('pubTime').textContent = `${Math.round((Date.now() - t0) / 1000)} s`;
-        };
-        tick();
-        pubClock = setInterval(tick, 500);
-    }
-}
-
-$('publishDialog').addEventListener('close', () => clearInterval(pubClock));
-/** Says what the pull requests would hold (the area, or with the box ticked its whole module). */
-async function pubCheck() {
-    const whole = $('pubWhole').checked;
-    $('pubGo').hidden = true;
-    $('pubNote').disabled = true;
-    pubShow(`Checking ${whole ? `module ${area.module}` : area.name}${me.package ? '' : ' with the publishing service'}…`, 'work');
-    try {
-        const { plan, findings = [] } = await publishCall(true);
-        // What the pull request will say about it (the review service writes it: what is new, or what changed against production).
-        $('pubReview').textContent = (plan.review ?? '').replace(/^### /gm, '').replace(/[*`]/g, '');
-        $('pubReviewBox').hidden = !plan.review;
-        const errors = findings.filter(f => f.level === 'error').length;
-        showFindings(findings);
-        const files = `${plan.module_files.length} area file${plan.module_files.length === 1 ? '' : 's'} and ${plan.hak_files} tile file${plan.hak_files === 1 ? '' : 's'}`;
-        const what = whole
-            ? `the ${plan.areas.length} areas ${plan.areas.join(', ')}`
-            : `${area.name} as ${plan.new ? 'a new area' : `a rework of ${plan.area}`}`;
-        const reviewers = me.reviewers || 'your reviewers';
-        pubShow(
-            me.package
-                ? `This packages ${what}: ${files}${plan.library ? ' (including the shared texture library)' : ''}, in the layout of your module's source, with a MANIFEST.md saying where each goes. It is what your last export built, so export first if you have changed anything.` +
-                      (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : '')
-                : `This sends ${what}: ${files}${plan.library ? ' (including the shared texture library)' : ''}. It is what your last export built, so export first if you have changed anything. Nothing is merged; ${reviewers} review the pull requests.` +
-                      (plan.warnings.length ? ` Notes: ${plan.warnings.join('; ')}.` : ''),
-        );
-        $('pubGo').textContent = me.package ? 'Download the package' : 'Open the pull requests';
-        $('pubNoteRow').hidden = !!me.package;
-        $('pubGo').hidden = errors > 0;
-        $('pubNote').disabled = errors > 0;
-        if (errors)
-            pubShow(
-                `${errors} problem${errors === 1 ? '' : 's'} to fix before this can be published (listed below). Fix them, export again, and check again.`,
-                'err',
-            );
-    } catch (err) {
-        showFindings([]);
-        $('pubReviewBox').hidden = true;
-        pubShow(`Can't publish yet: ${err.message}`, 'err');
-    }
-}
-
-/** What the check found: errors stop a publish; warnings are for a look; each says which object. */
-function showFindings(findings) {
-    const box = $('pubFindings');
-    box.textContent = '';
-    box.hidden = !findings.length;
-    for (const f of findings) {
-        const li = document.createElement('li');
-        li.className = `finding ${f.level}`;
-        if (f.what) {
-            const b = document.createElement('b');
-            b.textContent = `${f.what} `;
-            li.appendChild(b);
-        }
-        li.appendChild(document.createTextNode(f.msg));
-        box.appendChild(li);
-    }
-}
-$('pubWhole').onchange = pubCheck;
-$('btnPublish').onclick = async () => {
-    if (readOnly || !area) return;
-    const dlg = $('publishDialog');
-    $('pubLinks').textContent = '';
-    $('pubGo').disabled = false;
-    // A module of two or more exported areas can go as one set.
-    $('pubWhole').checked = false;
-    $('pubWholeRow').hidden = true;
-    try {
-        const mine = (await (await api('/api/areas')).json()).areas ?? [];
-        const same = mine.filter(a => a.exported && (a.module || a.name) === (area.module || area.name));
-        if (same.length > 1) {
-            $('pubWholeRow').hidden = false;
-            $('pubWholeNames').textContent = `(${same.map(a => a.name).join(', ')})`;
-        }
-    } catch {
-        /* the list fails to load: publish only this area */
-    }
-    dlg.showModal();
-    await pubCheck();
-};
-$('pubGo').onclick = async () => {
-    if (me.package) {
-        // A package: fetched (so an error shows here), then saved by the browser.
-        $('pubGo').disabled = true;
-        pubShow('Building the package…', 'work');
-        try {
-            const res = await api(`/api/package-download?name=${encodeURIComponent(area.name)}&whole=${$('pubWhole').checked ? 1 : 0}`);
-            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
-            const file = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `${area.name}-package.zip`;
-            const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: file });
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            pubShow(
-                `Downloaded ${file}. Unzip it into your module's repository (MANIFEST.md says what goes where), build the haks, and commit.`,
-                'ok',
-            );
-        } catch (err) {
-            pubShow(`Couldn't build the package: ${err.message}`, 'err');
-        }
-        $('pubGo').disabled = false;
-        return;
-    }
-    $('pubGo').disabled = true;
-    $('pubNote').disabled = true;
-    pubShow('Opening the pull requests (this can take a minute: it uploads the tile files)…', 'work');
-    try {
-        const { pr_urls } = await publishCall(false);
-        pubShow('Done. The review service opened these pull requests:', 'ok');
-        $('pubGo').hidden = true;
-        // One link per repository, under the name the review service gives it (the engine passes its answer on as it is).
-        for (const [label, url] of Object.entries(pr_urls ?? {})) {
-            if (!/^https:\/\//.test(url ?? '')) continue; // (a link from the engine's answer: only a web address is followed)
-            const a = document.createElement('a');
-            a.href = url;
-            a.target = '_blank';
-            a.rel = 'noopener';
-            a.textContent = `${label}: ${url}`;
-            const p = document.createElement('p');
-            p.appendChild(a);
-            $('pubLinks').appendChild(p);
-        }
-    } catch (err) {
-        pubShow(`Publishing failed: ${err.message}`, 'err');
-        $('pubGo').disabled = false;
-        $('pubNote').disabled = false;
-    }
-};
-
-// --- Test on the dev server ------------------------------------------------------------------
-// One holder at a time (the review service keeps the claim). The dialog says who has it, loads your last export of this
-// module with a temporary way in from an existing area, and gives it back.
-
-let testPoll = null,
-    testState = null,
-    testPicked = null,
-    testSeq = 0,
-    testTimer = null;
-const testSaysMinutes = secs => `${Math.max(1, Math.round(secs / 60))} minute${Math.round(secs / 60) === 1 ? '' : 's'}`;
-
-async function testRefresh(touch = true) {
-    let r;
-    try {
-        r = await (await api(`/api/dev-test${touch ? '?touch=1' : ''}`)).json();
-    } catch {
-        r = { error: 'the server did not answer' };
-    }
-    const st = $('testStatus');
-    if (r.error || !r.status) {
-        st.textContent = `Can't reach the dev test service: ${r.error ?? 'no answer'}`;
-        st.className = 'note err';
-        $('testGo').disabled = true;
-        return;
-    }
-    testState = r;
-    const claim = r.status.claim,
-        busy = r.status.busy ?? [];
-    const mine = claim && claim.user === r.me;
-    st.className = 'note';
-    $('testTakeRow').hidden = !(claim && !mine && r.admin);
-    $('testRelease').hidden = !(claim && (mine || r.admin));
-    $('testRelease').textContent = mine ? 'Give it back' : 'Release it';
-    if (busy.length) {
-        st.textContent = `Working: ${busy.join(', ')}. This takes a few minutes (build, upload, restart); the dev server comes back by itself.`;
-        st.className = 'note work';
-    } else if (claim && mine) {
-        st.textContent = `You have the dev server with module ${claim.module} (${testSaysMinutes(claim.expires_in)} left). It is ready: join ${r.join ?? 'the dev server'} and walk in from ${claim.area} near ${claim.waypoint}.`;
-        st.className = 'note ok';
-    } else if (claim) {
-        st.textContent = `${claim.user} has the dev server (module ${claim.module}), free in about ${testSaysMinutes(claim.expires_in)}.`;
-    } else {
-        st.textContent = 'The dev server is free.';
-    }
-    testCanGo();
-}
-
-function testCanGo() {
-    const claim = testState?.status?.claim,
-        busy = testState?.status?.busy ?? [];
-    const free = !claim || claim.user === testState.me || ($('testTake').checked && testState.admin);
-    $('testGo').disabled = !(free && !busy.length && testPicked && $('testWp').value);
-    $('testGo').textContent = claim && claim.user !== testState?.me ? 'Take over and load' : 'Load on the dev server';
-}
-
-/** Chooses the existing area you walk in from, and lists its waypoints (`waypoint` picked when it has it). */
-async function testPickArea(name, waypoint = '') {
-    testPicked = name;
-    const sel = $('testWp');
-    sel.textContent = '';
-    let wp = [];
-    try {
-        wp = (await (await api(`/api/dev-test/waypoints?area=${encodeURIComponent(name)}`)).json()).waypoints ?? [];
-    } catch {
-        /* none */
-    }
-    for (const w of wp) sel.add(new Option(`${w.tag}  (${Math.round(w.x)}, ${Math.round(w.y)})`, w.tag));
-    if (!wp.length) sel.add(new Option('this area has no waypoints: pick another', ''));
-    if (waypoint && wp.some(w => w.tag === waypoint)) sel.value = waypoint;
-    testCanGo();
-}
-
-/** The way in last used for a module, kept in this browser. */
-const testWayKey = () => `landscaper.testway.${area?.module || area?.name}`;
-
-async function testAreas() {
-    const mine = ++testSeq,
-        box = $('testAreas'),
-        q = $('testFind').value.trim();
-    box.textContent = '';
-    if (q.length < 3) return;
-    let r = { sources: [] };
-    try {
-        r = await (await api(`/api/import-sources?q=${encodeURIComponent(q)}`)).json();
-    } catch {
-        /* none */
-    }
-    if (mine !== testSeq) return;
-    for (const s of (r.sources ?? []).slice(0, 12)) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.append(...areaRow(s, `${s.width}×${s.height}`));
-        if (testPicked === s.area) b.classList.add('selected');
-        b.onclick = async () => {
-            for (const o of box.children) o.classList.toggle('selected', o === b);
-            await testPickArea(s.area);
-        };
-        box.appendChild(b);
-    }
-    if (!box.children.length) box.textContent = r.error || r.note || 'No area matches.';
-}
-
-$('btnTest').onclick = async () => {
-    if (readOnly || !area) return;
-    testPicked = null;
-    $('testFind').value = '';
-    $('testAreas').textContent = '';
-    $('testWp').textContent = '';
-    $('testWp').add(new Option('Pick an area first', ''));
-    $('testTake').checked = false;
-    // The areas of this module you can lead to.
-    const entry = $('testEntry');
-    entry.textContent = '';
-    entry.add(new Option('the first area', ''));
-    try {
-        const mine = (await (await api('/api/areas')).json()).areas ?? [];
-        for (const a of mine.filter(a => a.exported && (a.module || a.name) === (area.module || area.name)))
-            entry.add(new Option(a.name, a.name));
-    } catch {
-        /* the list fails to load: offer only "the first area" */
-    }
-    $('testStatus').textContent = 'Checking the dev server…';
-    $('testDialog').showModal();
-    // The way in used last time for this module, ready to go.
-    try {
-        const last = JSON.parse(localStorage.getItem(testWayKey()) ?? 'null');
-        if (last?.area) {
-            if (last.entry && [...entry.options].some(o => o.value === last.entry)) entry.value = last.entry;
-            $('testFind').value = last.area;
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'selected';
-            b.append(el('span', {}, el('b', { textContent: last.area }), ' ', el('small', { textContent: 'used last time' })));
-            $('testAreas').appendChild(b);
-            await testPickArea(last.area, last.waypoint);
-        }
-    } catch {
-        /* nothing remembered */
-    }
-    await testRefresh(false);
-    clearInterval(testPoll);
-    testPoll = setInterval(() => testRefresh(true), 10000);
-};
-$('testDialog').addEventListener('close', () => clearInterval(testPoll));
-$('testFind').oninput = () => {
-    clearTimeout(testTimer);
-    testTimer = setTimeout(testAreas, 300);
-};
-$('testWp').onchange = testCanGo;
-$('testTake').onchange = testCanGo;
-$('testGo').onclick = async () => {
-    $('testGo').disabled = true;
-    $('testStatus').textContent = 'Starting…';
-    const q = `module=${encodeURIComponent(area.module || area.name)}&area=${encodeURIComponent(testPicked)}&waypoint=${encodeURIComponent($('testWp').value)}&entry=${encodeURIComponent($('testEntry').value)}&takeover=${$('testTake').checked ? 1 : 0}`;
-    try {
-        const res = await api(`/api/dev-test?${q}`, { method: 'POST' });
-        const r = await res.json();
-        if (!res.ok) throw new Error(r.error || res.statusText);
-        localStorage.setItem(testWayKey(), JSON.stringify({ area: testPicked, waypoint: $('testWp').value, entry: $('testEntry').value }));
-    } catch (err) {
-        $('testStatus').textContent = `Couldn't start: ${err.message}`;
-        $('testStatus').className = 'note err';
-        testCanGo();
-        return;
-    }
-    await testRefresh(true);
-};
-$('testRelease').onclick = async () => {
-    $('testRelease').disabled = true;
-    try {
-        const res = await api('/api/dev-test/release', { method: 'POST' });
-        const r = await res.json();
-        if (!res.ok) throw new Error(r.error || res.statusText);
-    } catch (err) {
-        $('testStatus').textContent = `Couldn't release: ${err.message}`;
-        $('testStatus').className = 'note err';
-    }
-    $('testRelease').disabled = false;
-    await testRefresh(false);
-};
+initActivity();
+initPublish(editor);
+initDevTest(editor);
 
 // Keeps this version of the area in the team's history (a commit in the team server's history repository).
 $('btnVersion').onclick = async () => {
@@ -2213,14 +1449,6 @@ $('btnVersion').onclick = async () => {
         btn.disabled = readOnly;
     }
 };
-$('actRefresh').onclick = showActivity;
-$('actUser').onkeydown = e => {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        showActivity();
-    }
-};
-$('actAction').onchange = showActivity;
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
 async function viewAs(user) {
@@ -2459,80 +1687,8 @@ $('btnRedo').onclick = () => {
     if (area?.redo()) refreshAll();
 };
 
-// Square sizes to pick, or any width and height (2 to 32 tiles each).
-const SIZES = [4, 8, 12, 16, 20, 24, 28, 32];
-const showSize = () => {
-    for (const o of $('sizeChoices').children)
-        o.classList.toggle('active', +o.dataset.size === +$('newW').value && +o.dataset.size === +$('newH').value);
-};
-for (const s of SIZES) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.dataset.size = s;
-    b.append(`${s}×${s}`, el('small', { textContent: `${s * TILE} m` }));
-    b.onclick = () => {
-        $('newW').value = $('newH').value = s;
-        showSize();
-    };
-    $('sizeChoices').appendChild(b);
-}
-$('newW').oninput = $('newH').oninput = showSize;
-showSize();
-
-// Sample starts: a switchback descent already laid, to show what it is and to change. How many floors depends on the size.
-const DESCENT_STARTERS = {
-    crypt: { from: 'interior', floors: 6, drop: 5, ceiling: 4, floor: 'flagIrregular', size: [12, 12] },
-    dungeon: { from: 'interior', floors: 4, drop: 4, ceiling: 4, floor: 'cobbles', size: [12, 8] },
-    'descending-cave': { from: 'cave', floors: 5, drop: 5, ceiling: 5, floor: 'pebbles', size: [12, 10] },
-};
-function seedDescent(created, starter) {
-    const floors = Math.min(starter.floors, Math.floor(Math.min(created.tiles, created.tilesY) / 2));
-    const plan = descentPlan(created, { x: 0, y: 0 }, { x: created.sizeX, y: created.sizeY }, { floors, drop: starter.drop });
-    if (plan.error) {
-        $('statusMsg').textContent = `Too small for the sample descent (${plan.error}); started empty.`;
-        return;
-    }
-    cutDescent(created, plan, created.materialIndex(starter.floor));
-    created.clearance = starter.ceiling;
-}
-for (const radio of document.querySelectorAll('input[name=start]')) {
-    radio.addEventListener('change', () => {
-        const size = DESCENT_STARTERS[radio.value]?.size;
-        if (size && radio.checked) {
-            $('newW').value = size[0];
-            $('newH').value = size[1];
-            showSize();
-        }
-    });
-}
-$('btnNew').onclick = () => {
-    if (area) $('newName').value = area.name;
-    $('newDialog').showModal();
-};
-$('newDialog').addEventListener('close', () => {
-    if ($('newDialog').returnValue !== 'ok') return;
-    const start = new FormData($('newDialog').querySelector('form')).get('start');
-    const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
-    const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
-    const starter = DESCENT_STARTERS[start];
-    const created = Area.create(
-        $('newName').value.trim().toLowerCase(),
-        tiles($('newW').value),
-        starter?.from ?? start,
-        base,
-        tiles($('newH').value),
-    );
-    if (starter) seedDescent(created, starter);
-    created.module = $('newModule').value.trim().toLowerCase() || created.name;
-    // A new area starts with the project's template (the standard scripts and so on; the server's, or a plain one).
-    thingsTool.loadMeta().then(meta => {
-        created.settings = { ...structuredClone(meta.template ?? {}), tag: created.name };
-        delete created.settings._note;
-        saveSoon();
-    });
-    setArea(created);
-    saveSoon();
-});
+// The New area dialog (newarea.js).
+initNewArea({ ...editor, setArea, saveSoon, thingsTool });
 
 // --- Export ---------------------------------------------------------------------
 
@@ -2606,117 +1762,8 @@ $('btnCheck').onclick = async () => {
     }
 };
 
-function showReport(r, checkOnly = false) {
-    const failed = r.warnings.filter(w => w.kind === 'failed_route').length;
-    const closed = r.warnings.filter(w => w.kind === 'closed_passage').length;
-    const winding = r.warnings.length - failed - closed;
-    const level = failed ? 'bad' : r.warnings.length ? 'warn' : 'good';
-    const explain = text =>
-        el('details', {}, el('summary', { textContent: 'What this means' }), el('p', { className: 'note', textContent: text }));
-    const p = (className, text) => el('p', { className, textContent: text });
-    $('reportBody').replaceChildren(
-        ...[
-            el('h3', { textContent: checkOnly ? 'Path check' : `Exported ${r.name}` }),
-            el('div', { className: `big ${level}`, textContent: `${r.routes.ok} of ${r.routes.total} routes work` }),
-            p('', "NWN's pathfinding, simulated on random routes between places your ground joins."),
-            ...(failed
-                ? [
-                      p('bad', `● ${failed} route(s) stop short: red markers, where the walker stops.`),
-                      explain(
-                          `The ground joins the two ends, but NWN's pathfinding finds no way through, so a player clicking past there stops short. NWN only crosses from one 10 m tile to the next at a few fixed points on each tile edge, so the usual causes are a passage the tiles can't use (see closed passages), a steep step between tile heights, or a narrow way along a tile edge or corner. Widen or straighten the way there, soften the slope, or keep openings away from tile edges and corners (every 10 m on the grid).`,
-                      ),
-                  ]
-                : []),
-            ...(closed
-                ? [
-                      p('warn', `● ${closed} passage(s) closed: orange markers.`),
-                      explain(
-                          `Ground you can walk through, but no NWN tile layout can use it (a gap between obstacles at a tile corner, a strip along a tile edge), so the export made that bit unwalkable. Harmless where nobody needs to pass: a sliver beside a wall, a corner behind rocks. Where players should get through, move or widen the gap, away from tile corners and edges; if it cut a way off, routes through it show as red too.`,
-                      ),
-                  ]
-                : []),
-            ...(winding
-                ? [
-                      p('warn', `● ${winding} tile(s) too winding: orange markers.`),
-                      explain(
-                          `NWN searches inside each tile with a time limit. Ground that twists within one tile (U-bends, zigzags, many small pockets) can take too long, so creatures there sometimes give up or go the long way. Usually it still works; if creatures misbehave there, straighten or widen the passages in that tile.`,
-                      ),
-                  ]
-                : []),
-            p('', `Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%`),
-            ...(checkOnly
-                ? [p('note', 'Nothing was exported: this only checks.')]
-                : [
-                      ...updated(r.updated),
-                      r.added_to_module &&
-                          el(
-                              'p',
-                              {},
-                              'Added to module ',
-                              el('b', { textContent: r.added_to_module.module }),
-                              ` as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).`,
-                          ),
-                      el(
-                          'p',
-                          {},
-                          'Ready to play: ',
-                          el('b', { textContent: r.name }),
-                          ' is in your NWN modules list.',
-                          el('br'),
-                          el('code', { textContent: r.installed_module || r.module }),
-                      ),
-                  ]),
-        ].filter(Boolean),
-    );
-    $('report').hidden = false;
-}
-
-// What happened to a module that was already installed (and maybe built on): its paragraphs.
-function updated(u) {
-    if (!u) return [];
-    const p = (className, text) => el('p', { className, textContent: text });
-    const out = [
-        p(
-            '',
-            `Updated your module: new ground, everything you placed kept (${u.objects} object${u.objects === 1 ? '' : 's'}` +
-                (u.ground_known
-                    ? `, ${u.moved} moved up or down with the ground).`
-                    : `; the last ground wasn't found, so none were raised or lowered).`),
-        ),
-    ];
-    if (u.outside.length) {
-        const where = u.outside
-            .slice(0, 5)
-            .map(o => `${o.tag || '(no tag)'} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`)
-            .join('; ');
-        out.push(p('warn', `● ${u.outside.length} now outside the area: ${where}${u.outside.length > 5 ? '…' : ''}`));
-    }
-    if (u.placeables_added || u.placeables_removed)
-        out.push(
-            p(
-                '',
-                `Placeables: ${u.placeables_added} added, ${u.placeables_removed} removed; the others moved where you put them, keeping what the toolset gave them.`,
-            ),
-        );
-    if (u.doors_added) out.push(p('', `${u.doors_added} new entrance door(s) added: link their transitions in the toolset.`));
-    out.push(
-        p(
-            '',
-            u.atmosphere ? 'Light and fog: set from the editor.' : 'Light and fog: unchanged in the editor, so the module keeps its own.',
-        ),
-        p('note', 'Close the module in the toolset before exporting, or saving there will overwrite this update.'),
-    );
-    return out;
-}
-
-/** A problem in the report box: `title` says what failed, `msg` why. */
-function showError(msg, title) {
-    $('reportBody').replaceChildren(el('h3', { className: 'bad', textContent: title }), el('p', { textContent: msg }));
-    $('report').hidden = false;
-}
-$('reportClose').onclick = () => {
-    $('report').hidden = true;
-};
+// The report box (report.js).
+initReport();
 
 // --- Keys -------------------------------------------------------------------------
 
