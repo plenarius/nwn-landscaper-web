@@ -356,20 +356,21 @@ dialog input:not([type]) {
     display: block;
     margin-left: 22px;
 }
-dialog menu {
+/* The buttons at the foot of a dialog. :where() keeps the specificity <menu> had here before. */
+dialog div:where(.dialog-buttons) {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
     padding: 0;
     margin: 22px 0 0;
 }
-dialog menu button {
+dialog div:where(.dialog-buttons) button {
     padding: 9px 18px;
     background: var(--panel-2);
     border: 1px solid #000;
     border-radius: 8px;
 }
-dialog menu button.primary {
+dialog div:where(.dialog-buttons) button.primary {
     background: var(--accent);
     color: #1d1a12;
     font-weight: 600;
