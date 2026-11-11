@@ -200,9 +200,9 @@ same commit. `scripts/check.sh` checks that all three are there.
 
 The game's shaders (`.shd`, GLSL) and shader code in JavaScript strings follow the Rust rules for naming and comments:
 
-- A shader based on one of the game's stock shaders starts with a block comment that names the stock shader (`fslit`), says that
-  this file is a modified copy of it, and says what it changes. It has no SPDX lines and makes no licence claim: the stock
-  shaders are Beamdog's, and `REUSE.toml` marks the file as theirs (see [Licences and REUSE](#licences-and-reuse)).
+- A shader based on one of the game's stock shaders is not kept as a file. The program reads the stock shader (`fslit`) from the
+  player's install and makes its change at run time, so no copy of Beamdog's shader is in a repository or a release; the code that
+  changes it says what it changes and why. (The engine's `src/shared.rs` does this for its shadow shaders.)
 - A shader written from scratch is ours and starts with the two SPDX lines, then a comment saying what it draws.
 - A shader file's name is a resref: lower case, at most 16 characters before the extension, because the game looks it up by
   that name.
@@ -227,8 +227,9 @@ Every file says who owns it and under which licence, the [REUSE](https://reuse.s
   A file based on someone else's work keeps their copyright line above ours.
 - Everything else (Markdown, configuration, JSON, images, lock files) is covered by `REUSE.toml`, so those files stay clean.
 - Vendored code keeps its own licence, recorded in `REUSE.toml`.
-- A shader modified from one of the game's stock shaders is Beamdog's: `REUSE.toml` gives it `SPDX-FileCopyrightText = "Beamdog"`
-  and `LicenseRef-Beamdog`, a text in `LICENSES/` saying that the repository grants no licence for it.
+- Measured game data (see [Never in these repositories](#never-in-these-repositories)) is Beamdog's: `REUSE.toml` gives it
+  `SPDX-FileCopyrightText = "Beamdog"` and `LicenseRef-Beamdog`, a text in `LICENSES/` saying that the repository grants no
+  licence for it.
 - The licence texts are in `LICENSES/`, one file per SPDX identifier. `LICENSE` at the top stays, for GitHub and for people.
 
 The licences:
@@ -245,9 +246,11 @@ every Rust dependency's licence is on the list in `deny.toml` and `about.toml`.
 ### Never in these repositories
 
 Decompiled game code (a decompiler's output from the game's binaries, cleaned up or not), the game's own files or extracts of
-them (models, textures, 2da files, talk tables, scripts), and anything else taken from the game, apart from the modified shaders
-above. None of it is ours to license. Tests write the small made-up game files they need; notes on how the game behaves are
-written in our own words and name their source (a function of the game, a measurement).
+them (models, textures, 2da files, talk tables, scripts, shaders), and anything else taken from the game. None of it is ours to
+license. The one exception is layout data measured from how the game behaves, when a program can't work without it and the game
+has no file to read it from: the engine's path node layouts (`src/pathnodes.json`, measured from the server), marked as Beamdog's
+in `REUSE.toml`. Tests write the small made-up game files they need; notes on how the game behaves are written in our own words
+and name their source (a function of the game, a measurement).
 
 ## The checks
 
