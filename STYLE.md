@@ -99,21 +99,10 @@ set:
 | `clippy::ignored_unit_patterns`, `semicolon_if_nothing_returned` | warn | `Ok(())` over `Ok(_)`; a `;` after a unit expression. |
 | `clippy::manual_let_else`, `map_unwrap_or` | warn | `let Some(x) = ... else { ... };` and `map_or` over longer forms. |
 | `clippy::stable_sort_primitive`, `uninlined_format_args` | warn | `sort_unstable` for numbers; `"{name}"` over `"{}", name`. |
-| `missing_docs` | warn, then deny | nwn-bake only: a library others build on documents every public item. |
+| `missing_docs` | deny | nwn-bake only: a library others build on documents every public item. |
 
-The block is the same in every workspace, apart from `missing_docs`, which only nwn-bake has. Prefer
-`#[expect(lint, reason = "...")]` to `#[allow]`: it warns when it is no longer needed.
-
-**`missing_docs` until every item has its comment.** With `-D warnings`, CI would fail on each missing doc comment, and 298 of
-nwn-bake's public items had none when the lint was added. Until they all have one, `nwn-bake/src/lib.rs` holds the lint back with
-`#![expect(missing_docs, reason = "...")]`, so CI passes. This counts the items left:
-
-```sh
-cargo clippy -p nwn-bake --all-features -- --force-warn missing_docs
-```
-
-When none are left, the `expect` itself warns: the line goes, and `Cargo.toml` raises the lint to `deny` in the same pull
-request.
+The block is the same in every workspace, apart from `missing_docs`, which only nwn-bake has: a public item without a doc
+comment fails its build. Prefer `#[expect(lint, reason = "...")]` to `#[allow]`: it warns when it is no longer needed.
 
 The rest of clippy's pedantic group is not enforced. Its cast lints (`cast_possible_truncation`, `cast_precision_loss`) would flag
 the drawing code's casts, which are on purpose, and `doc_markdown`, `must_use_candidate`, `similar_names` and `too_many_lines`

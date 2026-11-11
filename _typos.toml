@@ -8,9 +8,6 @@ extend-exclude = [
     "LICENSES/",
     "*.lock",
     "*.min.js",
-    # Ghidra's output: the game's own names, not ours.
-    "research/decompiled/",
-    "research/decompiled-clean/",
 ]
 
 [default]

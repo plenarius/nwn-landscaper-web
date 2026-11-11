@@ -48,13 +48,13 @@ have() {
 }
 run() { local name=$1; shift; "$@" || fail "$name"; }
 
-# Folders checked by their own script, and files that are not ours (vendored code, Ghidra's output).
+# Folders checked by their own script, and files that are not ours (vendored code, licence texts).
 nested=()
 while IFS= read -r f; do nested+=("${f%/scripts/check.sh}/"); done < <(git ls-files '*/scripts/check.sh')
 ours() {
     local f n
     while IFS= read -r f; do
-        case "$f" in vendor/* | */vendor/* | research/decompiled* | LICENSES/* | LICENSE) continue ;; esac
+        case "$f" in vendor/* | */vendor/* | LICENSES/* | LICENSE) continue ;; esac
         for n in "${nested[@]}"; do [[ "$f" == "$n"* ]] && continue 2; done
         [[ -f "$f" ]] && printf '%s\n' "$f"
     done < <(git ls-files "$@")
