@@ -62,8 +62,8 @@ html-validate, spelling, writing, Markdown, links, licences, secrets); [STYLE.md
 ## Credits
 
 Forked from [ergin3d/heightmap-generator](https://github.com/ergin3d/heightmap-generator) (MIT), which supplied the three.js
-view, raycast painting, brush falloff, noise and filters. The UI and data model are rebuilt around NWN areas; `js/filters.js` and
-`js/noise.js` are still ergin3d's files.
+view, raycast painting, brush falloff, noise and filters. The UI and data model are rebuilt around NWN areas; `js/noise.js` is
+still ergin3d's file.
 
 Vendored, unmodified, each with its own `LICENSE`:
 
