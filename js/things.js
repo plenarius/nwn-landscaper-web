@@ -11,7 +11,7 @@ import { THING_COLOURS, css } from './thingcolours.js';
 import { creaturePreview, itemPreview, modelPreview } from './preview.js';
 import { scriptPicker } from './scripts.js';
 import { conversationPicker } from './dialogs.js';
-import { api } from './api.js';
+import { api, failure } from './api.js';
 
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
@@ -43,7 +43,14 @@ const KINDS = [
     { id: 'store', kind: 'store', label: 'Store', blueprint: true, bearing: true },
     { id: 'item', kind: 'item', label: 'Item', blueprint: true },
     { id: 'door', kind: 'door', label: 'Door', blueprint: true, bearing: true },
-    { id: 'placeable', kind: 'placeable', label: 'Placeable', blueprint: true, bearing: true },
+    {
+        id: 'placeable',
+        kind: 'placeable',
+        label: 'Placeable',
+        blueprint: true,
+        bearing: true,
+        note: 'Pick a blueprint below (its settings come with it), then click the ground to place it. For scenery from a model, the Place tool is quicker.',
+    },
 ];
 const BOOLEAN = new Set([
     'HasMapNote',
@@ -366,12 +373,9 @@ export class ThingsTool {
         }
         const mine = ++this.seq,
             q = this.ctx.$('thingSearch').value.trim();
-        let list = [];
-        try {
-            list = (await (await api(`/api/blueprints?kind=${k.kind}&q=${encodeURIComponent(q)}&limit=60`)).json()).blueprints ?? [];
-        } catch {
-            /* none */
-        }
+        const res = await api(`/api/blueprints?kind=${k.kind}&q=${encodeURIComponent(q)}&limit=60`);
+        const list = res.ok ? ((await res.json().catch(() => ({}))).blueprints ?? []) : [];
+        const why = res.ok ? '' : await failure(res);
         if (mine !== this.seq) return;
         const box = this.ctx.$('thingResults');
         box.textContent = '';
@@ -397,7 +401,7 @@ export class ThingsTool {
             };
             box.appendChild(e);
         }
-        if (!list.length) box.textContent = q ? 'Nothing matches.' : 'Nothing found.';
+        if (!list.length) box.textContent = why || (q ? 'Nothing matches.' : 'Nothing found.');
         this.bpFinder?.();
     }
 

@@ -12,7 +12,9 @@
     --accent: #d8a24a;
     --good: #7ec46a;
     --warn: #ff9a1f;
-    --bad: #e0402a;
+    /* Red text on the panels: 4.5:1 or better against --panel (#ff6a55: 5.0:1); --bad-fill is red behind white text. */
+    --bad: #ff6a55;
+    --bad-fill: #b8321f;
 }
 
 * {
@@ -212,7 +214,7 @@ button {
     font-size: 13px;
     color: var(--muted);
 }
-.slider-group label {
+.slider-group .slider-head {
     display: flex;
     justify-content: space-between;
     white-space: nowrap;
@@ -1044,7 +1046,7 @@ dialog button.busy:disabled {
     border-color: #000;
 }
 #askOk.danger:hover {
-    background: var(--bad);
+    background: var(--bad-fill);
 }
 
 /* Things and area settings. */
@@ -1146,7 +1148,7 @@ button.danger {
     margin-top: 8px;
 }
 button.danger:hover {
-    background: var(--bad);
+    background: var(--bad-fill);
 }
 #settingsDialog {
     width: min(760px, 94vw);
@@ -1647,4 +1649,51 @@ dialog label.check input {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* Without the engine: one line over the view saying what still works, with a link to how to start it. */
+#noEngine {
+    position: absolute;
+    left: 50%;
+    bottom: 44px;
+    transform: translateX(-50%);
+    width: min(760px, calc(100vw - 32px));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 10px 40px 10px 14px;
+    background: rgba(38, 44, 52, 0.97);
+    border: 1px solid var(--warn);
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    font-size: 14px;
+    z-index: 20;
+}
+#noEngine[hidden] {
+    display: none;
+}
+#noEngine b {
+    color: var(--warn);
+}
+#noEngine span {
+    color: var(--muted);
+}
+#noEngine a {
+    color: var(--accent);
+}
+#noEngineClose {
+    position: absolute;
+    right: 8px;
+    top: 4px;
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: var(--muted);
+}
+
+/* The keyboard's place: a ring on whatever has the focus from the keyboard (not from a click). */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
