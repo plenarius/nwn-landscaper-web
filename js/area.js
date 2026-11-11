@@ -200,7 +200,6 @@ export class Area {
         return Number.isNaN(l) ? 0 : l - this.heights[k];
     }
 
-    /** Whether ground at sample (i, j) is walkable by landscaper's rule. */
     /** Whether sample (i, j) is a cave's void (rock at its roof). */
     void(i, j) {
         return this.enclosed() && this.heights[j * this.nx + i] >= this.roof - VOID_BELOW;
@@ -255,6 +254,7 @@ export class Area {
         return this.kind === 'underground' || this.kind === 'interior';
     }
 
+    /** Whether ground at sample (i, j) is walkable by landscaper's rule. */
     walkable(i, j) {
         const n = this.nx,
             h = this.heights,

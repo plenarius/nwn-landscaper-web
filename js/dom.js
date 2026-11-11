@@ -13,3 +13,6 @@ export function el(tag, props = {}, ...kids) {
     e.append(...kids.filter(k => k != null && k !== false));
     return e;
 }
+
+/** The page's element with id `id` (null when there is none). */
+export const $ = id => document.getElementById(id);

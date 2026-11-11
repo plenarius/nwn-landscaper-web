@@ -3,6 +3,7 @@
 
 // The builder's own blueprints: a creature or item made as a copy of an existing one, then changed in a dialog.
 // The engine keeps them in the builder's workspace and Publish sends the ones an area uses.
+// The code is ThingsTool methods (their names start with `bp`), added to the class from here; the class lists them.
 
 // biome-ignore-all lint/complexity/useArrowFunction: these are ThingsTool methods, written as functions like the rest so that `this` works in them
 
@@ -14,8 +15,6 @@ import { api } from './api.js';
 
 const json = r => r.json().catch(() => ({}));
 
-/** How each setting reads in the form, in the order shown: [label, text, group]. Anything the engine lists that isn't here
- *  comes last under "Other" with its own name. */
 /** The blueprint file type of each kind the builder can make their own of. */
 const EXT = { creature: 'utc', item: 'uti', placeable: 'utp', door: 'utd', store: 'utm' };
 
@@ -44,6 +43,8 @@ const BOOLS = new Set([
     'BlackMarket',
 ]);
 
+/** How each setting reads in the form, in the order shown: [label, text, group]. Anything the engine lists that isn't here
+ *  comes last under "Other" with its own name. */
 const NAMES = {
     utd: [
         ['LocName', 'Name', 'The door'],

@@ -178,8 +178,15 @@ const label = l =>
 const SHOW_KEY = 'landscaper.showThings';
 const SHOW_DEFAULT = ['creature', 'waypoint', 'trigger', 'sound', 'encounter', 'store', 'item', 'door'];
 
+/**
+ * The Things tool: its panel, its markers on the map, and the forms of the thing selected.
+ *
+ * Its methods for the builder's own blueprints are in newbp.js, which adds them to this class when app.js imports it (they are
+ * many, and only that feature uses them): `bpFinder`, `bpCreateForm`, `bpEdit`, `bpConversationRow`, `bpProperties`, `bpGear`,
+ * `bpAppearance` and `bpDoorLook`. Every other method is here.
+ */
 export class ThingsTool {
-    /** `ctx`: { $, area(), view, saveSoon(), say(text) }. */
+    /** `ctx`: { $, area(), view, readOnly(), saveSoon(), say(text) }. */
     constructor(ctx) {
         this.ctx = ctx;
         this.armed = KINDS[0];
@@ -1234,153 +1241,342 @@ export class ThingsTool {
         const k = this.kindOf(t);
         this.propsForm(box, t, k, false);
     }
+
+    /** What a container, creature or store holds, or what an encounter spawns: the list the blueprint has to start from, changed
+     *  here (the change replaces the blueprint's whole list; "Use the blueprint's" takes it back). */
+    contentsSection(box, t, original = false) {
+        if (!['placeable', 'creature', 'store', 'encounter'].includes(t.kind) || (!t.blueprint && !original)) return;
+        const encounter = t.kind === 'encounter',
+            stock = t.kind === 'store';
+        const field = encounter ? 'creatures' : 'inventory';
+        const title = encounter ? 'Creatures it spawns' : stock ? 'Stock' : t.kind === 'creature' ? 'Items it carries' : 'Contents';
+        const key = `${t.kind}:${t.blueprint}`;
+        this.contentsCache ??= new Map();
+        const d = document.createElement('details');
+        d.className = 'fsec contents';
+        const sum = document.createElement('summary');
+        d.appendChild(sum);
+        box.appendChild(d);
+        d.open = t[field] !== undefined || this.openSections?.has(`${t.id}:contents`);
+        d.addEventListener('toggle', () => {
+            this.openSections ??= new Set();
+            this.openSections[d.open ? 'add' : 'delete'](`${t.id}:contents`);
+        });
+        // The blueprint's own list, fetched once (an original's is what it holds, sent with it).
+        if (!original && !this.contentsCache.has(key)) {
+            this.contentsCache.set(key, null);
+            api(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
+                .then(json)
+                .then(v => {
+                    this.contentsCache.set(key, v);
+                    if (this.active) this.renderProps();
+                })
+                .catch(() => this.contentsCache.set(key, { items: [], creatures: [], container: true }));
+        }
+        const base = original ? t.contents : this.contentsCache.get(key);
+        const mine = t[field];
+        const list = mine ?? (encounter ? base?.creatures : base?.items) ?? [];
+        sum.textContent = `${title} (${base || mine ? list.length : '…'})${mine ? ' · changed' : ''}`;
+        if (base && base.container === false) {
+            const p = document.createElement('p');
+            p.className = 'note';
+            p.textContent = "This one isn't a container: it holds nothing.";
+            d.appendChild(p);
+            return;
+        }
+        const edit = fn => {
+            this.area().beginStroke();
+            const next = (mine ?? (encounter ? base?.creatures : base?.items) ?? []).map(i => ({ ...i }));
+            fn(next);
+            t[field] = next;
+            this.changed();
+        };
+        const rows = document.createElement('div');
+        rows.className = 'stock';
+        list.forEach((it, i) => {
+            const r = document.createElement('div');
+            r.className = 'stock-row';
+            const name = document.createElement('span');
+            name.className = 'name';
+            name.textContent = it.name || it.resref;
+            const small = document.createElement('small');
+            small.textContent = it.resref;
+            name.appendChild(small);
+            r.appendChild(name);
+            if (stock) {
+                const inf = document.createElement('label');
+                inf.className = 'check';
+                inf.title = 'Never runs out';
+                const cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !!it.infinite });
+                cb.dataset.keep = String(t.id);
+                cb.onchange = () =>
+                    edit(l => {
+                        l[i].infinite = cb.checked;
+                    });
+                inf.append(cb, document.createTextNode('∞'));
+                r.appendChild(inf);
+            }
+            const rm = Object.assign(document.createElement('button'), { type: 'button', textContent: '×', title: 'Take it out' });
+            rm.onclick = () =>
+                edit(l => {
+                    l.splice(i, 1);
+                });
+            r.appendChild(rm);
+            rows.appendChild(r);
+        });
+        if (!list.length) rows.textContent = base || mine ? 'Nothing.' : 'Loading…';
+        d.appendChild(rows);
+        // Add: search the item (or creature) blueprints.
+        const find = Object.assign(document.createElement('input'), {
+            type: 'search',
+            placeholder: encounter ? 'Add a creature: type its name' : 'Add an item: type its name',
+            autocomplete: 'off',
+        });
+        find.dataset.keep = String(t.id);
+        const found = document.createElement('div');
+        found.className = 'bplist';
+        let timer = null,
+            seq = 0;
+        find.oninput = () => {
+            clearTimeout(timer);
+            timer = setTimeout(async () => {
+                const me = ++seq,
+                    q = find.value.trim();
+                found.textContent = '';
+                if (q.length < 2) return;
+                const r = await api(`/api/blueprints?kind=${encounter ? 'creature' : 'item'}&q=${encodeURIComponent(q)}&limit=8`)
+                    .then(json)
+                    .catch(() => ({}));
+                if (me !== seq) return;
+                for (const b of r.blueprints ?? []) {
+                    const e = document.createElement('button');
+                    e.type = 'button';
+                    e.className = 'bp';
+                    e.innerHTML = '<span class="txt"><b></b><small></small></span>';
+                    e.querySelector('b').textContent = b.name;
+                    e.querySelector('small').textContent = b.resref;
+                    e.onclick = () => {
+                        find.value = '';
+                        found.textContent = '';
+                        edit(l => {
+                            l.push(encounter ? { resref: b.resref, name: b.name } : { resref: b.resref, name: b.name, infinite: false });
+                        });
+                    };
+                    found.appendChild(e);
+                }
+                if (!found.children.length) found.textContent = 'Nothing matches.';
+            }, 250);
+        };
+        d.append(find, found);
+        if (mine) {
+            const back = Object.assign(document.createElement('button'), {
+                type: 'button',
+                textContent: original ? 'Put its contents back' : "Use the blueprint's",
+            });
+            back.onclick = () => {
+                this.area().beginStroke();
+                delete t[field];
+                this.changed();
+            };
+            d.appendChild(back);
+        }
+    }
+
+    /** What a creature wears and wields, slot by slot: the blueprint's own list to start from, changed here (the change replaces the
+     *  blueprint's whole list). */
+    equipmentSection(box, t, original = false) {
+        if (t.kind !== 'creature' || (!t.blueprint && !original)) return;
+        const key = `${t.kind}:${t.blueprint}`;
+        this.contentsCache ??= new Map();
+        const d = document.createElement('details');
+        d.className = 'fsec contents';
+        const sum = document.createElement('summary');
+        d.appendChild(sum);
+        box.appendChild(d);
+        d.open = t.equipment !== undefined || this.openSections?.has(`${t.id}:equipment`);
+        d.addEventListener('toggle', () => {
+            this.openSections ??= new Set();
+            this.openSections[d.open ? 'add' : 'delete'](`${t.id}:equipment`);
+        });
+        if (!original && !this.contentsCache.has(key)) {
+            this.contentsCache.set(key, null);
+            api(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
+                .then(json)
+                .then(v => {
+                    this.contentsCache.set(key, v);
+                    if (this.active) this.renderProps();
+                })
+                .catch(() => this.contentsCache.set(key, { items: [], equipment: [], container: true }));
+        }
+        const base = original ? t.contents : this.contentsCache.get(key);
+        const mine = t.equipment;
+        const list = mine ?? base?.equipment ?? [];
+        sum.textContent = `Worn and wielded (${base || mine ? list.length : '…'})${mine ? ' · changed' : ''}`;
+        const edit = fn => {
+            this.area().beginStroke();
+            const next = (mine ?? base?.equipment ?? []).map(i => ({ ...i }));
+            fn(next);
+            t.equipment = next;
+            this.changed();
+        };
+        const rows = document.createElement('div');
+        rows.className = 'stock';
+        list.forEach((it, i) => {
+            const r = document.createElement('div');
+            r.className = 'stock-row';
+            const name = document.createElement('span');
+            name.className = 'name';
+            name.textContent = `${it.slot}: ${it.name || it.resref}`;
+            const small = document.createElement('small');
+            small.textContent = it.resref;
+            name.appendChild(small);
+            const rm = Object.assign(document.createElement('button'), { type: 'button', textContent: '×', title: 'Take it off' });
+            rm.onclick = () =>
+                edit(l => {
+                    l.splice(i, 1);
+                });
+            r.append(name, rm);
+            rows.appendChild(r);
+        });
+        if (!list.length) rows.textContent = base || mine ? 'Nothing.' : 'Loading…';
+        d.appendChild(rows);
+        // Add: pick a free slot, then search the item blueprints (an item put in a slot that's taken replaces what was there).
+        const slot = document.createElement('select');
+        slot.dataset.keep = String(t.id);
+        for (const n of SLOTS) slot.add(new Option(n, n));
+        const find = Object.assign(document.createElement('input'), {
+            type: 'search',
+            placeholder: "Put on or in hand: type the item's name",
+            autocomplete: 'off',
+        });
+        find.dataset.keep = String(t.id);
+        const found = document.createElement('div');
+        found.className = 'bplist';
+        let timer = null,
+            seq = 0;
+        find.oninput = () => {
+            clearTimeout(timer);
+            timer = setTimeout(async () => {
+                const me = ++seq,
+                    q = find.value.trim();
+                found.textContent = '';
+                if (q.length < 2) return;
+                const r = await api(`/api/blueprints?kind=item&q=${encodeURIComponent(q)}&limit=8`)
+                    .then(json)
+                    .catch(() => ({}));
+                if (me !== seq) return;
+                for (const b of r.blueprints ?? []) {
+                    const e = document.createElement('button');
+                    e.type = 'button';
+                    e.className = 'bp';
+                    e.innerHTML = '<span class="txt"><b></b><small></small></span>';
+                    e.querySelector('b').textContent = b.name;
+                    e.querySelector('small').textContent = b.resref;
+                    e.onclick = () => {
+                        const at = slot.value;
+                        find.value = '';
+                        found.textContent = '';
+                        edit(l => {
+                            const i = l.findIndex(x => x.slot === at);
+                            if (i >= 0) l.splice(i, 1);
+                            l.push({ slot: at, resref: b.resref, name: b.name });
+                        });
+                    };
+                    found.appendChild(e);
+                }
+                if (!found.children.length) found.textContent = 'Nothing matches.';
+            }, 250);
+        };
+        d.append(slot, find, found);
+        if (mine) {
+            const back = Object.assign(document.createElement('button'), {
+                type: 'button',
+                textContent: original ? 'Put its gear back' : "Use the blueprint's",
+            });
+            back.onclick = () => {
+                this.area().beginStroke();
+                delete t.equipment;
+                this.changed();
+            };
+            d.appendChild(back);
+        }
+    }
+
+    /** Where a transition leads, picked from an existing area: a search for the area, then one of its waypoints. */
+    destinationPicker(t, _input) {
+        // Leads to a waypoint of an existing area: search it, then pick one of its waypoints.
+        const d = document.createElement('details');
+        d.className = 'dest-picker';
+        const sum = document.createElement('summary');
+        sum.textContent = 'Pick a waypoint of an existing area';
+        d.appendChild(sum);
+        const find = Object.assign(document.createElement('input'), {
+            type: 'search',
+            placeholder: "3 letters of the area's name or tag",
+            autocomplete: 'off',
+        });
+        const areas = document.createElement('div');
+        areas.className = 'bplist';
+        const wps = document.createElement('select');
+        wps.hidden = true;
+        const note = document.createElement('p');
+        note.className = 'note';
+        d.append(find, areas, wps, note);
+        let seq = 0,
+            timer = null;
+        find.oninput = () => {
+            clearTimeout(timer);
+            timer = setTimeout(async () => {
+                const mine = ++seq,
+                    q = find.value.trim();
+                areas.textContent = '';
+                wps.hidden = true;
+                if (q.length < 3) return;
+                const r = await api(`/api/import-sources?q=${encodeURIComponent(q)}`)
+                    .then(json)
+                    .catch(() => ({}));
+                if (mine !== seq) return;
+                for (const s of (r.sources ?? []).slice(0, 8)) {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    const title = document.createElement('b');
+                    title.textContent = s.name || s.tag || s.area;
+                    const small = document.createElement('small');
+                    small.textContent = s.area;
+                    b.append(title, ' ', small);
+                    b.onclick = async () => {
+                        note.textContent = `Waypoints of ${s.area}…`;
+                        const w = await api(`/api/dev-test/waypoints?area=${encodeURIComponent(s.area)}`)
+                            .then(json)
+                            .catch(() => ({}));
+                        wps.textContent = '';
+                        wps.add(new Option(w.waypoints?.length ? 'Pick a waypoint' : 'this area has no waypoints', ''));
+                        for (const p of w.waypoints ?? []) wps.add(new Option(`${p.tag}  (${Math.round(p.x)}, ${Math.round(p.y)})`, p.tag));
+                        wps.hidden = !w.waypoints?.length;
+                        note.textContent = w.error ? `Couldn't read its waypoints: ${w.error}` : '';
+                    };
+                    areas.appendChild(b);
+                }
+                if (!areas.children.length) areas.textContent = r.error || r.note || 'No area matches.';
+            }, 300);
+        };
+        wps.onchange = () => {
+            if (!wps.value) return;
+            this.area().beginStroke();
+            t.fields ??= {};
+            t.fields.LinkedTo = wps.value;
+            t.fields.LinkedToFlags = 2;
+            this.changed();
+            this.renderProps();
+        };
+        return d;
+    }
 }
 
 /** Reads a response body as JSON, or {} when it isn't. */
 const json = r => r.json().catch(() => ({}));
 
-/** What a container, creature or store holds, or what an encounter spawns: the list the blueprint has to start from, changed
- *  here (the change replaces the blueprint's whole list; "Use the blueprint's" takes it back). */
-ThingsTool.prototype.contentsSection = function (box, t, original = false) {
-    if (!['placeable', 'creature', 'store', 'encounter'].includes(t.kind) || (!t.blueprint && !original)) return;
-    const encounter = t.kind === 'encounter',
-        stock = t.kind === 'store';
-    const field = encounter ? 'creatures' : 'inventory';
-    const title = encounter ? 'Creatures it spawns' : stock ? 'Stock' : t.kind === 'creature' ? 'Items it carries' : 'Contents';
-    const key = `${t.kind}:${t.blueprint}`;
-    this.contentsCache ??= new Map();
-    const d = document.createElement('details');
-    d.className = 'fsec contents';
-    const sum = document.createElement('summary');
-    d.appendChild(sum);
-    box.appendChild(d);
-    d.open = t[field] !== undefined || this.openSections?.has(`${t.id}:contents`);
-    d.addEventListener('toggle', () => {
-        this.openSections ??= new Set();
-        this.openSections[d.open ? 'add' : 'delete'](`${t.id}:contents`);
-    });
-    // The blueprint's own list, fetched once (an original's is what it holds, sent with it).
-    if (!original && !this.contentsCache.has(key)) {
-        this.contentsCache.set(key, null);
-        api(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
-            .then(json)
-            .then(v => {
-                this.contentsCache.set(key, v);
-                if (this.active) this.renderProps();
-            })
-            .catch(() => this.contentsCache.set(key, { items: [], creatures: [], container: true }));
-    }
-    const base = original ? t.contents : this.contentsCache.get(key);
-    const mine = t[field];
-    const list = mine ?? (encounter ? base?.creatures : base?.items) ?? [];
-    sum.textContent = `${title} (${base || mine ? list.length : '…'})${mine ? ' · changed' : ''}`;
-    if (base && base.container === false) {
-        const p = document.createElement('p');
-        p.className = 'note';
-        p.textContent = "This one isn't a container: it holds nothing.";
-        d.appendChild(p);
-        return;
-    }
-    const edit = fn => {
-        this.area().beginStroke();
-        const next = (mine ?? (encounter ? base?.creatures : base?.items) ?? []).map(i => ({ ...i }));
-        fn(next);
-        t[field] = next;
-        this.changed();
-    };
-    const rows = document.createElement('div');
-    rows.className = 'stock';
-    list.forEach((it, i) => {
-        const r = document.createElement('div');
-        r.className = 'stock-row';
-        const name = document.createElement('span');
-        name.className = 'name';
-        name.textContent = it.name || it.resref;
-        const small = document.createElement('small');
-        small.textContent = it.resref;
-        name.appendChild(small);
-        r.appendChild(name);
-        if (stock) {
-            const inf = document.createElement('label');
-            inf.className = 'check';
-            inf.title = 'Never runs out';
-            const cb = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !!it.infinite });
-            cb.dataset.keep = String(t.id);
-            cb.onchange = () =>
-                edit(l => {
-                    l[i].infinite = cb.checked;
-                });
-            inf.append(cb, document.createTextNode('∞'));
-            r.appendChild(inf);
-        }
-        const rm = Object.assign(document.createElement('button'), { type: 'button', textContent: '×', title: 'Take it out' });
-        rm.onclick = () =>
-            edit(l => {
-                l.splice(i, 1);
-            });
-        r.appendChild(rm);
-        rows.appendChild(r);
-    });
-    if (!list.length) rows.textContent = base || mine ? 'Nothing.' : 'Loading…';
-    d.appendChild(rows);
-    // Add: search the item (or creature) blueprints.
-    const find = Object.assign(document.createElement('input'), {
-        type: 'search',
-        placeholder: encounter ? 'Add a creature: type its name' : 'Add an item: type its name',
-        autocomplete: 'off',
-    });
-    find.dataset.keep = String(t.id);
-    const found = document.createElement('div');
-    found.className = 'bplist';
-    let timer = null,
-        seq = 0;
-    find.oninput = () => {
-        clearTimeout(timer);
-        timer = setTimeout(async () => {
-            const me = ++seq,
-                q = find.value.trim();
-            found.textContent = '';
-            if (q.length < 2) return;
-            const r = await api(`/api/blueprints?kind=${encounter ? 'creature' : 'item'}&q=${encodeURIComponent(q)}&limit=8`)
-                .then(json)
-                .catch(() => ({}));
-            if (me !== seq) return;
-            for (const b of r.blueprints ?? []) {
-                const e = document.createElement('button');
-                e.type = 'button';
-                e.className = 'bp';
-                e.innerHTML = '<span class="txt"><b></b><small></small></span>';
-                e.querySelector('b').textContent = b.name;
-                e.querySelector('small').textContent = b.resref;
-                e.onclick = () => {
-                    find.value = '';
-                    found.textContent = '';
-                    edit(l => {
-                        l.push(encounter ? { resref: b.resref, name: b.name } : { resref: b.resref, name: b.name, infinite: false });
-                    });
-                };
-                found.appendChild(e);
-            }
-            if (!found.children.length) found.textContent = 'Nothing matches.';
-        }, 250);
-    };
-    d.append(find, found);
-    if (mine) {
-        const back = Object.assign(document.createElement('button'), {
-            type: 'button',
-            textContent: original ? 'Put its contents back' : "Use the blueprint's",
-        });
-        back.onclick = () => {
-            this.area().beginStroke();
-            delete t[field];
-            this.changed();
-        };
-        d.appendChild(back);
-    }
-};
-
-/** What a creature wears and wields, slot by slot: the blueprint's own list to start from, changed here (the change replaces the
- *  blueprint's whole list). */
+/** The creature inventory slots by name, in the order of the game's slot numbers (INVENTORY_SLOT_HEAD is 0). */
 const SLOTS = [
     'head',
     'chest',
@@ -1401,192 +1597,6 @@ const SLOTS = [
     'bite',
     'skin',
 ];
-ThingsTool.prototype.equipmentSection = function (box, t, original = false) {
-    if (t.kind !== 'creature' || (!t.blueprint && !original)) return;
-    const key = `${t.kind}:${t.blueprint}`;
-    this.contentsCache ??= new Map();
-    const d = document.createElement('details');
-    d.className = 'fsec contents';
-    const sum = document.createElement('summary');
-    d.appendChild(sum);
-    box.appendChild(d);
-    d.open = t.equipment !== undefined || this.openSections?.has(`${t.id}:equipment`);
-    d.addEventListener('toggle', () => {
-        this.openSections ??= new Set();
-        this.openSections[d.open ? 'add' : 'delete'](`${t.id}:equipment`);
-    });
-    if (!original && !this.contentsCache.has(key)) {
-        this.contentsCache.set(key, null);
-        api(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
-            .then(json)
-            .then(v => {
-                this.contentsCache.set(key, v);
-                if (this.active) this.renderProps();
-            })
-            .catch(() => this.contentsCache.set(key, { items: [], equipment: [], container: true }));
-    }
-    const base = original ? t.contents : this.contentsCache.get(key);
-    const mine = t.equipment;
-    const list = mine ?? base?.equipment ?? [];
-    sum.textContent = `Worn and wielded (${base || mine ? list.length : '…'})${mine ? ' · changed' : ''}`;
-    const edit = fn => {
-        this.area().beginStroke();
-        const next = (mine ?? base?.equipment ?? []).map(i => ({ ...i }));
-        fn(next);
-        t.equipment = next;
-        this.changed();
-    };
-    const rows = document.createElement('div');
-    rows.className = 'stock';
-    list.forEach((it, i) => {
-        const r = document.createElement('div');
-        r.className = 'stock-row';
-        const name = document.createElement('span');
-        name.className = 'name';
-        name.textContent = `${it.slot}: ${it.name || it.resref}`;
-        const small = document.createElement('small');
-        small.textContent = it.resref;
-        name.appendChild(small);
-        const rm = Object.assign(document.createElement('button'), { type: 'button', textContent: '×', title: 'Take it off' });
-        rm.onclick = () =>
-            edit(l => {
-                l.splice(i, 1);
-            });
-        r.append(name, rm);
-        rows.appendChild(r);
-    });
-    if (!list.length) rows.textContent = base || mine ? 'Nothing.' : 'Loading…';
-    d.appendChild(rows);
-    // Add: pick a free slot, then search the item blueprints (an item put in a slot that's taken replaces what was there).
-    const slot = document.createElement('select');
-    slot.dataset.keep = String(t.id);
-    for (const n of SLOTS) slot.add(new Option(n, n));
-    const find = Object.assign(document.createElement('input'), {
-        type: 'search',
-        placeholder: "Put on or in hand: type the item's name",
-        autocomplete: 'off',
-    });
-    find.dataset.keep = String(t.id);
-    const found = document.createElement('div');
-    found.className = 'bplist';
-    let timer = null,
-        seq = 0;
-    find.oninput = () => {
-        clearTimeout(timer);
-        timer = setTimeout(async () => {
-            const me = ++seq,
-                q = find.value.trim();
-            found.textContent = '';
-            if (q.length < 2) return;
-            const r = await api(`/api/blueprints?kind=item&q=${encodeURIComponent(q)}&limit=8`)
-                .then(json)
-                .catch(() => ({}));
-            if (me !== seq) return;
-            for (const b of r.blueprints ?? []) {
-                const e = document.createElement('button');
-                e.type = 'button';
-                e.className = 'bp';
-                e.innerHTML = '<span class="txt"><b></b><small></small></span>';
-                e.querySelector('b').textContent = b.name;
-                e.querySelector('small').textContent = b.resref;
-                e.onclick = () => {
-                    const at = slot.value;
-                    find.value = '';
-                    found.textContent = '';
-                    edit(l => {
-                        const i = l.findIndex(x => x.slot === at);
-                        if (i >= 0) l.splice(i, 1);
-                        l.push({ slot: at, resref: b.resref, name: b.name });
-                    });
-                };
-                found.appendChild(e);
-            }
-            if (!found.children.length) found.textContent = 'Nothing matches.';
-        }, 250);
-    };
-    d.append(slot, find, found);
-    if (mine) {
-        const back = Object.assign(document.createElement('button'), {
-            type: 'button',
-            textContent: original ? 'Put its gear back' : "Use the blueprint's",
-        });
-        back.onclick = () => {
-            this.area().beginStroke();
-            delete t.equipment;
-            this.changed();
-        };
-        d.appendChild(back);
-    }
-};
-
-ThingsTool.prototype.destinationPicker = function (t, _input) {
-    // Leads to a waypoint of an existing area: search it, then pick one of its waypoints.
-    const d = document.createElement('details');
-    d.className = 'dest-picker';
-    const sum = document.createElement('summary');
-    sum.textContent = 'Pick a waypoint of an existing area';
-    d.appendChild(sum);
-    const find = Object.assign(document.createElement('input'), {
-        type: 'search',
-        placeholder: "3 letters of the area's name or tag",
-        autocomplete: 'off',
-    });
-    const areas = document.createElement('div');
-    areas.className = 'bplist';
-    const wps = document.createElement('select');
-    wps.hidden = true;
-    const note = document.createElement('p');
-    note.className = 'note';
-    d.append(find, areas, wps, note);
-    let seq = 0,
-        timer = null;
-    find.oninput = () => {
-        clearTimeout(timer);
-        timer = setTimeout(async () => {
-            const mine = ++seq,
-                q = find.value.trim();
-            areas.textContent = '';
-            wps.hidden = true;
-            if (q.length < 3) return;
-            const r = await api(`/api/import-sources?q=${encodeURIComponent(q)}`)
-                .then(json)
-                .catch(() => ({}));
-            if (mine !== seq) return;
-            for (const s of (r.sources ?? []).slice(0, 8)) {
-                const b = document.createElement('button');
-                b.type = 'button';
-                const title = document.createElement('b');
-                title.textContent = s.name || s.tag || s.area;
-                const small = document.createElement('small');
-                small.textContent = s.area;
-                b.append(title, ' ', small);
-                b.onclick = async () => {
-                    note.textContent = `Waypoints of ${s.area}…`;
-                    const w = await api(`/api/dev-test/waypoints?area=${encodeURIComponent(s.area)}`)
-                        .then(json)
-                        .catch(() => ({}));
-                    wps.textContent = '';
-                    wps.add(new Option(w.waypoints?.length ? 'Pick a waypoint' : 'this area has no waypoints', ''));
-                    for (const p of w.waypoints ?? []) wps.add(new Option(`${p.tag}  (${Math.round(p.x)}, ${Math.round(p.y)})`, p.tag));
-                    wps.hidden = !w.waypoints?.length;
-                    note.textContent = w.error ? `Couldn't read its waypoints: ${w.error}` : '';
-                };
-                areas.appendChild(b);
-            }
-            if (!areas.children.length) areas.textContent = r.error || r.note || 'No area matches.';
-        }, 300);
-    };
-    wps.onchange = () => {
-        if (!wps.value) return;
-        this.area().beginStroke();
-        t.fields ??= {};
-        t.fields.LinkedTo = wps.value;
-        t.fields.LinkedToFlags = 2;
-        this.changed();
-        this.renderProps();
-    };
-    return d;
-};
 
 const round = (v, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
 
