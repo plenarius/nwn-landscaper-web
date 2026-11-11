@@ -2,7 +2,7 @@
 # `scripts/check.sh` runs it offline (links between our own files); `scripts/check.sh --online` also checks the web.
 
 # Not ours, or not text.
-exclude_path = ['(^|/)target/', '(^|/)vendor/', '(^|/)node_modules/', '(^|/)research/decompiled', '(^|/)LICENSES?(/|$)']
+exclude_path = ['(^|/)target/', '(^|/)vendor/', '(^|/)node_modules/', '(^|/)LICENSES?(/|$)']
 
 # Addresses that only exist on the machine running the program, and the documentation's placeholders.
 exclude = [
