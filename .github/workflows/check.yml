@@ -41,7 +41,11 @@ jobs:
           grep gitleaks_8.30.1_linux_x64.tar.gz gitleaks.sums | sed 's/  .*/  gitleaks.tgz/' | sha256sum -c
           grep trufflehog_3.99.8_linux_amd64.tar.gz trufflehog.sums | sed 's/  .*/  trufflehog.tgz/' | sha256sum -c
           install -m 755 biome "$bin/biome"
-          for t in typos vale lychee gitleaks trufflehog; do tar -xzf "$t.tgz" -C "$bin" --wildcards --no-anchored "$t"; done
+          # Some archives keep the binary in a subfolder (lychee does), so unpack each on its own and install the file named like the tool.
+          for t in typos vale lychee gitleaks trufflehog; do
+            mkdir "x-$t" && tar -xzf "$t.tgz" -C "x-$t"
+            install -m 755 "$(find "x-$t" -type f -name "$t" | head -n 1)" "$bin/$t"
+          done
           npm install -g --prefix "$HOME/.local" html-validate@11.21.0 markdownlint-cli2@0.24.0
           pipx install reuse==6.3.0
       - name: scripts/check.sh
