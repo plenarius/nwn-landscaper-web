@@ -1,7 +1,7 @@
 # REUSE (https://reuse.software/): who owns each file and under which licence (STYLE.md, "Licences and REUSE"). Source code says
 # it in its first lines; this file covers everything that is not source code, and the vendored packages.
 #
-# Everything here is MIT (James, 2026-11-11), the licence of ergin3d/heightmap-generator, which this was forked from.
+# Everything here is MIT, the licence of ergin3d/heightmap-generator, which this was forked from.
 # js/noise.js is still ergin3d's file and carries ergin3d's copyright line above ours.
 version = 1
 SPDX-PackageName = "landscaper-web"
@@ -15,6 +15,7 @@ path = [
     "**/*.toml",
     "**/*.yml",
     "**/.gitignore",
+    ".lycheeignore",
     ".editorconfig",
     ".vale.ini",
     ".vale/**",

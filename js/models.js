@@ -53,7 +53,9 @@ export class ModelLibrary {
         if (!this.flats.has(model)) {
             this.flats.set(
                 model,
-                api(`/api/model/${model}`).then(r => (r.ok ? r.json() : Promise.reject(new Error(`no model ${model}`)))),
+                api(`/api/model/${encodeURIComponent(model)}`).then(r =>
+                    r.ok ? r.json() : Promise.reject(new Error(`no model ${model}`)),
+                ),
             );
         }
         return this.flats.get(model);
@@ -69,7 +71,7 @@ export class ModelLibrary {
                 }),
             );
             const t = new THREE.TextureLoader().load(
-                `/api/texture/${name}`,
+                `/api/texture/${encodeURIComponent(name)}`,
                 () => done(),
                 undefined,
                 () => done(),
