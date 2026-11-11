@@ -21,7 +21,7 @@
     <header id="topbar">
         <div class="brand">NWN <b>Landscaper</b></div>
         <div class="menu" id="menuFile">
-            <button class="top-btn menu-btn" type="button" aria-haspopup="true">File</button>
+            <button class="top-btn menu-btn" type="button" aria-haspopup="true" aria-expanded="false">File</button>
             <div class="menu-list" hidden>
                 <button type="button" class="menu-item" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span><span>New area</span><kbd>N</kbd></button>
                 <button type="button" class="menu-item" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span><span>Open…</span><kbd>O</kbd></button>
@@ -32,7 +32,7 @@
         </div>
         <div id="areaInfo"></div>
         <div class="menu" id="menuArea">
-            <button class="top-btn menu-btn" type="button" aria-haspopup="true">Area</button>
+            <button class="top-btn menu-btn" type="button" aria-haspopup="true" aria-expanded="false">Area</button>
             <div class="menu-list" hidden>
                 <button type="button" class="menu-item" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span><span>Sky &amp; fog</span><kbd>L</kbd></button>
                 <button type="button" class="menu-item" id="btnCeiling" hidden title="How high the ceiling stays over the floor in a cave or interior"><span>Ceiling height…</span></button>
@@ -47,7 +47,7 @@
         <button type="button" class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
         <button type="button" class="top-btn active" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on">Markers</button>
         <div class="menu" id="menuShow">
-            <button class="top-btn menu-btn" type="button" id="btnShow" title="Which things show on the map when the Things tool isn't selected">Show</button>
+            <button class="top-btn menu-btn" type="button" id="btnShow" aria-haspopup="true" aria-expanded="false" title="Which things show on the map when the Things tool isn't selected">Show</button>
             <div class="menu-list" hidden>
                 <p class="menu-note" data-stay>On the map out of the Things tool (in it, everything shows). The area's own objects as well as yours.</p>
                 <label class="menu-item" data-stay><input type="checkbox" data-kind="creature"><span class="dot"></span><span>Creatures</span></label>
@@ -69,7 +69,7 @@
         <span class="group-sep"></span>
         <button type="button" class="top-btn primary" id="btnExport" title="Export to Neverwinter Nights"><span class="icon" data-icon="exportNwn"></span>Export to NWN</button>
         <div class="menu menu-right" id="menuShare">
-            <button class="top-btn menu-btn" type="button" aria-haspopup="true">Share</button>
+            <button class="top-btn menu-btn" type="button" aria-haspopup="true" aria-expanded="false">Share</button>
             <div class="menu-list" hidden>
                 <button type="button" class="menu-item" id="btnTest" hidden title="Put your exported module on the dev server and walk it in the game"><span>Test on the dev server…</span></button>
                 <button type="button" class="menu-item" id="btnPublish" hidden title="Send your last export to the team for review as pull requests (or, where there is no review service, build a package of its files to download)"><span>Publish to the team…</span></button>
@@ -80,9 +80,9 @@
     <nav id="tools">
         <div id="toolButtons"></div>
         <div class="slider-group">
-            <label>Brush size <output id="sizeOut"></output></label>
+            <div class="slider-head"><label for="brushSize">Brush size</label><output id="sizeOut" for="brushSize"></output></div>
             <input type="range" id="brushSize" min="1" max="30" step="0.5" value="6">
-            <label>Strength <output id="strengthOut"></output></label>
+            <div class="slider-head"><label for="brushStrength">Strength</label><output id="strengthOut" for="brushStrength"></output></div>
             <input type="range" id="brushStrength" min="0.05" max="1" step="0.05" value="0.5">
         </div>
         <button type="button" class="tool toggle on" id="btnWalk" title="Show where NWN won't let creatures walk (W)"><span class="icon" data-icon="walk"></span><span>Walkable</span></button>
@@ -141,9 +141,10 @@
             <label class="check"><input type="checkbox" id="placeSolid" checked> Blocks walking</label>
             <div class="segmented" id="placeMode">
                 <button type="button" data-baked="1" class="active" title="Scenery: part of the tiles, shadows baked">Bake into terrain</button>
-                <button type="button" data-baked="0" title="A real placeable: use, open, script it in the toolset">Object</button>
+                <button type="button" data-baked="0" title="A real placeable from this model: use, open, script it in the toolset">Placeable</button>
             </div>
             <p class="note">Click to place, drag to turn. Shift-click one to remove it. Baked into the terrain: it blocks walking and casts shadows.</p>
+            <p class="note">Place puts scenery down from a model. For a placeable with settings (a chest that holds items, a lever with a script), use Things, which places one from its blueprint.</p>
             <div class="swatches" id="placeResults"></div>
         </section>
         <section id="scatterPanel" class="side-panel" hidden>
@@ -213,6 +214,13 @@
         <button type="button" id="reportClose" title="Close">×</button>
         <div id="reportBody"></div>
     </aside>
+
+    <div id="noEngine" role="status" hidden>
+        <b>No engine: sculpting only.</b>
+        <span>The Landscaper engine (<code>landscaper serve</code>) isn't running, so importing, exporting, the path check, the texture library and the game's models and blueprints are off. Sculpting and painting work, and the browser keeps your area.</span>
+        <a href="https://github.com/plenarius/landscaper-web#run" target="_blank" rel="noopener">How to start the engine</a>
+        <button type="button" id="noEngineClose" title="Hide this" aria-label="Hide this">×</button>
+    </div>
 
     <footer id="status">
         <span id="statusPos">Left-drag to sculpt or paint · right-drag to turn · middle-drag to move · wheel to zoom · arrows move, Shift+arrows turn, +/- zoom, Home top-down, F frame</span>
@@ -293,7 +301,7 @@
 
     <dialog id="publishDialog">
         <form method="dialog">
-            <h2>Publish</h2>
+            <h2 id="pubTitle">Publish to the team</h2>
             <p class="note" id="pubText"></p>
             <ul class="findings" id="pubFindings" hidden></ul>
             <details id="pubReviewBox" class="review-box" hidden><summary>What your reviewers will read</summary><pre id="pubReview"></pre></details>

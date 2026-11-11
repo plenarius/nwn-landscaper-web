@@ -22,14 +22,11 @@ export class ModelLibrary {
         this.thumbs = new Map(); // model -> Promise<data URL>
     }
 
+    /** The list, asked for until the engine gives it (so a search after it starts finds them). */
     async load() {
-        if (this.list) return this.list;
-        try {
-            const res = await api('/api/placeables');
-            this.list = res.ok ? (await res.json()).placeables : [];
-        } catch {
-            this.list = [];
-        }
+        if (this.list?.length) return this.list;
+        const res = await api('/api/placeables');
+        this.list = res.ok ? ((await res.json().catch(() => ({}))).placeables ?? []) : [];
         return this.list;
     }
 

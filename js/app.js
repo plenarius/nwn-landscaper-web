@@ -17,7 +17,7 @@ import './newbp.js';
 import { ask } from './ask.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
-import { api } from './api.js';
+import { api, engine, failure, NEEDS_ENGINE } from './api.js';
 import { el } from './dom.js';
 
 const $ = id => document.getElementById(id);
@@ -254,6 +254,7 @@ for (const q of QUICK) {
 async function modelResults(box, query, pick) {
     await models.load();
     box.textContent = '';
+    if (!models.list.length) box.textContent = engine.up ? 'No placeables: the engine found none in the game.' : NEEDS_ENGINE;
     for (const p of models.search(query)) {
         const b = document.createElement('button');
         b.className = 'swatch';
@@ -351,7 +352,7 @@ $('placeSolid').onchange = () => {
         });
 };
 
-/** placeables.2da's row of a model (object mode's appearance). */
+/** placeables.2da's row of a model (placeable mode's appearance). */
 const appearanceOf = model => models.list?.find(p => p.model === model)?.row;
 
 function selectObject(o) {
@@ -364,7 +365,7 @@ function selectObject(o) {
         showPlaceMode(o.baked !== false);
         $('placeSolid').checked = o.solid !== false;
         $('statusMsg').textContent =
-            `${o.model} (${o.baked === false ? `object, tag ${area.name}_p${o.id}` : 'baked'}): drag to move · G move · R turn · S size (or the handles) · Q/E turn 15° · Delete removes · Esc deselects`;
+            `${o.model} (${o.baked === false ? `placeable, tag ${area.name}_p${o.id}` : 'baked'}): drag to move · G move · R turn · S size (or the handles) · Q/E turn 15° · Delete removes · Esc deselects`;
     } else {
         $('statusMsg').textContent = '';
     }
@@ -594,7 +595,7 @@ async function showImportList() {
         };
         box.appendChild(b);
     }
-    if (!found.length) box.textContent = r.note || 'No area matches.';
+    if (!found.length) box.textContent = engine.up ? r.note || 'No area matches.' : NEEDS_ENGINE;
     else if (r.note) box.prepend(el('p', { className: 'note', textContent: r.note }));
     else if (r.total > found.length)
         box.append(el('p', { className: 'note', textContent: `${r.total - found.length} more: narrow the search.` }));
@@ -759,7 +760,7 @@ async function reimport(a, button) {
             `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
     } catch (err) {
         $('openDialog').close();
-        showError(`Couldn't import ${a.name} again: ${err.message}`);
+        showError(`Couldn't import ${a.name} again: ${err.message}`, 'Import failed');
     } finally {
         reimporting = false;
         for (const b of $('openDialog').querySelectorAll('button')) b.disabled = false;
@@ -798,7 +799,7 @@ async function openArea(a) {
         $('statusMsg').textContent = `Opened ${area.name} (module ${area.module}).`;
         saveSoon();
     } catch (err) {
-        showError(`Couldn't open ${a.name}: ${err.message}`);
+        showError(`Couldn't open ${a.name}: ${err.message}`, 'Open failed');
     }
 }
 
@@ -1052,22 +1053,59 @@ $('skyPreview').onchange = () => {
     localStorage.setItem('landscaper.skyPreview', $('skyPreview').checked ? 'on' : 'off');
     showSky();
 };
-// The top bar's menus (File, Area, Share): one open at a time, closed by a pick, a click elsewhere or Escape.
+// The top bar's menus (File, Area, Show, Share): one open at a time, closed by a pick, a click elsewhere or Escape.
+// From the keyboard: Enter, Space or the down arrow opens one at its first item, the arrows (and Home, End) move through
+// its items, Escape closes it and gives the focus back to its button, and Tab out of it closes it.
 function closeMenus() {
     for (const m of document.querySelectorAll('.menu')) {
         m.querySelector('.menu-list').hidden = true;
-        m.querySelector('.menu-btn').classList.remove('active');
+        const btn = m.querySelector('.menu-btn');
+        btn.classList.remove('active');
+        btn.setAttribute('aria-expanded', 'false');
     }
 }
+/** A menu's items that can take the focus now: its buttons and ticks, shown and not off. */
+const menuItems = list =>
+    [...list.querySelectorAll('button, input')].filter(i => !i.disabled && !i.closest('[hidden]') && i.getClientRects().length);
 for (const m of document.querySelectorAll('.menu')) {
     const btn = m.querySelector('.menu-btn'),
         list = m.querySelector('.menu-list');
+    const open = focus => {
+        closeMenus();
+        list.hidden = false;
+        btn.classList.add('active');
+        btn.setAttribute('aria-expanded', 'true');
+        if (focus) menuItems(list)[0]?.focus();
+    };
     btn.addEventListener('click', e => {
         e.stopPropagation();
-        const open = list.hidden;
-        closeMenus();
-        list.hidden = !open;
-        btn.classList.toggle('active', open);
+        if (list.hidden)
+            open(e.detail === 0); // (detail 0: Enter or Space, not a click)
+        else closeMenus();
+    });
+    btn.addEventListener('keydown', e => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            e.stopPropagation(); // (not the camera's arrow too)
+            open(true);
+        }
+    });
+    list.addEventListener('keydown', e => {
+        const items = menuItems(list),
+            at = items.indexOf(document.activeElement);
+        const to = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1 }[e.key];
+        if (to !== undefined && items.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            items[(to + items.length) % items.length].focus();
+        } else if (e.key === 'Escape') {
+            e.stopPropagation();
+            closeMenus();
+            btn.focus();
+        }
+    });
+    m.addEventListener('focusout', e => {
+        if (!list.hidden && e.relatedTarget && !m.contains(e.relatedTarget)) closeMenus();
     });
     // (A menu whose items are ticked stays open: its items say `data-stay`.)
     list.addEventListener('click', e => {
@@ -1706,17 +1744,29 @@ let me = { team: false, user: 'local', name: 'You', admin: true, viewing: null }
 let readOnly = false;
 
 async function loadMe() {
-    try {
-        const res = await api('/api/me');
-        if (res.ok) me = await res.json();
-        else if (res.status === 401 || res.status === 403)
-            showError((await res.json().catch(() => ({}))).error || 'You are not signed in.');
-    } catch {
-        /* not served: a plain page */
-    }
+    const res = await api('/api/me');
+    if (res.status === 401 || res.status === 403)
+        showError((await res.json().catch(() => ({}))).error || 'You are not signed in.', 'Not signed in');
+    else if (res.ok) {
+        try {
+            me = await res.json();
+        } catch {
+            engine.up = false; // (a file server that answers every path with the page)
+        }
+    } else engine.up = false; // no engine: stopped (503 from api()), or a plain file server (404)
     readOnly = !!me.viewing;
     showWho();
+    showEngine();
 }
+
+/** Without the engine the page sculpts and paints; the banner says so once, and Live stays off. */
+function showEngine() {
+    $('noEngine').hidden = engine.up;
+    if (!engine.up) showLive('off');
+}
+$('noEngineClose').onclick = () => {
+    $('noEngine').hidden = true;
+};
 
 /** Which of the file menu's buttons show, and which are off while looking at someone else's workspace. */
 function showButtons() {
@@ -1727,6 +1777,9 @@ function showButtons() {
     // Publish opens pull requests through a review service when there is one; without it, it makes a package to download.
     $('btnPublish').hidden = !((me.team && me.publish) || me.package);
     $('btnPublish').querySelector('span').textContent = me.package ? 'Package for your module…' : 'Publish to the team…';
+    // Its dialog says the same: a package to download, or pull requests for the team.
+    $('pubTitle').textContent = me.package ? 'Package for your module' : 'Publish to the team';
+    $('pubGo').textContent = me.package ? 'Download the package' : 'Open the pull requests';
     $('btnTest').hidden = !(me.team && me.publish);
     $('btnPublish').disabled = readOnly;
     $('btnTest').disabled = readOnly;
@@ -2202,7 +2255,9 @@ async function saveArea(a) {
         try {
             localStorage.setItem(`landscaper.area.${a.name}`, json);
             localStorage.setItem(`landscaper.saved.${a.name}`, String(Date.now()));
-            $('statusMsg').textContent = `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`;
+            $('statusMsg').textContent = engine.up
+                ? `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`
+                : `Saved ${a.name} in this browser (no engine to save it to disk).`;
         } catch {
             $('statusMsg').textContent =
                 `Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`;
@@ -2262,23 +2317,28 @@ async function moveBrowserAreas() {
 const LIVE_DELAY = 1500;
 
 function showLive(state, text, title) {
-    const b = $('btnLive');
-    b.className = `top-btn live ${live.on ? state : 'off'}`;
-    $('liveText').textContent = live.on ? text : 'Live off';
-    b.title = live.on ? `${title}\nClick to stop checking after each edit.` : 'Check paths after each edit (click to turn on)';
+    const b = $('btnLive'),
+        on = live.on && engine.up;
+    b.className = `top-btn live ${on ? state : 'off'}`;
+    $('liveText').textContent = on ? text : 'Live off';
+    b.title = on
+        ? `${title}\nClick to stop checking after each edit.`
+        : engine.up
+          ? 'Check paths after each edit (click to turn on)'
+          : 'The live path check needs the Landscaper engine, which is not running.';
 }
 
 function checkSoon() {
     if (readOnly) return;
     live.edits++;
     clearTimeout(live.timer);
-    if (!live.on || !area) return;
+    if (!live.on || !area || !engine.up) return;
     showLive('busy', 'Live …', 'Waiting for you to stop editing.');
     live.timer = setTimeout(liveCheck, LIVE_DELAY);
 }
 
 async function liveCheck() {
-    if (!live.on || !area) return;
+    if (!live.on || !area || !engine.up) return;
     if (stroke) return; // its end schedules one
     if (live.running) {
         live.again = true;
@@ -2302,7 +2362,8 @@ async function liveCheck() {
         return;
     }
     if (error) {
-        showLive('bad', 'Live: error', error.message);
+        if (engine.up) showLive('bad', 'Live: error', error.message);
+        else showEngine(); // (the engine stopped: Live goes off rather than red)
         return;
     }
     view.setMarkers(report.warnings || []);
@@ -2329,8 +2390,15 @@ function showMarkers(on) {
 $('btnMarkers').onclick = () => showMarkers(!$('btnMarkers').classList.contains('active'));
 showMarkers(localStorage.getItem('landscaper.markers') !== 'off');
 
-$('btnLive').onclick = () => {
-    live.on = !live.on;
+$('btnLive').onclick = async () => {
+    // Off for want of the engine: started since? (Asking again sets engine.up when it answers.) Then the click turns it on.
+    const wasDown = !engine.up;
+    if (wasDown && (await api('/api/me')).ok) showEngine();
+    if (!engine.up) {
+        showError(NEEDS_ENGINE, 'Live check needs the engine');
+        return;
+    }
+    live.on = wasDown || !live.on;
     localStorage.setItem('landscaper.live', live.on ? 'on' : 'off');
     if (live.on) checkSoon();
     else {
@@ -2495,9 +2563,8 @@ async function sendArea(what) {
     const { query, body } = areaRequest();
     const res = await api(`/api/${what}?${query}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body });
     if (res.status === 404 || res.status === 501) throw new Error('This page is not being served by landscaper. Run: landscaper serve');
-    const report = await res.json();
-    if (!res.ok) throw new Error(report.error || res.statusText);
-    return report;
+    if (!res.ok) throw new Error(await failure(res));
+    return await res.json();
 }
 
 $('btnExport').onclick = async () => {
@@ -2513,7 +2580,7 @@ $('btnExport').onclick = async () => {
         $('statusMsg').textContent = '';
     } catch (err) {
         $('statusMsg').textContent = '';
-        showError(err.message);
+        showError(err.message, engine.up ? 'Export failed' : 'Export needs the engine');
     } finally {
         btn.disabled = false;
     }
@@ -2533,7 +2600,7 @@ $('btnCheck').onclick = async () => {
         $('statusMsg').textContent = '';
     } catch (err) {
         $('statusMsg').textContent = '';
-        showError(err.message);
+        showError(err.message, engine.up ? 'Path check failed' : 'Check paths needs the engine');
     } finally {
         btn.disabled = false;
     }
@@ -2628,7 +2695,7 @@ function updated(u) {
         out.push(
             p(
                 '',
-                `Placeables (objects): ${u.placeables_added} added, ${u.placeables_removed} removed; the others moved where you put them, keeping what the toolset gave them.`,
+                `Placeables: ${u.placeables_added} added, ${u.placeables_removed} removed; the others moved where you put them, keeping what the toolset gave them.`,
             ),
         );
     if (u.doors_added) out.push(p('', `${u.doors_added} new entrance door(s) added: link their transitions in the toolset.`));
@@ -2642,8 +2709,9 @@ function updated(u) {
     return out;
 }
 
-function showError(msg) {
-    $('reportBody').replaceChildren(el('h3', { className: 'bad', textContent: 'Export failed' }), el('p', { textContent: msg }));
+/** A problem in the report box: `title` says what failed, `msg` why. */
+function showError(msg, title) {
+    $('reportBody').replaceChildren(el('h3', { className: 'bad', textContent: title }), el('p', { textContent: msg }));
     $('report').hidden = false;
 }
 $('reportClose').onclick = () => {
@@ -2677,12 +2745,15 @@ function cameraKey(e) {
 
 window.addEventListener('keydown', e => {
     // F5 / Ctrl+R reload, as in a browser (the app's window has no such keys).
-    if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+    if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r')) {
         e.preventDefault();
         location.reload();
         return;
     }
-    if (e.target.closest('input, dialog')) return;
+    // Not while typing or choosing (a box, a list, a text area, an editor, a dialog).
+    if (e.target.closest?.('input, select, textarea, dialog, [contenteditable]:not([contenteditable="false"])')) return;
+    // Letters work with Caps Lock on: the shortcuts compare lower case (Ctrl+Shift+Z still reads e.key's capital).
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     // The camera: arrows move along the ground, Shift+arrows turn the view, + and - zoom, Home looks straight down (F frames).
     if (!transformer.active && !e.ctrlKey && !e.metaKey && !e.altKey && cameraKey(e)) {
         e.preventDefault();
@@ -2721,16 +2792,16 @@ window.addEventListener('keydown', e => {
             return;
         }
     }
-    const t = Object.entries(TOOLS).find(([, v]) => v.key === e.key);
+    const t = !e.ctrlKey && !e.metaKey && !e.altKey && Object.entries(TOOLS).find(([, v]) => v.key === key);
     if (e.key === 'Escape' && picking) setPicking(false);
-    else if (e.key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    else if (key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         selectTool('paint');
         setPicking(true);
     } else if (t) selectTool(t[0]);
-    else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && key === 'z') {
         e.preventDefault();
         $('btnUndo').click();
-    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+    } else if ((e.ctrlKey || e.metaKey) && (key === 'y' || (e.shiftKey && key === 'z'))) {
         e.preventDefault();
         $('btnRedo').click();
     } else if (e.key === '[') {
@@ -2739,12 +2810,14 @@ window.addEventListener('keydown', e => {
     } else if (e.key === ']') {
         sizeIn.value = +sizeIn.value + 1;
         showSliders();
-    } else if (e.key === 'w') $('btnWalk').click();
-    else if (e.key === 'l') $('btnSky').click();
-    else if (e.key === 'n') $('btnNew').click();
-    else if (e.key === 'o') $('btnOpen').click();
-    else if (e.key === 'f') view.frame();
-    else if (e.key === 'm') $('btnMarkers').click();
+    } else if (e.ctrlKey || e.metaKey || e.altKey) {
+        /* the browser's own (Ctrl+F, Ctrl+N, Ctrl+O...) */
+    } else if (key === 'w') $('btnWalk').click();
+    else if (key === 'l') $('btnSky').click();
+    else if (key === 'n') $('btnNew').click();
+    else if (key === 'o') $('btnOpen').click();
+    else if (key === 'f') view.frame();
+    else if (key === 'm') $('btnMarkers').click();
 });
 
 // --- Start ---------------------------------------------------------------------------
