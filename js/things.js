@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The Things tool: creatures, waypoints, triggers (area transitions too), sounds, encounters, stores, items
 // on the ground, doors and real placeables, placed on the ground and given the settings a builder needs
 // (tag, name, scripts, variables). The area keeps them in `area.things`; landscaper writes them into the

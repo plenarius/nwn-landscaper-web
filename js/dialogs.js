@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The conversation editor: one of the builder's own conversations as a tree of lines. The NPC's lines ("NPC") lead to the
 // player's replies ("You"), which lead to more NPC lines. A line reached from more than one place is shown once in full and
 // as a link elsewhere. Every change is saved as it is made (lines keep their places); closing tidies the numbering.

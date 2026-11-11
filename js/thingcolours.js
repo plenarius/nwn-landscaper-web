@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // One colour per kind of thing, shared by the view (markers, outlines) and the Things panel (its chips).
 export const THING_COLOURS = {
     creature: 0xe0402a,

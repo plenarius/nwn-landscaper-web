@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Big, plain toolbar icons (inline SVG, currentColor).
 
 const svg = body =>

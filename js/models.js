@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The game's placeables, from landscaper serve (/api/placeables,
 // /api/model/<resref>, /api/texture/<name>): the list, each model as a
 // three.js group (its textured triangles, at rest), and small thumbnails.

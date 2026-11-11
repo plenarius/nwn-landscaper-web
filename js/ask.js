@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The app's own question dialog (`#askDialog`): a title, some text, optionally one text box, and OK / Cancel. Used instead of the
 // browser's prompt/confirm/alert so it looks like the rest of the app.
 //

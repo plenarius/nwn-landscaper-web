@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // NWN Landscaper: sculpt an NWN area, export it with `landscaper serve`.
 
 import { Area, TILE, DEFAULT_TEXTURE, SPACING, SHALLOW, CAVE_ROCK } from './area.js';

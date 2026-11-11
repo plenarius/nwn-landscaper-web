@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Baked shadows, as landscaper bakes them into each tile's shadow map
 // (landscaper src/shade.rs): cast shadows along the game's fixed sun
 // direction, towards (4000, 4500, 7000), and ambient occlusion from the

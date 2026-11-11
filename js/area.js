@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // An NWN area being sculpted: its size in tiles and its heights in metres
 // on landscaper's walkmesh sample grid (0.625 m, 16 cells a 10 m tile).
 // Rows run from the south edge (NWN y = 0) north; each row west to east,

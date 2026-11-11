@@ -1,9 +1,8 @@
 # REUSE (https://reuse.software/): who owns each file and under which licence (STYLE.md, "Licences and REUSE"). Source code says
-# it in its first two lines; this file covers everything that is not source code, and the vendored packages.
+# it in its first lines; this file covers everything that is not source code, and the vendored packages.
 #
-# DRAFT: MIT is the licence in LICENSE today, kept from the project this one was forked from (ergin3d/heightmap-generator). Whether
-# it stays MIT is James's decision before the repository goes public. Files that still contain ergin3d's code keep the line
-# "Copyright (c) 2026 ergin3d" above ours.
+# Everything here is MIT (James, 2026-11-11), the licence of ergin3d/heightmap-generator, which this was forked from.
+# js/filters.js and js/noise.js are still ergin3d's files and carry ergin3d's copyright line above ours.
 version = 1
 SPDX-PackageName = "landscaper-web"
 SPDX-PackageDownloadLocation = "https://github.com/plenarius/landscaper-web"
@@ -43,4 +42,11 @@ SPDX-License-Identifier = "MIT"
 path = "vendor/codemirror/**"
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (C) 2018-2021 by Marijn Haverbeke and others"
+SPDX-License-Identifier = "MIT"
+
+# Our note on the bundle above: its versions and how to rebuild it.
+[[annotations]]
+path = "vendor/codemirror/README.md"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (C) 2026 plenarius"
 SPDX-License-Identifier = "MIT"

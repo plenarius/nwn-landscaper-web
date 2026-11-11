@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The area's own settings: name, tag, scripts, PvP and rest, weather, music and ambient sound, load screen,
 // listen and spot modifiers, sky box, comments and local variables (what the toolset's Area Properties holds).
 // A dialog; OK keeps them in `area.settings`, which landscaper writes into the area on export.

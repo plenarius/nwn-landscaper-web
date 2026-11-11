@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Local variables (an int, a float or a string, with a name) as a list of rows to edit: shared by the Things
 // properties and the Area settings dialog.
 

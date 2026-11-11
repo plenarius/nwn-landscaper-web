@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The texture library `landscaper serve` publishes under /textures/
 // (built by landscaper's scripts/build_texture_library.py), and the GPU
 // texture array the view paints with: one 512 px layer per palette entry.

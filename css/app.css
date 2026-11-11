@@ -1,3 +1,8 @@
+/* SPDX-FileCopyrightText: Copyright (C) 2026 plenarius */
+/* SPDX-License-Identifier: MIT */
+
+/* The editor's styles, for index.html and for the elements the scripts build. */
+
 :root {
     --bg: #1d2228;
     --panel: #262c34;

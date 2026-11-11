@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Cave entrances (landscaper src/entrance.rs): a notch carved into the
 // slope (a flat floor, rock walls and a rim round it), with a rock hood and
 // a dark back that landscaper builds into the tile, and a transition door

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Sculpting tools. Each stamp applies over a circle of `radius` metres
 // with a smooth falloff, scaled by `strength` (0..1) and the frame time,
 // so holding the mouse keeps working at a steady rate.

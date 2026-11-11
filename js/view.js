@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The 3D view of one area: the terrain with its painted textures (or
 // coloured by height until they load), tinted where NWN won't walk, the
 // 10 m NWN tile grid draped on it, the brush cursor, and export warnings.

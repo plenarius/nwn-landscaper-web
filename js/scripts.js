@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Scripts: a picker beside every script-name box, and (for admins, who may write them) an editor with the compiler's errors
 // underlined as you type. The compiler is Moonglow's built-in one, the same the game and Aurora use; it stops at the first error.
 

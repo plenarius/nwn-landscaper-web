@@ -1,3 +1,11 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 ergin3d
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
+// Seeded simplex noise in octaves: a new area's starting heights (area.js).
+// ergin3d's file from https://github.com/ergin3d/heightmap-generator (MIT), the project this one was forked from.
+// Changed here: the import of simplex-noise points at vendor/, and Biome formatted it and fixed its lint findings.
+
 import { createNoise2D } from '../vendor/simplex-noise/simplex-noise.js';
 
 // Mulberry32 seeded PRNG - returns function () => [0, 1)

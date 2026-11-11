@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // An area's light and fog: the .are's sun and moon colours, fog and view
 // distance, and whether it cycles day and night. Colours are #rrggbb
 // (landscaper stores them as the .are wants). Presets follow the lighting

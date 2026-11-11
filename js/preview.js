@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Thumbnails of what a blueprint looks like: a creature is baked by the server (nwn-bake, through the ops API)
 // into a scene of meshes and textures, which one hidden WebGL renderer draws from the front into a small picture.
 // One at a time (the server bakes one at a time too), each kept for the page's life; a creature it can't show

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // The builder's own blueprints: a creature or item made as a copy of an existing one, then changed in a dialog.
 // The engine keeps them in the builder's workspace and Publish sends the ones an area uses.
 

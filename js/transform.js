@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
 // Moving, turning and sizing the selected placeable, the way Blender does it.
 //
 // Keyboard (selected object, Place tool): G grab, R rotate, S scale, then move the mouse with no
