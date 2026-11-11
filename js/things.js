@@ -11,6 +11,7 @@ import { THING_COLOURS, css } from './thingcolours.js';
 import { creaturePreview, itemPreview, modelPreview } from './preview.js';
 import { scriptPicker } from './scripts.js';
 import { conversationPicker } from './dialogs.js';
+import { api } from './api.js';
 
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
@@ -227,7 +228,7 @@ export class ThingsTool {
     async loadMeta() {
         if (this.meta) return this.meta;
         try {
-            const r = await fetch('/api/things-meta');
+            const r = await api('/api/things-meta');
             if (r.ok) this.meta = await r.json();
         } catch {
             /* try again next time */
@@ -242,7 +243,7 @@ export class ThingsTool {
         if (!a) return;
         let list = [];
         try {
-            const r = await fetch(`/api/links?module=${encodeURIComponent(a.module || a.name)}`);
+            const r = await api(`/api/links?module=${encodeURIComponent(a.module || a.name)}`);
             if (r.ok) list = (await r.json()).links ?? [];
         } catch {
             /* none */
@@ -259,7 +260,7 @@ export class ThingsTool {
         const name = a.name;
         let list = [];
         try {
-            const r = await fetch(`/api/originals?name=${encodeURIComponent(name)}`);
+            const r = await api(`/api/originals?name=${encodeURIComponent(name)}`);
             if (r.ok) list = (await r.json()).originals ?? [];
         } catch {
             /* none */
@@ -367,7 +368,7 @@ export class ThingsTool {
             q = this.ctx.$('thingSearch').value.trim();
         let list = [];
         try {
-            list = (await (await fetch(`/api/blueprints?kind=${k.kind}&q=${encodeURIComponent(q)}&limit=60`)).json()).blueprints ?? [];
+            list = (await (await api(`/api/blueprints?kind=${k.kind}&q=${encodeURIComponent(q)}&limit=60`)).json()).blueprints ?? [];
         } catch {
             /* none */
         }
@@ -948,7 +949,7 @@ export class ThingsTool {
     async loadLists() {
         this.lists = {};
         try {
-            this.lists = await (await fetch('/api/area-lists')).json();
+            this.lists = await (await api('/api/area-lists')).json();
         } catch {
             /* the setting is a plain number then */
         }
@@ -1257,7 +1258,7 @@ ThingsTool.prototype.contentsSection = function (box, t, original = false) {
     // The blueprint's own list, fetched once (an original's is what it holds, sent with it).
     if (!original && !this.contentsCache.has(key)) {
         this.contentsCache.set(key, null);
-        fetch(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
+        api(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
             .then(json)
             .then(v => {
                 this.contentsCache.set(key, v);
@@ -1336,7 +1337,7 @@ ThingsTool.prototype.contentsSection = function (box, t, original = false) {
                 q = find.value.trim();
             found.textContent = '';
             if (q.length < 2) return;
-            const r = await fetch(`/api/blueprints?kind=${encounter ? 'creature' : 'item'}&q=${encodeURIComponent(q)}&limit=8`)
+            const r = await api(`/api/blueprints?kind=${encounter ? 'creature' : 'item'}&q=${encodeURIComponent(q)}&limit=8`)
                 .then(json)
                 .catch(() => ({}));
             if (me !== seq) return;
@@ -1412,7 +1413,7 @@ ThingsTool.prototype.equipmentSection = function (box, t, original = false) {
     });
     if (!original && !this.contentsCache.has(key)) {
         this.contentsCache.set(key, null);
-        fetch(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
+        api(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
             .then(json)
             .then(v => {
                 this.contentsCache.set(key, v);
@@ -1473,7 +1474,7 @@ ThingsTool.prototype.equipmentSection = function (box, t, original = false) {
                 q = find.value.trim();
             found.textContent = '';
             if (q.length < 2) return;
-            const r = await fetch(`/api/blueprints?kind=item&q=${encodeURIComponent(q)}&limit=8`)
+            const r = await api(`/api/blueprints?kind=item&q=${encodeURIComponent(q)}&limit=8`)
                 .then(json)
                 .catch(() => ({}));
             if (me !== seq) return;
@@ -1543,7 +1544,7 @@ ThingsTool.prototype.destinationPicker = function (t, _input) {
             areas.textContent = '';
             wps.hidden = true;
             if (q.length < 3) return;
-            const r = await fetch(`/api/import-sources?q=${encodeURIComponent(q)}`)
+            const r = await api(`/api/import-sources?q=${encodeURIComponent(q)}`)
                 .then(json)
                 .catch(() => ({}));
             if (mine !== seq) return;
@@ -1557,7 +1558,7 @@ ThingsTool.prototype.destinationPicker = function (t, _input) {
                 b.append(title, ' ', small);
                 b.onclick = async () => {
                     note.textContent = `Waypoints of ${s.area}…`;
-                    const w = await fetch(`/api/dev-test/waypoints?area=${encodeURIComponent(s.area)}`)
+                    const w = await api(`/api/dev-test/waypoints?area=${encodeURIComponent(s.area)}`)
                         .then(json)
                         .catch(() => ({}));
                     wps.textContent = '';

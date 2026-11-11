@@ -7,6 +7,7 @@
 // resolves to null and its entry has no picture.
 
 import * as THREE from 'three';
+import { api } from './api.js';
 
 const SIZE = 112;
 const cache = new Map();
@@ -75,9 +76,9 @@ function draw(scene, textures) {
 }
 
 async function make(resref) {
-    const { key } = await fetch(`/api/preview/creature?resref=${encodeURIComponent(resref)}`).then(json);
+    const { key } = await api(`/api/preview/creature?resref=${encodeURIComponent(resref)}`).then(json);
     const base = `/api/preview-file/${key}`;
-    const scene = await fetch(`${base}/scene.json`).then(json);
+    const scene = await api(`${base}/scene.json`).then(json);
     const loader = new THREE.TextureLoader();
     const textures = new Map();
     await Promise.all(
@@ -114,7 +115,7 @@ export function creaturePreview(resref) {
  *  same small picture the Place tool's list has). `models` is the view's ModelCache. Null if it names none. */
 export async function modelPreview(models, kind, resref) {
     try {
-        const { model } = await fetch(`/api/blueprint-model?kind=${kind}&resref=${encodeURIComponent(resref)}`).then(json);
+        const { model } = await api(`/api/blueprint-model?kind=${kind}&resref=${encodeURIComponent(resref)}`).then(json);
         return model ? (await models.thumbnail(model)) || null : null;
     } catch {
         return null;
@@ -127,7 +128,7 @@ export function itemPreview(resref) {
     if (!icons.has(resref)) {
         icons.set(
             resref,
-            fetch(`/api/preview/item?resref=${encodeURIComponent(resref)}`)
+            api(`/api/preview/item?resref=${encodeURIComponent(resref)}`)
                 .then(json)
                 .then(({ key }) => (key ? `/api/preview-icon/${encodeURIComponent(key)}.png` : null))
                 .catch(() => null),

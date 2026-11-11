@@ -10,6 +10,7 @@
 // turns by rotation.y = its bearing.
 
 import * as THREE from 'three';
+import { api } from './api.js';
 
 export class ModelLibrary {
     constructor() {
@@ -24,7 +25,7 @@ export class ModelLibrary {
     async load() {
         if (this.list) return this.list;
         try {
-            const res = await fetch('/api/placeables');
+            const res = await api('/api/placeables');
             this.list = res.ok ? (await res.json()).placeables : [];
         } catch {
             this.list = [];
@@ -52,7 +53,7 @@ export class ModelLibrary {
         if (!this.flats.has(model)) {
             this.flats.set(
                 model,
-                fetch(`/api/model/${model}`).then(r => (r.ok ? r.json() : Promise.reject(new Error(`no model ${model}`)))),
+                api(`/api/model/${model}`).then(r => (r.ok ? r.json() : Promise.reject(new Error(`no model ${model}`)))),
             );
         }
         return this.flats.get(model);

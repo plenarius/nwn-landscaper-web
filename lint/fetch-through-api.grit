@@ -1,0 +1,10 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
+// Biome plugin: requests to the engine go through api() in js/api.js, which adds the X-Landscaper header the engine
+// checks (review B3). A plain fetch() would be refused by the engine.
+language js
+
+`fetch($args)` as $call where {
+    register_diagnostic(span = $call, message = "Use api() from js/api.js: it sends the X-Landscaper header the engine requires")
+}

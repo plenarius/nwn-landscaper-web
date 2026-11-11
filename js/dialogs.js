@@ -7,6 +7,7 @@
 
 import { scriptPicker } from './scripts.js';
 import { ask } from './ask.js';
+import { api } from './api.js';
 
 const json = r => r.json().catch(() => ({}));
 const el = (tag, props = {}, ...kids) => {
@@ -25,7 +26,7 @@ export async function openConversation(resref, onMade = null) {
     status.textContent = '';
     status.className = 'note';
     dlg.showModal();
-    const res = await fetch(`/api/dialog?resref=${encodeURIComponent(resref)}&any=1`);
+    const res = await api(`/api/dialog?resref=${encodeURIComponent(resref)}&any=1`);
     const m = await json(res);
     if (!res.ok) {
         tree.textContent = m.error || res.statusText;
@@ -47,7 +48,7 @@ export async function openConversation(resref, onMade = null) {
             ok: 'Make the copy',
             input: { label: 'Name', placeholder: 'e.g. my_innkeeper' },
             submit: async name => {
-                const r = await fetch(`/api/dialog?resref=${encodeURIComponent(name.toLowerCase())}&from=${encodeURIComponent(resref)}`, {
+                const r = await api(`/api/dialog?resref=${encodeURIComponent(name.toLowerCase())}&from=${encodeURIComponent(resref)}`, {
                     method: 'POST',
                 });
                 const out = await json(r);
@@ -67,7 +68,7 @@ export async function openConversation(resref, onMade = null) {
         clearTimeout(timer);
         const body = JSON.stringify(m);
         saving = saving.then(async () => {
-            const r = await fetch(`/api/dialog-save?resref=${encodeURIComponent(resref)}${compact ? '&compact=1' : ''}`, {
+            const r = await api(`/api/dialog-save?resref=${encodeURIComponent(resref)}${compact ? '&compact=1' : ''}`, {
                 method: 'POST',
                 body,
             });
@@ -262,13 +263,13 @@ export function conversationPicker(input, suggest = '') {
             const q = input.value.trim();
             if (q.length < 2) return;
             list.textContent = '';
-            for (const d of (await json(await fetch(`/api/dialogs?q=${encodeURIComponent(q)}`))).found ?? [])
+            for (const d of (await json(await api(`/api/dialogs?q=${encodeURIComponent(q)}`))).found ?? [])
                 list.appendChild(new Option(d.source === 'mine' ? `${d.resref} (yours)` : d.resref, d.resref));
         }, 250);
     });
     const row = el('span', { className: 'scriptbtns' }, list);
     const b = el('button', { type: 'button', className: 'small' });
-    const mine = async () => ((await json(await fetch('/api/dialogs'))).dialogs ?? []).includes(input.value.trim().toLowerCase());
+    const mine = async () => ((await json(await api('/api/dialogs'))).dialogs ?? []).includes(input.value.trim().toLowerCase());
     const sync = async () => {
         b.textContent = (await mine()) ? 'Edit conversation' : input.value.trim() ? 'View conversation' : 'Write a conversation';
     };
@@ -292,7 +293,7 @@ export function conversationPicker(input, suggest = '') {
             ok: 'Start writing',
             input: { label: 'Name', value: suggest, placeholder: 'e.g. my_innkeeper' },
             submit: async pick => {
-                const res = await fetch(`/api/dialog?resref=${encodeURIComponent(pick.toLowerCase())}&from=`, { method: 'POST' });
+                const res = await api(`/api/dialog?resref=${encodeURIComponent(pick.toLowerCase())}&from=`, { method: 'POST' });
                 const out = await json(res);
                 if (!res.ok) return out.error || res.statusText;
                 r = out;

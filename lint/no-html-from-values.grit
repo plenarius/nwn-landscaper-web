@@ -1,0 +1,24 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
+// Biome plugin: HTML may only be set from a fixed string. Anything built from a value (a template with ${}, a +, a variable)
+// is refused: area data and the engine's answers went in this way and could run script (review B2). Build the elements
+// with el() from js/dom.js, textContent or new Option(text, value) instead.
+language js
+
+or {
+    `$obj.innerHTML = $value`,
+    `$obj.innerHTML += $value`,
+    `$obj.outerHTML = $value`,
+    `$obj.outerHTML += $value`,
+    `$obj.insertAdjacentHTML($where, $value)`,
+    `$obj.createContextualFragment($value)`,
+    `document.write($value)`,
+    `document.writeln($value)`
+} as $sink where {
+    $value <: not or { r"^'[^']*'$", r"^\"[^\"]*\"$", r"^`[^`$]*`$" },
+    register_diagnostic(
+        span = $sink,
+        message = "HTML built from a value: use el() from js/dom.js, textContent or new Option() so data stays text"
+    )
+}

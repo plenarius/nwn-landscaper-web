@@ -59,6 +59,14 @@ brave-browser --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 There is no build step: edit the files and reload the page. `scripts/check.sh` runs every check the way CI does (Biome,
 html-validate, spelling, writing, Markdown, links, licences, secrets); [STYLE.md](STYLE.md) is the standard it checks.
 
+Two rules of this repository's own, as Biome plugins in `lint/`:
+
+- Data goes into the page as text: build elements with `el()` from `js/dom.js`, `textContent` or `new Option()`.
+  `innerHTML` and its relatives take only a fixed string. Area files, the engine's answers and the browser's storage hold
+  text that builders typed, and an admin opens builders' areas.
+- Every request to the engine goes through `api()` in `js/api.js`, which sends the `X-Landscaper: 1` header the engine
+  checks. Another site's page can't send that header, so the engine can refuse requests that don't carry it.
+
 ## Credits
 
 Forked from [ergin3d/heightmap-generator](https://github.com/ergin3d/heightmap-generator) (MIT), which supplied the three.js

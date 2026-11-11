@@ -10,6 +10,7 @@ import { ThingsTool } from './things.js';
 import { conversationPicker } from './dialogs.js';
 import { scriptPicker } from './scripts.js';
 import { ask } from './ask.js';
+import { api } from './api.js';
 
 const json = r => r.json().catch(() => ({}));
 
@@ -276,7 +277,7 @@ ThingsTool.prototype.bpCreateForm = function (box, from) {
     cancel.onclick = () => this.bpFinder();
     go.onclick = async () => {
         const q = `ext=${ext}&resref=${encodeURIComponent(resref.value.trim())}&from=${encodeURIComponent(from.resref)}&name=${encodeURIComponent(name.value.trim())}`;
-        const res = await fetch(`/api/new-blueprint?${q}`, { method: 'POST' });
+        const res = await api(`/api/new-blueprint?${q}`, { method: 'POST' });
         const r = await json(res);
         if (!res.ok) {
             note.textContent = r.error || res.statusText;
@@ -299,7 +300,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     const body = document.getElementById('bpBody');
     body.textContent = 'Loading…';
     dlg.showModal();
-    const res = await fetch(`/api/new-blueprint?ext=${ext}&resref=${encodeURIComponent(resref)}`);
+    const res = await api(`/api/new-blueprint?ext=${ext}&resref=${encodeURIComponent(resref)}`);
     const d = await json(res);
     if (!res.ok) {
         body.textContent = d.error || res.statusText;
@@ -338,7 +339,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         else input.value = f.value ?? '';
         if (f.type === 'r') input.maxLength = 16;
         input.onchange = async () => {
-            const r = await fetch(`/api/new-blueprint-edit?ext=${ext}&resref=${encodeURIComponent(resref)}`, {
+            const r = await api(`/api/new-blueprint-edit?ext=${ext}&resref=${encodeURIComponent(resref)}`, {
                 method: 'POST',
                 body: JSON.stringify({ [label]: bool ? (input.checked ? 1 : 0) : input.value }),
             });
@@ -369,7 +370,13 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
             }))
         )
             return;
-        await fetch(`/api/new-blueprint-delete?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST' });
+        const res = await api(`/api/new-blueprint-delete?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST' });
+        if (!res.ok) {
+            const status = document.getElementById('bpStatus');
+            status.className = 'note err';
+            status.textContent = `Not deleted: ${(await json(res)).error || res.statusText}`;
+            return;
+        }
         dlg.close();
         if (this.blueprint?.resref === resref) this.blueprint = null;
         this.search();
@@ -397,12 +404,12 @@ ThingsTool.prototype.bpProperties = async function (resref, body) {
     const cost = el('p', { className: 'note' });
     const form = el('div', { className: 'propform' });
     box.append(list, cost, form);
-    const types = (await json(await fetch(`/api/itemprops-types?${q}`))).types ?? [];
+    const types = (await json(await api(`/api/itemprops-types?${q}`))).types ?? [];
     const show = d => {
         list.textContent = '';
         (d.properties ?? []).forEach((p, i) => {
             const rm = el('button', { type: 'button', textContent: '×', title: 'Take it off the item' });
-            rm.onclick = async () => show(await json(await fetch(`/api/itemprops-remove?${q}&index=${i}`, { method: 'POST' })));
+            rm.onclick = async () => show(await json(await api(`/api/itemprops-remove?${q}&index=${i}`, { method: 'POST' })));
             list.appendChild(el('div', { className: 'stock-row' }, el('span', { className: 'name', textContent: p.text }), rm));
         });
         if (!(d.properties ?? []).length) list.textContent = 'None.';
@@ -413,7 +420,7 @@ ThingsTool.prototype.bpProperties = async function (resref, body) {
             t.textContent = d.error;
         }
     };
-    show(await json(await fetch(`/api/itemprops?${q}`)));
+    show(await json(await api(`/api/itemprops?${q}`)));
     const select = (options, label) => {
         const s = el('select', {});
         for (const o of options) s.add(new Option(o.text ?? o.name, String(o.row)));
@@ -434,7 +441,7 @@ ThingsTool.prototype.bpProperties = async function (resref, body) {
         sub = val = par = null;
         add.hidden = type.value === '';
         if (type.value === '') return;
-        const c = await json(await fetch(`/api/itemprops-choices?${q}&property=${type.value}&subtype=${sub?.value ?? 0}`));
+        const c = await json(await api(`/api/itemprops-choices?${q}&property=${type.value}&subtype=${sub?.value ?? 0}`));
         if (c.subtypes?.length) {
             sub = select(c.subtypes, 'Which');
             sub.onchange = reparam;
@@ -451,7 +458,7 @@ ThingsTool.prototype.bpProperties = async function (resref, body) {
     };
     // (A subtype can bring its own parameter table.)
     const reparam = async () => {
-        const c = await json(await fetch(`/api/itemprops-choices?${q}&property=${type.value}&subtype=${sub.value}`));
+        const c = await json(await api(`/api/itemprops-choices?${q}&property=${type.value}&subtype=${sub.value}`));
         par?.remove();
         par = null;
         if (c.params?.length) {
@@ -465,7 +472,7 @@ ThingsTool.prototype.bpProperties = async function (resref, body) {
         if (sub) req.subtype = Number(sub.value);
         if (val) req.costValue = Number(val.value);
         if (par) req.param1Value = Number(par.value);
-        show(await json(await fetch(`/api/itemprops-add?${q}`, { method: 'POST', body: JSON.stringify(req) })));
+        show(await json(await api(`/api/itemprops-add?${q}`, { method: 'POST', body: JSON.stringify(req) })));
         type.value = '';
         choose();
     };
@@ -501,14 +508,14 @@ ThingsTool.prototype.bpGear = async function (resref, body, ext = 'utc') {
     body.appendChild(box);
     const url = `/api/new-blueprint-gear?resref=${encodeURIComponent(resref)}${placeable ? `&ext=${ext}` : ''}`;
     const kind = store ? 'store' : placeable ? 'placeable' : 'creature';
-    let c = await json(await fetch(`/api/blueprint-contents?kind=${kind}&resref=${encodeURIComponent(resref)}`));
+    let c = await json(await api(`/api/blueprint-contents?kind=${kind}&resref=${encodeURIComponent(resref)}`));
     const put = async patch => {
-        const r = await fetch(url, { method: 'POST', body: JSON.stringify(patch) });
+        const r = await api(url, { method: 'POST', body: JSON.stringify(patch) });
         const out = await json(r);
         const st = document.getElementById('bpStatus');
         st.className = r.ok ? 'note' : 'note err';
         st.textContent = r.ok ? 'Saved.' : out.error || r.statusText;
-        if (r.ok) c = await json(await fetch(`/api/blueprint-contents?kind=${kind}&resref=${encodeURIComponent(resref)}`));
+        if (r.ok) c = await json(await api(`/api/blueprint-contents?kind=${kind}&resref=${encodeURIComponent(resref)}`));
         draw();
     };
     const finder = (placeholder, pick) => {
@@ -523,7 +530,7 @@ ThingsTool.prototype.bpGear = async function (resref, body, ext = 'utc') {
                     q = find.value.trim();
                 found.textContent = '';
                 if (q.length < 2) return;
-                const r = await json(await fetch(`/api/blueprints?kind=item&q=${encodeURIComponent(q)}&limit=8`));
+                const r = await json(await api(`/api/blueprints?kind=item&q=${encodeURIComponent(q)}&limit=8`));
                 if (me !== seq) return;
                 for (const b of r.blueprints ?? []) {
                     const e = el('button', { type: 'button', className: 'bp' });
@@ -598,7 +605,7 @@ let placeableRows = null;
 /** A placeable's Appearance: the game's placeables.2da rows (the game's own and the haks'), found by name as you type. The
  *  box keeps the row number the blueprint stores; the line above it says what that row is. */
 ThingsTool.prototype.bpAppearance = async function (input, row) {
-    placeableRows ??= (await json(await fetch('/api/placeables'))).placeables ?? [];
+    placeableRows ??= (await json(await api('/api/placeables'))).placeables ?? [];
     const byRow = new Map(placeableRows.map(p => [p.row, p]));
     const shown = el('div', { className: 'note' });
     const label = () => {
@@ -638,9 +645,9 @@ let doorLooks = null;
 
 /** A door's look: a generic door (genericdoors.2da, Appearance 0 and a generic type) or a tile door (doortypes.2da, an Appearance row), found by name. */
 ThingsTool.prototype.bpDoorLook = async function (resref, byLabel, input, row, status) {
-    doorLooks ??= (await json(await fetch('/api/door-appearances'))).doors ?? [];
+    doorLooks ??= (await json(await api('/api/door-appearances'))).doors ?? [];
     const edit = async fields => {
-        const r = await fetch(`/api/new-blueprint-edit?ext=utd&resref=${encodeURIComponent(resref)}`, {
+        const r = await api(`/api/new-blueprint-edit?ext=utd&resref=${encodeURIComponent(resref)}`, {
             method: 'POST',
             body: JSON.stringify(fields),
         });
