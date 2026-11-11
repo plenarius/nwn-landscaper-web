@@ -1,0 +1,492 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+
+// The pointer over the view: a press starts a stroke with the tool that is on (sculpt, paint, dig, a room, a ramp, a descent,
+// water, an entrance, placing, scattering), dragging carries it on each frame, and letting go ends it. Also the right-click menu
+// on a marker, the status line's position, and ?debug's pointer readout.
+
+import { TILE, DEFAULT_TEXTURE, SHALLOW, CAVE_ROCK } from './area.js';
+import { stamp, roomRect, cutRoom, rampPlan, cutRamp, descentPlan, cutDescent, DIG_MIN } from './tools.js';
+import { ask } from './ask.js';
+import { $ } from './dom.js';
+import { models, transformer, selectObject, placeDown, placeDrag } from './place.js';
+import { scatterMix, scatterStamp } from './scatter.js';
+import { waterDown, waterDrag, waterChanged } from './water.js';
+import { entranceDown } from './entrancetool.js';
+import { live } from './live.js';
+import { saveSoon } from './save.js';
+
+/** What app.js gives this file (initStrokes): `area()`, `tool()`, `readOnly()`, `view`, the Things tool (`thingsTool`),
+ *  `selectTool(id)`, the Paint tool's `paintTexture()`, `picking()`, `setPicking(on)` and `pickTexture(p)`, the texture
+ *  `library`, and the brush's `sizeIn` and `strengthIn` sliders. */
+let ctx = null;
+
+// ?debug: show what the pointer is doing (to diagnose input on other machines).
+const debug = new URLSearchParams(location.search).has('debug');
+const dbg = { last: '-', downs: 0, strokes: 0, stamps: 0, note: '' };
+function showDebug() {
+    if (!debug) return;
+    $('statusMsg').textContent =
+        `[debug] last: ${dbg.last} · downs ${dbg.downs} · strokes ${dbg.strokes} · stamps ${dbg.stamps} ${dbg.note}`;
+}
+
+let canvas = null;
+let stroke = null; // { flattenTo, last }
+let mouse = null; // last client position over the canvas
+let rmb = null; // where and when a right-click began, to tell a click from a drag that turns the view
+let placePointer = null; // the pointer whose Place press is waiting for its model
+
+/** The stroke under way (null between strokes). */
+export const currentStroke = () => stroke;
+
+function closeCtx() {
+    const m = $('ctxMenu');
+    if (m) m.hidden = true;
+}
+function openCtx(x, y, hit) {
+    const items = ctx.thingsTool.menuFor(hit);
+    if (!items.length) return;
+    const m = $('ctxMenu');
+    m.textContent = '';
+    for (const it of items) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'menu-item';
+        b.textContent = it.label;
+        b.onclick = () => {
+            closeCtx();
+            ctx.selectTool('things');
+            ctx.thingsTool.pick(hit);
+            it.run();
+        };
+        m.appendChild(b);
+    }
+    m.style.left = `${Math.min(x, window.innerWidth - 190)}px`;
+    m.style.top = `${Math.min(y, window.innerHeight - items.length * 44 - 12)}px`;
+    m.hidden = false;
+}
+
+/** The ramp tool's settings: the rise you typed (blank: to where the button comes up), and whether to keep it walkable. */
+const rampOptions = () => ({ rise: $('rampRise').value === '' ? null : +$('rampRise').value, keepWalkable: $('rampWalkable').checked });
+/** A ramp is twice the brush size wide, and at least as wide as the narrowest passage NWN's pathfinding keeps open. */
+const rampWidth = () => Math.max(+ctx.sizeIn.value, DIG_MIN) * 2;
+/** The descent tool's settings. */
+const descentOptions = () => ({
+    floors: Math.round(+$('descentFloors').value),
+    drop: +$('descentDrop').value,
+    flip: $('descentFlip').checked,
+});
+const endStroke = () => {
+    placePointer = null;
+    if (ctx.thingsTool.drag) {
+        ctx.thingsTool.up();
+        return;
+    }
+    if (!stroke) return;
+    if (stroke.ramp) {
+        const plan = rampPlan(ctx.area(), stroke.ramp.from, stroke.ramp.to, rampOptions());
+        const rect = cutRamp(ctx.area(), plan, rampWidth(), $('rampStairs').checked ? +$('rampStep').value : null, $('rampCarve').checked);
+        if (rect) ctx.view.markDirty(rect);
+        ctx.view.setRampPreview(null);
+        $('statusMsg').textContent =
+            ctx.area().enclosed() && rect && rect.changed < 20
+                ? 'Nothing to lay it on there: dig or make a room first (or tick "Cut through rock").'
+                : '';
+    }
+    if (stroke.descent) {
+        const plan = descentPlan(ctx.area(), stroke.descent.from, stroke.descent.to, descentOptions());
+        ctx.view.setDescentPreview(null);
+        if (plan.error) {
+            $('statusMsg').textContent = plan.error;
+        } else {
+            // The same headroom all the way down, or the walls grow as the floors drop.
+            const headroom = +$('descentCeiling').value;
+            if (headroom >= 2 && headroom <= 20) ctx.area().clearance = headroom;
+            const floorTexture = ctx.library.byId.get(ctx.paintTexture())?.category === 'Floors' ? ctx.paintTexture() : 'woodOld';
+            const rect = cutDescent(
+                ctx.area(),
+                plan,
+                ctx.library.byId.has(floorTexture) ? ctx.area().materialIndex(floorTexture) : undefined,
+            );
+            ctx.view.markDirty(rect);
+            ctx.view.syncPalette();
+            $('statusMsg').textContent = `A descent of ${plan.floors} floors, down to ${plan.bottom.toFixed(1)} m.`;
+        }
+    }
+    if (stroke.room) {
+        const r = roomRect(stroke.room.from, stroke.room.to, ctx.area().sizeX, ctx.area().sizeY);
+        ctx.view.markDirty(cutRoom(ctx.area(), r, stroke.room.floor, stroke.paintIndex));
+        ctx.view.setRoomOutline(null);
+        ctx.view.syncPalette();
+        $('statusMsg').textContent = '';
+    }
+    // The ground moved: its shadows too.
+    if (!stroke.water && !stroke.place && !stroke.scatter && ctx.tool() !== 'paint') ctx.view.updateShade();
+    // Sculpting may have flooded or drained hollows.
+    if (!stroke.water && ctx.area().water.length && ctx.tool() !== 'paint') waterChanged();
+    if (stroke.water) $('statusMsg').textContent = '';
+    stroke = null;
+    saveSoon();
+};
+
+/** Sets up the pointer handlers over the view. */
+export function initStrokes(c) {
+    ctx = c;
+    if (debug) {
+        for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'lostpointercapture']) {
+            ctx.view.renderer.domElement.addEventListener(
+                type,
+                e => {
+                    dbg.last = `${type} button=${e.button} buttons=${e.buttons} type=${e.pointerType ?? '-'}${e.ctrlKey ? ' ctrl' : ''}${e.altKey ? ' alt' : ''}`;
+                    if (type === 'pointerdown') dbg.downs++;
+                    showDebug();
+                },
+                true,
+            );
+        }
+    }
+
+    // ?debug: the editor's state for test scripts.
+    if (debug)
+        window.landscaper = {
+            area: () => ctx.area(),
+            view: ctx.view,
+            live: () => live,
+            select: o => selectObject(o),
+            transformer,
+            ask,
+            things: ctx.thingsTool,
+        };
+
+    canvas = ctx.view.renderer.domElement;
+
+    canvas.addEventListener('pointerdown', e => {
+        // Moving, turning or sizing the selected object: a click keeps it, a right click cancels.
+        if (transformer.active) {
+            e.preventDefault();
+            if (e.button === 0) transformer.confirm();
+            else if (e.button === 2) transformer.cancel();
+            return;
+        }
+        if (e.button === 0 && ctx.area() && ctx.tool() === 'place' && ctx.view.selected) {
+            const h = transformer.pickHandle(e.clientX, e.clientY);
+            if (h) {
+                const p = ctx.view.pick(e.clientX, e.clientY);
+                transformer.last = { clientX: e.clientX, clientY: e.clientY };
+                if (transformer.begin(h.kind, h.axis, true, p ? { x: p.x, y: p.y } : null)) {
+                    try {
+                        canvas.setPointerCapture(e.pointerId);
+                    } catch {
+                        /* fine */
+                    }
+                }
+                return;
+            }
+        }
+        if (e.button !== 0 || !ctx.area()) {
+            dbg.note = `(ignored: button ${e.button})`;
+            showDebug();
+            return;
+        }
+        // A click on a marker that shows (the Show menu) selects it, from any tool: its properties open in the Things tool, as the
+        // right-click menu does. (The Place tool has its own objects to pick.)
+        // (Not when picking a texture up: a marker over the ground is not what is being asked about.)
+        if (
+            ctx.tool() !== 'things' &&
+            ctx.tool() !== 'place' &&
+            !ctx.readOnly() &&
+            !(ctx.tool() === 'paint' && (ctx.picking() || e.altKey))
+        ) {
+            const hit = ctx.view.pickThing(e.clientX, e.clientY, true);
+            if (hit != null) {
+                e.preventDefault();
+                ctx.selectTool('things');
+                ctx.thingsTool.pick(hit);
+                return;
+            }
+        }
+        mouse = { x: e.clientX, y: e.clientY };
+        const p = ctx.view.pick(e.clientX, e.clientY);
+        if (!p) {
+            dbg.note = '(down missed the terrain)';
+            showDebug();
+            return;
+        }
+        if (ctx.tool() === 'things') {
+            if (!ctx.readOnly() && ctx.thingsTool.down(e, p)) {
+                try {
+                    canvas.setPointerCapture(e.pointerId);
+                } catch {
+                    /* fine */
+                }
+            }
+            return;
+        }
+        if (ctx.tool() === 'entrance') {
+            entranceDown(e, p);
+            return;
+        }
+        if (ctx.tool() === 'scatter') {
+            if (!e.shiftKey && !scatterMix.size) {
+                $('statusMsg').textContent = 'Add models to the mix in the panel first.';
+                return;
+            }
+            ctx.area().beginStroke();
+            const scatter = { erase: e.shiftKey, flats: null };
+            stroke = { scatter, last: 0 };
+            Promise.all(
+                [...scatterMix].map(m =>
+                    models.flat(m).then(
+                        f => [m, f],
+                        () => null,
+                    ),
+                ),
+            ).then(list => {
+                scatter.flats = list.filter(Boolean);
+            });
+            try {
+                canvas.setPointerCapture(e.pointerId);
+            } catch {
+                /* fine */
+            }
+            return;
+        }
+        if (ctx.tool() === 'place') {
+            const pointerId = e.pointerId;
+            // Placing waits for the model: a quick click may be released first,
+            // and must not leave a drag running (it turned the next object).
+            placePointer = pointerId;
+            placeDown(e, p).then(s => {
+                if (s && placePointer === pointerId) {
+                    stroke = { place: s };
+                    try {
+                        canvas.setPointerCapture(pointerId);
+                    } catch {
+                        /* fine */
+                    }
+                }
+            });
+            return;
+        }
+        if (ctx.tool() === 'water') {
+            const w = waterDown(e, p);
+            if (w) {
+                stroke = { water: w };
+                try {
+                    canvas.setPointerCapture(e.pointerId);
+                } catch {
+                    /* fine */
+                }
+            }
+            return;
+        }
+        // The eyedropper (its button, the I key, or Alt-click): one click picks the texture, no paint goes down.
+        if (ctx.tool() === 'paint' && (ctx.picking() || e.altKey)) {
+            e.preventDefault();
+            ctx.setPicking(false);
+            ctx.pickTexture(p);
+            return;
+        }
+        ctx.area().beginStroke();
+        stroke = { flattenTo: ctx.area().heightAt(p.x, p.y), last: performance.now() };
+        if (ctx.tool() === 'paint') {
+            stroke.paintIndex = ctx.area().materialIndex(ctx.paintTexture());
+            ctx.view.syncPalette();
+        }
+        if (ctx.tool() === 'ramp') {
+            // From here to where the button comes up; laid then.
+            stroke.ramp = { from: p, to: p };
+        }
+        if (ctx.tool() === 'descent') {
+            // The box from here to where the button comes up; filled then.
+            stroke.descent = { from: p, to: p };
+        }
+        if (ctx.tool() === 'room') {
+            // From here to where the button comes up; cut out then.
+            // Started in a room: its floor (the lowest ground within 2 m, not a
+            // point up its wall), else in the rock: the area's floor.
+            let start = Infinity;
+            for (let dy = -2; dy <= 2; dy += 0.5) {
+                for (let dx = -2; dx <= 2; dx += 0.5) {
+                    if (dx * dx + dy * dy <= 4)
+                        start = Math.min(
+                            start,
+                            ctx
+                                .area()
+                                .heightAt(
+                                    Math.min(ctx.area().sizeX, Math.max(0, p.x + dx)),
+                                    Math.min(ctx.area().sizeY, Math.max(0, p.y + dy)),
+                                ),
+                        );
+                }
+            }
+            stroke.room = {
+                from: p,
+                to: p,
+                floor: ctx.area().enclosed() && start >= ctx.area().roof - 0.5 ? ctx.area().roof - CAVE_ROCK : start,
+            };
+            const floorTexture = ctx.library.byId.get(ctx.paintTexture())?.category === 'Floors' ? ctx.paintTexture() : 'woodOld';
+            stroke.paintIndex = ctx.library.byId.has(floorTexture) ? ctx.area().materialIndex(floorTexture) : undefined;
+            ctx.view.setRoomOutline(roomRect(p, p, ctx.area().sizeX, ctx.area().sizeY), stroke.room.floor);
+        }
+        if (ctx.tool() === 'dig') {
+            // Down to the floor, or to the level of dug ground where it starts;
+            // the floor painted with the picked texture (dirt unless painted).
+            const start = ctx.area().heightAt(p.x, p.y);
+            stroke.flattenTo = ctx.area().enclosed() && start >= ctx.area().roof - 0.5 ? ctx.area().roof - CAVE_ROCK : start;
+            stroke.paintIndex = ctx.area().materialIndex(ctx.paintTexture() === DEFAULT_TEXTURE ? 'dirt' : ctx.paintTexture());
+            ctx.view.syncPalette();
+        }
+        dbg.strokes++;
+        dbg.note = '';
+        showDebug();
+        try {
+            canvas.setPointerCapture(e.pointerId);
+        } catch (err) {
+            dbg.note = `(capture failed: ${err.message})`;
+            showDebug();
+        }
+    });
+    // A right-click that doesn't move (a drag turns the view) on a marker: its menu, from any tool.
+    canvas.addEventListener('pointerdown', e => {
+        if (e.button === 2) rmb = { x: e.clientX, y: e.clientY, t: performance.now() };
+    });
+    canvas.addEventListener('pointerup', e => {
+        if (e.button !== 2 || !rmb) return;
+        const moved = Math.hypot(e.clientX - rmb.x, e.clientY - rmb.y),
+            quick = performance.now() - rmb.t < 600;
+        rmb = null;
+        if (moved > 4 || !quick || !ctx.area() || ctx.readOnly()) return;
+        const hit = ctx.view.pickThing(e.clientX, e.clientY, true);
+        if (hit == null) {
+            closeCtx();
+            return;
+        }
+        openCtx(e.clientX, e.clientY, hit);
+    });
+    document.addEventListener(
+        'pointerdown',
+        e => {
+            if (!e.target.closest('#ctxMenu')) closeCtx();
+        },
+        true,
+    );
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeCtx();
+    });
+
+    canvas.addEventListener('pointermove', e => {
+        mouse = { x: e.clientX, y: e.clientY };
+        // A marker you can click shows a pointer, whichever tool is on.
+        if (
+            ctx.tool() !== 'things' &&
+            ctx.tool() !== 'place' &&
+            !stroke &&
+            !transformer.active &&
+            ctx.area() &&
+            !ctx.readOnly() &&
+            e.buttons === 0
+        )
+            canvas.style.cursor = ctx.view.pickThing(e.clientX, e.clientY, true) != null ? 'pointer' : '';
+        transformer.move(e);
+        if (ctx.thingsTool.drag) {
+            const p = ctx.view.pick(e.clientX, e.clientY);
+            if (p) ctx.thingsTool.move(p);
+        }
+        if (stroke?.water) waterDrag(e, stroke.water);
+        if (stroke?.place) placeDrag(e, stroke.place);
+        if (stroke?.ramp) {
+            const p = ctx.view.pick(e.clientX, e.clientY);
+            if (p) {
+                stroke.ramp.to = p;
+                const plan = rampPlan(ctx.area(), stroke.ramp.from, p, rampOptions());
+                ctx.view.setRampPreview(plan, rampWidth());
+                const dir = plan.dh > 0.05 ? 'up' : plan.dh < -0.05 ? 'down' : 'level';
+                $('statusMsg').textContent =
+                    `Ramp ${plan.len.toFixed(1)} m long, ${dir} ${Math.abs(plan.dh).toFixed(2)} m: ${plan.degrees.toFixed(0)}°${plan.eased ? ' (eased: it was too steep or too high)' : ''}`;
+            }
+        }
+        if (stroke?.descent) {
+            const p = ctx.view.pick(e.clientX, e.clientY);
+            if (p) {
+                stroke.descent.to = p;
+                const plan = descentPlan(ctx.area(), stroke.descent.from, p, descentOptions());
+                ctx.view.setDescentPreview(plan);
+                $('statusMsg').textContent =
+                    plan.error ??
+                    `${plan.floors} floors, ${plan.drop} m apart: ramps of ${plan.pitch.toFixed(0)} m at ${plan.degrees.toFixed(0)}°, the lowest at ${plan.bottom.toFixed(1)} m`;
+            }
+        }
+        if (stroke?.room) {
+            const p = ctx.view.pick(e.clientX, e.clientY);
+            if (p) {
+                stroke.room.to = p;
+                const r = roomRect(stroke.room.from, p, ctx.area().sizeX, ctx.area().sizeY);
+                ctx.view.setRoomOutline(r, stroke.room.floor);
+                $('statusMsg').textContent = `Room ${(r.x1 - r.x0).toFixed(2)} × ${(r.y1 - r.y0).toFixed(2)} m`;
+            }
+        }
+    });
+    canvas.addEventListener('pointerleave', () => {
+        mouse = null;
+        ctx.view.setCursor(null);
+        $('statusPos').textContent = '';
+    });
+    canvas.addEventListener('pointerup', () => {
+        if (transformer.active && transformer.held) {
+            transformer.confirm();
+            return;
+        }
+        endStroke();
+    });
+    canvas.addEventListener('pointercancel', () => {
+        if (transformer.active && transformer.held) {
+            transformer.cancel();
+            return;
+        }
+        endStroke();
+    });
+
+    ctx.view.onFrame = () => {
+        if (ctx.view.selected) transformer.place(ctx.view.selected);
+        if (!ctx.area() || !mouse) return;
+        const p = ctx.view.pick(mouse.x, mouse.y);
+        const radius = +ctx.sizeIn.value;
+        ctx.view.setCursor(p, radius);
+        if (p) {
+            const tx = Math.floor(p.x / TILE),
+                ty = Math.floor(p.y / TILE);
+            const i = Math.round(p.x / 0.625),
+                j = Math.round(p.y / 0.625);
+            const ci = Math.min(i, ctx.area().nx - 1),
+                cj = Math.min(j, ctx.area().ny - 1);
+            const walk = ctx.area().walkable(ci, cj),
+                deep = ctx.area().depth(ci, cj);
+            const what =
+                deep > SHALLOW
+                    ? `water ${deep.toFixed(1)} m deep: too deep to walk`
+                    : deep > 0
+                      ? `shallow water ${deep.toFixed(1)} m: wading`
+                      : walk
+                        ? 'walkable'
+                        : 'too steep to walk';
+            $('statusPos').textContent =
+                `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
+        }
+        if (stroke?.scatter && p) {
+            scatterStamp(p, radius, stroke.scatter);
+            dbg.stamps++;
+            return;
+        }
+        if (stroke && p && !stroke.water && !stroke.place && !stroke.room && !stroke.ramp && !stroke.descent) {
+            const now = performance.now();
+            const dt = (now - stroke.last) / 1000;
+            stroke.last = now;
+            ctx.view.markDirty(
+                stamp(ctx.area(), ctx.tool(), p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
+            );
+            dbg.stamps++;
+            if (dbg.stamps % 10 === 0) showDebug();
+        }
+    };
+}
