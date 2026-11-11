@@ -122,7 +122,8 @@ fi
 # A nested project is checked again by the outer one: its licences and secrets are part of the outer repository.
 if [[ -z "${CHECK_NESTED:-}" ]]; then
     step "REUSE (every file has its copyright and licence)"
-    have reuse && run reuse reuse lint --quiet
+    # --root: in a folder of a larger repository (nwn-bake in crates/), lint the folder, not the whole repository.
+    have reuse && run reuse reuse --root . lint --quiet
     step "gitleaks (the tree, then every commit)"
     if have gitleaks; then
         run "gitleaks (tree)" gitleaks dir --redact --no-banner .
@@ -132,7 +133,8 @@ if [[ -z "${CHECK_NESTED:-}" ]]; then
     if have trufflehog; then
         run "trufflehog (tree)" trufflehog filesystem --no-update --fail --results=verified,unknown . \
             --exclude-paths=<(printf '%s\n' '^target/' '/target/' '^\.git/')
-        run "trufflehog (history)" trufflehog git --no-update --fail --results=verified,unknown "file://$PWD"
+        # The repository's top: trufflehog clones it, so a folder inside it will not do.
+        run "trufflehog (history)" trufflehog git --no-update --fail --results=verified,unknown "file://$(git rev-parse --show-toplevel)"
     fi
 fi
 

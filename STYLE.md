@@ -1,8 +1,11 @@
 # Code and documentation standard
 
 One standard for nwn-bake and the two projects built on it (an area editor's Rust engine and its web page). Each repository keeps
-an identical copy of this file and of the shared configuration files listed under [The checks](#the-checks). Change them in all
-three in one pull request each, on the same day, so they never drift.
+an identical copy of this file at its root, and of the shared configuration files listed under [The checks](#the-checks). While
+nwn-bake is still a folder (`crates/`) of the engine's repository, that folder has its own copy too.
+
+**nwn-bake's copy is the master.** Change it there first, then copy it word for word to the other two in one pull request each,
+on the same day, so they never drift. The other copies follow it and are not edited on their own.
 
 `scripts/check.sh` runs every check below, the way CI runs them. Run it before you push.
 
@@ -89,11 +92,33 @@ set:
 | `clippy::mod_module_files` | warn | Modules are `foo.rs` plus `foo/`, never `foo/mod.rs`. |
 | `clippy::too_many_arguments` | allow | Drawing and baking functions take their parts as arguments. |
 | `clippy::type_complexity` | allow | Some caches have long types; an alias would hide them. |
+| `clippy::case_sensitive_file_extension_comparisons` | warn | Game files are often upper case (`.MDL`, `.TGA`). |
+| `clippy::cast_lossless` | warn | `f32::from(x)` over `x as f32` where no value is lost, so the casts that remain are the lossy ones. |
+| `clippy::cloned_instead_of_copied`, `implicit_clone` | warn | Say what is copied, and how. |
+| `clippy::explicit_iter_loop`, `redundant_closure_for_method_calls` | warn | `for x in &v`, `.map(ToString::to_string)`. |
+| `clippy::ignored_unit_patterns`, `semicolon_if_nothing_returned` | warn | `Ok(())` over `Ok(_)`; a `;` after a unit expression. |
+| `clippy::manual_let_else`, `map_unwrap_or` | warn | `let Some(x) = ... else { ... };` and `map_or` over longer forms. |
+| `clippy::stable_sort_primitive`, `uninlined_format_args` | warn | `sort_unstable` for numbers; `"{name}"` over `"{}", name`. |
+| `missing_docs` | warn, then deny | nwn-bake only: a library others build on documents every public item. |
 
-Prefer `#[expect(lint, reason = "...")]` to `#[allow]`: it warns when it is no longer needed.
+The block is the same in every workspace, apart from `missing_docs`, which only nwn-bake has. Prefer
+`#[expect(lint, reason = "...")]` to `#[allow]`: it warns when it is no longer needed.
 
-clippy's pedantic group is not enforced. `scripts/check.sh --pedantic` counts its hits by lint; a pedantic lint joins the shared
-set when it is worth it, in all workspaces at once, with its hits fixed in the same pull request.
+**`missing_docs` until every item has its comment.** With `-D warnings`, CI would fail on each missing doc comment, and 298 of
+nwn-bake's public items had none when the lint was added. Until they all have one, `nwn-bake/src/lib.rs` holds the lint back with
+`#![expect(missing_docs, reason = "...")]`, so CI passes. This counts the items left:
+
+```sh
+cargo clippy -p nwn-bake --all-features -- --force-warn missing_docs
+```
+
+When none are left, the `expect` itself warns: the line goes, and `Cargo.toml` raises the lint to `deny` in the same pull
+request.
+
+The rest of clippy's pedantic group is not enforced. Its cast lints (`cast_possible_truncation`, `cast_precision_loss`) would flag
+the drawing code's casts, which are on purpose, and `doc_markdown`, `must_use_candidate`, `similar_names` and `too_many_lines`
+cost more than they catch here. `scripts/check.sh --pedantic` counts the whole group's hits by lint; a pedantic lint joins the
+shared set in all workspaces at once, with its hits fixed in the same pull request.
 
 ### Naming
 
@@ -150,8 +175,9 @@ on every block saying why it holds, the lint relaxed for that module only with a
 ### Formatting and lint
 
 Biome formats and lints JavaScript, CSS and JSON (`biome.json`): 4 spaces, 140 columns, single quotes, semicolons, trailing
-commas, `x => ...` without parentheses for one argument. The linter uses Biome's recommended rules. `vendor/` is never
-formatted or linted.
+commas, `x => ...` without parentheses for one argument. The linter uses Biome's recommended rules with one turned off:
+`noDescendingSpecificity` (CSS), which asks for rules ordered by specificity; a stylesheet here is ordered by part of the page.
+`vendor/` is never formatted or linted.
 
 html-validate checks the HTML with its recommended rules (`.htmlvalidate.json`).
 
@@ -185,8 +211,10 @@ same commit. `scripts/check.sh` checks that all three are there.
 
 The game's shaders (`.shd`, GLSL) and shader code in JavaScript strings follow the Rust rules for naming and comments:
 
-- A file starts with a block comment saying what it draws and how it differs from the stock shader it is based on (name that
-  shader).
+- A shader based on one of the game's stock shaders starts with a block comment that names the stock shader (`fslit`), says that
+  this file is a modified copy of it, and says what it changes. It has no SPDX lines and makes no licence claim: the stock
+  shaders are Beamdog's, and `REUSE.toml` marks the file as theirs (see [Licences and REUSE](#licences-and-reuse)).
+- A shader written from scratch is ours and starts with the two SPDX lines, then a comment saying what it draws.
 - A shader file's name is a resref: lower case, at most 16 characters before the extension, because the game looks it up by
   that name.
 - 4 spaces, lines under 140 columns. The game's own macro names (`SHADER_TYPE`, `FOG`) are kept as the game spells them.
@@ -197,7 +225,8 @@ No tool formats these files; typos checks their spelling. WGSL, if a repository 
 
 Every file says who owns it and under which licence, the [REUSE](https://reuse.software/) way:
 
-- Source code (`.rs`, `.js`, `.css`, `.html`, `.sh`, `.py`, `.java`, `.shd`) starts with two lines in its own comment style:
+- Source code (`.rs`, `.js`, `.css`, `.html`, `.sh`, `.py`, `.java`, and `.shd` written from scratch) starts with two lines in
+  its own comment style:
 
   <!-- REUSE-IgnoreStart -->
   ```rust
@@ -209,10 +238,27 @@ Every file says who owns it and under which licence, the [REUSE](https://reuse.s
   A file based on someone else's work keeps their copyright line above ours.
 - Everything else (Markdown, configuration, JSON, images, lock files) is covered by `REUSE.toml`, so those files stay clean.
 - Vendored code keeps its own licence, recorded in `REUSE.toml`.
+- A shader modified from one of the game's stock shaders is Beamdog's: `REUSE.toml` gives it `SPDX-FileCopyrightText = "Beamdog"`
+  and `LicenseRef-Beamdog`, a text in `LICENSES/` saying that the repository grants no licence for it.
 - The licence texts are in `LICENSES/`, one file per SPDX identifier. `LICENSE` at the top stays, for GitHub and for people.
 
-Each repository's licence is in its `REUSE.toml` and README. `cargo-deny` and `cargo-about` check that every Rust dependency's
-licence is on the list in `deny.toml` and `about.toml`.
+The licences:
+
+- **nwn-bake:** GPL-3.0-or-later.
+- **The area editor's engine:** GPL-3.0-or-later, like nwn-bake. Both build on Moonglow, which is GPL-3.0, so their binaries are
+  GPL-3.0 in any case.
+- **The area editor's web page:** MIT. It started from ergin3d's MIT-licensed code, and its `LICENSE` keeps ergin3d's copyright
+  line above ours.
+
+Each repository's licence is also in its `REUSE.toml`, `Cargo.toml` (Rust) and README. `cargo-deny` and `cargo-about` check that
+every Rust dependency's licence is on the list in `deny.toml` and `about.toml`.
+
+### Never in these repositories
+
+Decompiled game code (a decompiler's output from the game's binaries, cleaned up or not), the game's own files or extracts of
+them (models, textures, 2da files, talk tables, scripts), and anything else taken from the game, apart from the modified shaders
+above. None of it is ours to license. Tests write the small made-up game files they need; notes on how the game behaves are
+written in our own words and name their source (a function of the game, a measurement).
 
 ## The checks
 
@@ -237,8 +283,8 @@ pedantic report.
 
 Shared files, identical in every repository: `STYLE.md`, `scripts/check.sh`, `.editorconfig`, `_typos.toml`, `.vale.ini`,
 `.vale/styles/Plain/`, `.markdownlint.jsonc`, `lychee.toml`, and in Rust workspaces `rustfmt.toml`, `deny.toml`, `about.toml`
-and the `[workspace.lints]` block. Each repository has its own `REUSE.toml`, and `biome.json` and `.htmlvalidate.json` where
-there is a web page.
+and the `[workspace.lints]` block (apart from `missing_docs`). Each repository has its own `REUSE.toml`, and `biome.json` and
+`.htmlvalidate.json` where there is a web page.
 
 Install the tools as release binaries checked against their published checksums, into `~/.local/bin`: cargo-deny, cargo-about,
 cargo-machete, typos, Vale, lychee, gitleaks and trufflehog from their GitHub releases, and Biome's standalone binary
