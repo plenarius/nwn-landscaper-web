@@ -10,7 +10,7 @@ import { $, el } from './dom.js';
 /** What app.js gives this file (initNewArea): `area()`, `setArea(a)`, `saveSoon()` and the Things tool (`thingsTool`). */
 let ctx = null;
 
-// Square sizes to pick, or any width and height (2 to 32 tiles each).
+// Square sizes to pick, or any width and height (3 to 32 tiles each).
 const SIZES = [4, 8, 12, 16, 20, 24, 28, 32];
 const showSize = () => {
     for (const o of $('sizeChoices').children)
