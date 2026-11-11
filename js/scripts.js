@@ -7,6 +7,7 @@
 import { EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, oneDark } from '../vendor/codemirror/codemirror.js';
 
 import { ask } from './ask.js';
+import { api } from './api.js';
 
 const json = r => r.json().catch(() => ({}));
 const el = (tag, props = {}, ...kids) => {
@@ -15,9 +16,14 @@ const el = (tag, props = {}, ...kids) => {
     return e;
 };
 
+// The question is asked once: several boxes ask at the same time while a panel opens. When the engine doesn't answer, it is
+// asked again next time.
 let canWrite = null;
-export async function scriptsWritable() {
-    if (canWrite === null) canWrite = !!(await json(await fetch('/api/scripts?q=zzzz'))).canWrite;
+export function scriptsWritable() {
+    canWrite ??= api('/api/scripts?q=zzzz').then(async res => {
+        if (!res.ok) canWrite = null;
+        return !!(await json(res)).canWrite;
+    });
     return canWrite;
 }
 
@@ -31,7 +37,7 @@ export async function openScript(resref, onMade = null) {
     status.textContent = '';
     status.className = 'note';
     dlg.showModal();
-    const res = await fetch(`/api/script?resref=${encodeURIComponent(resref)}&any=1`);
+    const res = await api(`/api/script?resref=${encodeURIComponent(resref)}&any=1`);
     const d = await json(res);
     if (!res.ok) {
         host.textContent = d.error || res.statusText;
@@ -69,7 +75,7 @@ export async function openScript(resref, onMade = null) {
         clearTimeout(timer);
         const text = view.state.doc.toString();
         saving = saving.then(async () =>
-            show(await json(await fetch(`/api/script-save?resref=${encodeURIComponent(resref)}`, { method: 'POST', body: text }))),
+            show(await json(await api(`/api/script-save?resref=${encodeURIComponent(resref)}`, { method: 'POST', body: text }))),
         );
         return saving;
     };
@@ -107,7 +113,7 @@ export async function openScript(resref, onMade = null) {
             ok: 'Make the copy',
             input: { label: 'Name', placeholder: 'e.g. my_spawn' },
             submit: async name => {
-                const res2 = await fetch(
+                const res2 = await api(
                     `/api/script?resref=${encodeURIComponent(name.toLowerCase())}&from=${encodeURIComponent(resref)}&kind=action`,
                     { method: 'POST' },
                 );
@@ -131,7 +137,12 @@ export async function openScript(resref, onMade = null) {
             }))
         )
             return;
-        await fetch(`/api/script-delete?resref=${encodeURIComponent(resref)}`, { method: 'POST' });
+        const res = await api(`/api/script-delete?resref=${encodeURIComponent(resref)}`, { method: 'POST' });
+        if (!res.ok) {
+            status.className = 'note err';
+            status.textContent = `Not deleted: ${(await json(res)).error || res.statusText}`;
+            return;
+        }
         dlg.close();
     };
     await new Promise(done => {
@@ -159,7 +170,7 @@ export function scriptPicker(input, kind = 'action') {
         timer = setTimeout(async () => {
             const q = input.value.trim();
             if (q.length < 2) return;
-            const r = await json(await fetch(`/api/scripts?q=${encodeURIComponent(q)}`));
+            const r = await json(await api(`/api/scripts?q=${encodeURIComponent(q)}`));
             list.textContent = '';
             for (const s of r.scripts ?? [])
                 list.appendChild(
@@ -172,7 +183,7 @@ export function scriptPicker(input, kind = 'action') {
         if (!ok) return;
         const b = el('button', { type: 'button', className: 'small' });
         const mine = async () =>
-            ((await json(await fetch(`/api/scripts?q=${encodeURIComponent(input.value.trim().toLowerCase())}`))).scripts ?? []).some(
+            ((await json(await api(`/api/scripts?q=${encodeURIComponent(input.value.trim().toLowerCase())}`))).scripts ?? []).some(
                 s => s.source === 'mine' && s.resref === input.value.trim().toLowerCase(),
             );
         const sync = async () => {
@@ -198,7 +209,7 @@ export function scriptPicker(input, kind = 'action') {
                 ok: 'Start writing',
                 input: { label: 'Name', placeholder: 'e.g. my_spawn' },
                 submit: async pick => {
-                    const res = await fetch(`/api/script?resref=${encodeURIComponent(pick.toLowerCase())}&from=&kind=${kind}`, {
+                    const res = await api(`/api/script?resref=${encodeURIComponent(pick.toLowerCase())}&from=&kind=${kind}`, {
                         method: 'POST',
                     });
                     const r = await json(res);

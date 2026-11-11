@@ -33,6 +33,7 @@
     "assist": {
         "actions": { "source": { "organizeImports": "off" } }
     },
+    "plugins": ["./lint/no-html-from-values.grit", "./lint/fetch-through-api.grit"],
     "linter": {
         "enabled": true,
         "rules": {

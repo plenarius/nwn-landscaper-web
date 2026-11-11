@@ -6,6 +6,7 @@
 // texture array the view paints with: one 512 px layer per palette entry.
 
 import * as THREE from 'three';
+import { api } from './api.js';
 
 const LAYER = 512;
 
@@ -19,7 +20,7 @@ export class TextureLibrary {
     /** Loads the catalog; false when the page isn't served by landscaper. */
     async load() {
         try {
-            const res = await fetch('textures/catalog.json');
+            const res = await api('textures/catalog.json');
             if (!res.ok) return false;
             this.catalog = (await res.json()).textures;
         } catch {

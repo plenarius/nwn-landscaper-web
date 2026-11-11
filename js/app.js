@@ -17,10 +17,17 @@ import './newbp.js';
 import { ask } from './ask.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
+import { api } from './api.js';
+import { el } from './dom.js';
 
 const $ = id => document.getElementById(id);
 
-for (const el of document.querySelectorAll('[data-icon]')) el.innerHTML = ICONS[el.dataset.icon];
+/** An icon from icons.js: fixed SVG markup, written in this repository (no data reaches it). */
+function setIcon(e, name) {
+    // biome-ignore lint/plugin: ICONS holds fixed SVG markup from js/icons.js
+    e.innerHTML = ICONS[name];
+}
+for (const e of document.querySelectorAll('[data-icon]')) setIcon(e, e.dataset.icon);
 
 // No WebGL: say why instead of showing a blank page.
 const probe = document.createElement('canvas');
@@ -41,7 +48,9 @@ for (const [id, t] of Object.entries(TOOLS)) {
     b.className = 'tool';
     b.dataset.tool = id;
     b.title = `${t.hint} (${t.key})`;
-    b.innerHTML = `<span class="icon">${ICONS[id]}</span><span>${t.label}</span><span class="key">${t.key}</span>`;
+    const icon = el('span', { className: 'icon' });
+    setIcon(icon, id);
+    b.append(icon, el('span', { textContent: t.label }), el('span', { className: 'key', textContent: t.key }));
     b.onclick = () => selectTool(id);
     $('toolButtons').appendChild(b);
 }
@@ -134,7 +143,7 @@ function buildPalette() {
             b.className = 'swatch';
             b.dataset.texture = t.id;
             b.title = `${t.name} (${t.source})`;
-            b.innerHTML = `<img loading="lazy" alt="" src="${library.swatchUrl(t.id)}"><span>${t.name}</span>`;
+            b.append(el('img', { loading: 'lazy', alt: '', src: library.swatchUrl(t.id) }), el('span', { textContent: t.name }));
             b.onclick = () => selectTexture(t.id);
             grid.appendChild(b);
         }
@@ -187,7 +196,7 @@ async function pickTexture(p) {
     let r = {};
     let ok = false;
     try {
-        const res = await fetch(
+        const res = await api(
             `/api/pick-texture?name=${encodeURIComponent(ground.slice('@import:'.length))}&x=${p.x.toFixed(2)}&y=${p.y.toFixed(2)}`,
             { method: 'POST' },
         );
@@ -250,7 +259,7 @@ async function modelResults(box, query, pick) {
         b.className = 'swatch';
         b.dataset.model = p.model;
         b.title = `${p.name} (${p.model})`;
-        b.innerHTML = `<img class="thumb" alt=""><span>${p.name.replace(/</g, '&lt;')}</span>`;
+        b.append(el('img', { className: 'thumb', alt: '' }), el('span', { textContent: p.name }));
         b.onclick = () => pick(p.model);
         box.appendChild(b);
         models.thumbnail(p.model).then(url => {
@@ -485,7 +494,12 @@ $('objScale').onchange = () =>
 
 // --- Import an NWN area ----------------------------------------------------------------
 // What a list shows for an area: the name the game shows for it (when the server knows it), else its tag.
-const areaTitle = s => String(s.name || s.tag || s.area).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+const areaTitle = s => String(s.name || s.tag || s.area);
+/** An area's row in a list: its title in bold, its resref small beside it, then `small` below. */
+const areaRow = (s, small) => [
+    el('span', {}, el('b', { textContent: areaTitle(s) }), ' ', el('small', { textContent: s.area })),
+    el('small', { textContent: small }),
+];
 
 let importChosen = null,
     importing = false,
@@ -534,14 +548,14 @@ async function showImportList() {
     const box = $('importList');
     let r = { sources: [] };
     try {
-        r = await (await fetch(`/api/import-sources?q=${encodeURIComponent($('importFind').value.trim())}`)).json();
+        r = await (await api(`/api/import-sources?q=${encodeURIComponent($('importFind').value.trim())}`)).json();
     } catch {
         /* none */
     }
     // Their own uploaded files come first, and stay while they search (filtered by the same words).
     let uploads = [];
     try {
-        uploads = (await (await fetch('/api/uploads')).json()).uploads ?? [];
+        uploads = (await (await api('/api/uploads')).json()).uploads ?? [];
     } catch {
         /* none */
     }
@@ -563,7 +577,7 @@ async function showImportList() {
         const kind = s.kind ?? (s.flags & 1 ? 'interior' : s.flags & 2 ? 'underground' : 'outdoors');
         const allowed = s.assigned !== false;
         const state = s.assigned === true ? ' · assigned to you' : allowed ? '' : ' · needs an assignment';
-        b.innerHTML = `<span><b>${areaTitle(s)}</b> <small>${s.area}</small></span><small>${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ` · ${s.from}` : ''}${state}</small>`;
+        b.append(...areaRow(s, `${s.width}×${s.height} · ${s.tileset} · ${kind}${s.from ? ` · ${s.from}` : ''}${state}`));
         b.disabled = !allowed;
         if (!allowed) b.title = 'Ask an admin to assign this area to you';
         if (importChosen?.area === s.area && importChosen?.upload === s.upload) b.classList.add('selected');
@@ -581,9 +595,9 @@ async function showImportList() {
         box.appendChild(b);
     }
     if (!found.length) box.textContent = r.note || 'No area matches.';
-    else if (r.note) box.insertAdjacentHTML('afterbegin', `<p class="note">${r.note}</p>`);
+    else if (r.note) box.prepend(el('p', { className: 'note', textContent: r.note }));
     else if (r.total > found.length)
-        box.insertAdjacentHTML('beforeend', `<p class="note">${r.total - found.length} more: narrow the search.</p>`);
+        box.append(el('p', { className: 'note', textContent: `${r.total - found.length} more: narrow the search.` }));
 }
 
 // Their own file goes up as it is (the server checks it reads as a module); its areas then show in the list.
@@ -596,7 +610,7 @@ $('importFile').onchange = async () => {
     const saveAs = kept.slice(0, kept.length - ext.length).slice(0, 64 - ext.length) + ext;
     $('importStatus').textContent = `Uploading ${file.name}…`;
     try {
-        const res = await fetch(`/api/upload?file=${encodeURIComponent(saveAs)}`, { method: 'POST', body: file });
+        const res = await api(`/api/upload?file=${encodeURIComponent(saveAs)}`, { method: 'POST', body: file });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
         $('importFind').value = '';
@@ -630,7 +644,7 @@ $('importGo').onclick = async () => {
     $('importStatus').textContent =
         `Importing ${importChosen.tag || importChosen.area} as ${name}… (reading its tiles and the module's haks takes a little while)`;
     try {
-        const res = await fetch(
+        const res = await api(
             `/api/import?area=${encodeURIComponent(importChosen.area)}&name=${encodeURIComponent(name)}${importChosen.upload ? `&upload=${encodeURIComponent(importChosen.upload)}` : ''}`,
             { method: 'POST' },
         );
@@ -655,7 +669,7 @@ $('btnOpen').onclick = async () => {
     $('openDialog').showModal();
     let areas = [];
     try {
-        areas = (await (await fetch('/api/areas')).json()).areas;
+        areas = (await (await api('/api/areas')).json()).areas ?? [];
     } catch {
         /* none */
     }
@@ -665,17 +679,14 @@ $('btnOpen').onclick = async () => {
     if (!who.hidden && !who.firstChild) {
         let users = [];
         try {
-            users = (await (await fetch('/api/users')).json()).users;
+            users = (await (await api('/api/users')).json()).users ?? [];
         } catch {
             /* none */
         }
         const pick = document.createElement('select');
-        pick.innerHTML =
-            `<option value="">My workspace</option>` +
-            users
-                .filter(u => u.user !== me.user)
-                .map(u => `<option value="${u.user}">${u.user}: ${u.areas} area${u.areas === 1 ? '' : 's'} (read-only)</option>`)
-                .join('');
+        pick.add(new Option('My workspace', ''));
+        for (const u of users.filter(u => u.user !== me.user))
+            pick.add(new Option(`${u.user}: ${u.areas} area${u.areas === 1 ? '' : 's'} (read-only)`, u.user));
         pick.value = me.viewing ?? '';
         pick.onchange = () => viewAs(pick.value);
         who.append('Workspace', pick);
@@ -695,7 +706,7 @@ $('btnOpen').onclick = async () => {
         const what = a.local
             ? 'only in this browser'
             : `${a.tiles}×${a.tilesY ?? a.tiles}${kind} · module ${a.module}${a.exported ? '' : ' · not exported yet'}`;
-        b.innerHTML = `<span><b>${a.name}</b>${a.name === area.name ? ' (open)' : ''}</span><small>${what}</small>`;
+        b.append(el('span', {}, el('b', { textContent: a.name }), a.name === area.name && ' (open)'), el('small', { textContent: what }));
         b.onclick = () => {
             $('openDialog').close();
             openArea(a);
@@ -737,7 +748,7 @@ async function reimport(a, button) {
     button.textContent = 'Importing…';
     button.classList.add('busy');
     try {
-        const res = await fetch(`/api/reimport?name=${encodeURIComponent(a.name)}`, { method: 'POST' });
+        const res = await api(`/api/reimport?name=${encodeURIComponent(a.name)}`, { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
         reimporting = false;
@@ -779,7 +790,7 @@ async function openArea(a) {
         if (local && a.local) {
             setArea(Area.fromJSON(JSON.parse(local)));
         } else {
-            const res = await fetch(`/api/area?name=${encodeURIComponent(a.name)}`);
+            const res = await api(`/api/area?name=${encodeURIComponent(a.name)}`);
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || res.statusText);
             setArea(Area.fromJSON(json));
@@ -803,7 +814,7 @@ async function showEntrances() {
     }
     let doors = [];
     try {
-        doors = (await (await fetch(`/api/doors?module=${encodeURIComponent(area.module || area.name)}`)).json()).doors;
+        doors = (await (await api(`/api/doors?module=${encodeURIComponent(area.module || area.name)}`)).json()).doors ?? [];
     } catch {
         /* none */
     }
@@ -814,12 +825,15 @@ async function showEntrances() {
         const row = document.createElement('div');
         row.className = 'entrance-row';
         const others = doors.filter(d => !d.tag.startsWith(`${area.name}_ent`));
-        const options = ['<option value="">(not linked here: the toolset\'s link stays)</option>'].concat(
-            others.map(d => `<option value="${d.tag}"${e.link === d.tag ? ' selected' : ''}>${d.tag} (area ${d.area})</option>`),
+        const select = el('select', {}, new Option("(not linked here: the toolset's link stays)", ''));
+        for (const d of others) select.add(new Option(`${d.tag} (area ${d.area})`, d.tag, e.link === d.tag, e.link === d.tag));
+        if (e.link && !others.some(d => d.tag === e.link)) select.add(new Option(e.link, e.link, true, true));
+        row.append(
+            el('b', { textContent: `Entrance ${k + 1}` }),
+            el('span', {}, 'door ', el('code', { textContent: tag }), ' leads to'),
+            select,
         );
-        if (e.link && !others.some(d => d.tag === e.link)) options.push(`<option value="${e.link}" selected>${e.link}</option>`);
-        row.innerHTML = `<b>Entrance ${k + 1}</b><span>door <code>${tag}</code> leads to</span><select>${options.join('')}</select>`;
-        row.querySelector('select').onchange = ev => {
+        select.onchange = ev => {
             area.beginStroke();
             e.link = ev.target.value || undefined;
             saveSoon();
@@ -827,9 +841,11 @@ async function showEntrances() {
         box.appendChild(row);
     });
     if (!doors.length)
-        box.insertAdjacentHTML(
-            'beforeend',
-            `<p class="note">No other entrance doors in module ${area.module} yet: export the other area into it first.</p>`,
+        box.append(
+            el('p', {
+                className: 'note',
+                textContent: `No other entrance doors in module ${area.module} yet: export the other area into it first.`,
+            }),
         );
 }
 
@@ -931,7 +947,9 @@ for (const p of PRESETS) {
     b.className = 'preset';
     b.dataset.preset = p.id;
     const s = p.time === 'night' ? p.moon : p.sun;
-    b.innerHTML = `<span class="look" style="background: linear-gradient(${s.diffuse}, ${s.fog} 70%, ${s.ambient})"></span><span>${p.name}</span>`;
+    const look = el('span', { className: 'look' });
+    look.style.background = `linear-gradient(${s.diffuse}, ${s.fog} 70%, ${s.ambient})`;
+    b.append(look, el('span', { textContent: p.name }));
     b.onclick = () => {
         area.atmosphere = copyPreset(p);
         skyNight = p.time === 'night';
@@ -1689,7 +1707,7 @@ let readOnly = false;
 
 async function loadMe() {
     try {
-        const res = await fetch('/api/me');
+        const res = await api('/api/me');
         if (res.ok) me = await res.json();
         else if (res.status === 401 || res.status === 403)
             showError((await res.json().catch(() => ({}))).error || 'You are not signed in.');
@@ -1741,7 +1759,7 @@ async function showActivity() {
     const q = `limit=300&user=${encodeURIComponent($('actUser').value.trim())}&action=${encodeURIComponent($('actAction').value)}`;
     let events = [];
     try {
-        events = (await (await fetch(`/api/audit?${q}`)).json()).events ?? [];
+        events = (await (await api(`/api/audit?${q}`)).json()).events ?? [];
     } catch {
         /* none */
     }
@@ -1776,12 +1794,12 @@ async function publishCall(dry) {
         : `/api/publish?name=${encodeURIComponent(area.name)}`;
     // (No review service: a package to download. Its check is the same call with `dry`; the download is a separate one.)
     if (me.package) {
-        const res = await fetch(`/api/package?name=${encodeURIComponent(area.name)}&whole=${whole ? 1 : 0}`, { method: 'POST' });
+        const res = await api(`/api/package?name=${encodeURIComponent(area.name)}&whole=${whole ? 1 : 0}`, { method: 'POST' });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || res.statusText);
         return body;
     }
-    const res = await fetch(`${url}&dry=${dry ? 1 : 0}&note=${note}`, { method: 'POST' });
+    const res = await api(`${url}&dry=${dry ? 1 : 0}&note=${note}`, { method: 'POST' });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || res.statusText);
     return body;
@@ -1874,7 +1892,7 @@ $('btnPublish').onclick = async () => {
     $('pubWhole').checked = false;
     $('pubWholeRow').hidden = true;
     try {
-        const mine = (await (await fetch('/api/areas')).json()).areas ?? [];
+        const mine = (await (await api('/api/areas')).json()).areas ?? [];
         const same = mine.filter(a => a.exported && (a.module || a.name) === (area.module || area.name));
         if (same.length > 1) {
             $('pubWholeRow').hidden = false;
@@ -1892,7 +1910,7 @@ $('pubGo').onclick = async () => {
         $('pubGo').disabled = true;
         pubShow('Building the package…', 'work');
         try {
-            const res = await fetch(`/api/package-download?name=${encodeURIComponent(area.name)}&whole=${$('pubWhole').checked ? 1 : 0}`);
+            const res = await api(`/api/package-download?name=${encodeURIComponent(area.name)}&whole=${$('pubWhole').checked ? 1 : 0}`);
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
             const file = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `${area.name}-package.zip`;
             const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: file });
@@ -1920,6 +1938,7 @@ $('pubGo').onclick = async () => {
             ['nwn-module', pr_urls.nwn_module],
             ['nwn-haks', pr_urls.nwn_haks],
         ]) {
+            if (!/^https:\/\//.test(url ?? '')) continue; // (a link from the engine's answer: only a web address is followed)
             const a = document.createElement('a');
             a.href = url;
             a.target = '_blank';
@@ -1950,7 +1969,7 @@ const testSaysMinutes = secs => `${Math.max(1, Math.round(secs / 60))} minute${M
 async function testRefresh(touch = true) {
     let r;
     try {
-        r = await (await fetch(`/api/dev-test${touch ? '?touch=1' : ''}`)).json();
+        r = await (await api(`/api/dev-test${touch ? '?touch=1' : ''}`)).json();
     } catch {
         r = { error: 'the server did not answer' };
     }
@@ -1998,7 +2017,7 @@ async function testPickArea(name, waypoint = '') {
     sel.textContent = '';
     let wp = [];
     try {
-        wp = (await (await fetch(`/api/dev-test/waypoints?area=${encodeURIComponent(name)}`)).json()).waypoints ?? [];
+        wp = (await (await api(`/api/dev-test/waypoints?area=${encodeURIComponent(name)}`)).json()).waypoints ?? [];
     } catch {
         /* none */
     }
@@ -2019,7 +2038,7 @@ async function testAreas() {
     if (q.length < 3) return;
     let r = { sources: [] };
     try {
-        r = await (await fetch(`/api/import-sources?q=${encodeURIComponent(q)}`)).json();
+        r = await (await api(`/api/import-sources?q=${encodeURIComponent(q)}`)).json();
     } catch {
         /* none */
     }
@@ -2027,7 +2046,7 @@ async function testAreas() {
     for (const s of (r.sources ?? []).slice(0, 12)) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.innerHTML = `<span><b>${areaTitle(s)}</b> <small>${s.area}</small></span><small>${s.width}×${s.height}</small>`;
+        b.append(...areaRow(s, `${s.width}×${s.height}`));
         if (testPicked === s.area) b.classList.add('selected');
         b.onclick = async () => {
             for (const o of box.children) o.classList.toggle('selected', o === b);
@@ -2051,7 +2070,7 @@ $('btnTest').onclick = async () => {
     entry.textContent = '';
     entry.add(new Option('the first area', ''));
     try {
-        const mine = (await (await fetch('/api/areas')).json()).areas ?? [];
+        const mine = (await (await api('/api/areas')).json()).areas ?? [];
         for (const a of mine.filter(a => a.exported && (a.module || a.name) === (area.module || area.name)))
             entry.add(new Option(a.name, a.name));
     } catch {
@@ -2068,7 +2087,7 @@ $('btnTest').onclick = async () => {
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'selected';
-            b.innerHTML = `<span><b>${last.area}</b> <small>used last time</small></span>`;
+            b.append(el('span', {}, el('b', { textContent: last.area }), ' ', el('small', { textContent: 'used last time' })));
             $('testAreas').appendChild(b);
             await testPickArea(last.area, last.waypoint);
         }
@@ -2091,7 +2110,7 @@ $('testGo').onclick = async () => {
     $('testStatus').textContent = 'Starting…';
     const q = `module=${encodeURIComponent(area.module || area.name)}&area=${encodeURIComponent(testPicked)}&waypoint=${encodeURIComponent($('testWp').value)}&entry=${encodeURIComponent($('testEntry').value)}&takeover=${$('testTake').checked ? 1 : 0}`;
     try {
-        const res = await fetch(`/api/dev-test?${q}`, { method: 'POST' });
+        const res = await api(`/api/dev-test?${q}`, { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
         localStorage.setItem(testWayKey(), JSON.stringify({ area: testPicked, waypoint: $('testWp').value, entry: $('testEntry').value }));
@@ -2106,7 +2125,7 @@ $('testGo').onclick = async () => {
 $('testRelease').onclick = async () => {
     $('testRelease').disabled = true;
     try {
-        const res = await fetch('/api/dev-test/release', { method: 'POST' });
+        const res = await api('/api/dev-test/release', { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
     } catch (err) {
@@ -2133,7 +2152,7 @@ $('btnVersion').onclick = async () => {
     try {
         clearTimeout(saveTimer);
         await putArea(area.name, JSON.stringify(area.toJSON()));
-        const res = await fetch(`/api/version?name=${encodeURIComponent(area.name)}&note=${encodeURIComponent(note)}`, { method: 'POST' });
+        const res = await api(`/api/version?name=${encodeURIComponent(area.name)}&note=${encodeURIComponent(note)}`, { method: 'POST' });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || res.statusText);
         $('statusMsg').textContent = `Saved a version of ${area.name} (${String(body.commit).slice(0, 7)}).`;
@@ -2154,7 +2173,7 @@ $('actAction').onchange = showActivity;
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
 async function viewAs(user) {
-    await fetch(`/api/view-as?user=${encodeURIComponent(user)}`, { method: 'POST' });
+    await api(`/api/view-as?user=${encodeURIComponent(user)}`, { method: 'POST' });
     location.reload();
 }
 
@@ -2195,7 +2214,7 @@ async function saveArea(a) {
 }
 
 async function putArea(name, json) {
-    const res = await fetch(`/api/save?name=${encodeURIComponent(name)}`, {
+    const res = await api(`/api/save?name=${encodeURIComponent(name)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: json,
@@ -2213,7 +2232,9 @@ async function moveBrowserAreas() {
     if (!names.length) return;
     let known = [];
     try {
-        known = (await (await fetch('/api/areas')).json()).areas;
+        const res = await api('/api/areas');
+        if (!res.ok) return; // (no engine: they stay in the browser until there is one)
+        known = (await res.json()).areas ?? [];
     } catch {
         return;
     }
@@ -2337,7 +2358,7 @@ let areaLists = null;
 $('btnSettings').onclick = async () => {
     if (!area || readOnly) return;
     const meta = await thingsTool.loadMeta();
-    areaLists ??= await fetch('/api/area-lists')
+    areaLists ??= await api('/api/area-lists')
         .then(r => r.json())
         .catch(() => ({}));
     openSettings(area, meta.template, areaLists, () => {
@@ -2382,7 +2403,7 @@ for (const s of SIZES) {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.size = s;
-    b.innerHTML = `${s}×${s}<small>${s * TILE} m</small>`;
+    b.append(`${s}×${s}`, el('small', { textContent: `${s * TILE} m` }));
     b.onclick = () => {
         $('newW').value = $('newH').value = s;
         showSize();
@@ -2474,7 +2495,7 @@ function areaRequest() {
 /** Sends the area to `what` (export or check); its report, or throws. */
 async function sendArea(what) {
     const { query, body } = areaRequest();
-    const res = await fetch(`/api/${what}?${query}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body });
+    const res = await api(`/api/${what}?${query}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body });
     if (res.status === 404 || res.status === 501) throw new Error('This page is not being served by landscaper. Run: landscaper serve');
     const report = await res.json();
     if (!res.ok) throw new Error(report.error || res.statusText);
@@ -2525,65 +2546,106 @@ function showReport(r, checkOnly = false) {
     const closed = r.warnings.filter(w => w.kind === 'closed_passage').length;
     const winding = r.warnings.length - failed - closed;
     const level = failed ? 'bad' : r.warnings.length ? 'warn' : 'good';
-    const explain = text => `<details><summary>What this means</summary><p class="note">${text}</p></details>`;
-    $('reportBody').innerHTML = `
-        <h3>${checkOnly ? 'Path check' : `Exported ${r.name}`}</h3>
-        <div class="big ${level}">${r.routes.ok} of ${r.routes.total} routes work</div>
-        <p>NWN's pathfinding, simulated on random routes between places your ground joins.</p>
-        ${
-            failed
-                ? `<p class="bad">● ${failed} route(s) stop short: red markers, where the walker stops.</p>
-            ${explain(`The ground joins the two ends, but NWN's pathfinding finds no way through, so a player clicking past there stops short. NWN only crosses from one 10 m tile to the next at a few fixed points on each tile edge, so the usual causes are a passage the tiles can't use (see closed passages), a steep step between tile heights, or a narrow way along a tile edge or corner. Widen or straighten the way there, soften the slope, or keep openings away from tile edges and corners (every 10 m on the grid).`)}`
-                : ''
-        }
-        ${
-            closed
-                ? `<p class="warn">● ${closed} passage(s) closed: orange markers.</p>
-            ${explain(`Ground you can walk through, but no NWN tile layout can use it (a gap between obstacles at a tile corner, a strip along a tile edge), so the export made that bit unwalkable. Harmless where nobody needs to pass: a sliver beside a wall, a corner behind rocks. Where players should get through, move or widen the gap, away from tile corners and edges; if it cut a way off, routes through it show as red too.`)}`
-                : ''
-        }
-        ${
-            winding
-                ? `<p class="warn">● ${winding} tile(s) too winding: orange markers.</p>
-            ${explain(`NWN searches inside each tile with a time limit. Ground that twists within one tile (U-bends, zigzags, many small pockets) can take too long, so creatures there sometimes give up or go the long way. Usually it still works; if creatures misbehave there, straighten or widen the passages in that tile.`)}`
-                : ''
-        }
-        <p>Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%</p>
-        ${
-            checkOnly
-                ? '<p class="note">Nothing was exported: this only checks.</p>'
-                : `${updated(r.updated)}${r.added_to_module ? `<p>Added to module <b>${r.added_to_module.module}</b> as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).</p>` : ''}
-        <p>Ready to play: <b>${r.name}</b> is in your NWN modules list.<br><code>${r.installed_module || r.module}</code></p>`
-        }`;
+    const explain = text =>
+        el('details', {}, el('summary', { textContent: 'What this means' }), el('p', { className: 'note', textContent: text }));
+    const p = (className, text) => el('p', { className, textContent: text });
+    $('reportBody').replaceChildren(
+        ...[
+            el('h3', { textContent: checkOnly ? 'Path check' : `Exported ${r.name}` }),
+            el('div', { className: `big ${level}`, textContent: `${r.routes.ok} of ${r.routes.total} routes work` }),
+            p('', "NWN's pathfinding, simulated on random routes between places your ground joins."),
+            ...(failed
+                ? [
+                      p('bad', `● ${failed} route(s) stop short: red markers, where the walker stops.`),
+                      explain(
+                          `The ground joins the two ends, but NWN's pathfinding finds no way through, so a player clicking past there stops short. NWN only crosses from one 10 m tile to the next at a few fixed points on each tile edge, so the usual causes are a passage the tiles can't use (see closed passages), a steep step between tile heights, or a narrow way along a tile edge or corner. Widen or straighten the way there, soften the slope, or keep openings away from tile edges and corners (every 10 m on the grid).`,
+                      ),
+                  ]
+                : []),
+            ...(closed
+                ? [
+                      p('warn', `● ${closed} passage(s) closed: orange markers.`),
+                      explain(
+                          `Ground you can walk through, but no NWN tile layout can use it (a gap between obstacles at a tile corner, a strip along a tile edge), so the export made that bit unwalkable. Harmless where nobody needs to pass: a sliver beside a wall, a corner behind rocks. Where players should get through, move or widen the gap, away from tile corners and edges; if it cut a way off, routes through it show as red too.`,
+                      ),
+                  ]
+                : []),
+            ...(winding
+                ? [
+                      p('warn', `● ${winding} tile(s) too winding: orange markers.`),
+                      explain(
+                          `NWN searches inside each tile with a time limit. Ground that twists within one tile (U-bends, zigzags, many small pockets) can take too long, so creatures there sometimes give up or go the long way. Usually it still works; if creatures misbehave there, straighten or widen the passages in that tile.`,
+                      ),
+                  ]
+                : []),
+            p('', `Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%`),
+            ...(checkOnly
+                ? [p('note', 'Nothing was exported: this only checks.')]
+                : [
+                      ...updated(r.updated),
+                      r.added_to_module &&
+                          el(
+                              'p',
+                              {},
+                              'Added to module ',
+                              el('b', { textContent: r.added_to_module.module }),
+                              ` as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).`,
+                          ),
+                      el(
+                          'p',
+                          {},
+                          'Ready to play: ',
+                          el('b', { textContent: r.name }),
+                          ' is in your NWN modules list.',
+                          el('br'),
+                          el('code', { textContent: r.installed_module || r.module }),
+                      ),
+                  ]),
+        ].filter(Boolean),
+    );
     $('report').hidden = false;
 }
 
-// What happened to a module that was already installed (and maybe built on).
+// What happened to a module that was already installed (and maybe built on): its paragraphs.
 function updated(u) {
-    if (!u) return '';
-    const esc = t => String(t).replace(/</g, '&lt;');
-    let html = `<p>Updated your module: new ground, everything you placed kept (${u.objects} object${u.objects === 1 ? '' : 's'}`;
-    html += u.ground_known
-        ? `, ${u.moved} moved up or down with the ground).</p>`
-        : `; the last ground wasn't found, so none were raised or lowered).</p>`;
+    if (!u) return [];
+    const p = (className, text) => el('p', { className, textContent: text });
+    const out = [
+        p(
+            '',
+            `Updated your module: new ground, everything you placed kept (${u.objects} object${u.objects === 1 ? '' : 's'}` +
+                (u.ground_known
+                    ? `, ${u.moved} moved up or down with the ground).`
+                    : `; the last ground wasn't found, so none were raised or lowered).`),
+        ),
+    ];
     if (u.outside.length) {
-        html += `<p class="warn">● ${u.outside.length} now outside the area: ${u.outside
+        const where = u.outside
             .slice(0, 5)
-            .map(o => `${esc(o.tag || '(no tag)')} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`)
-            .join('; ')}${u.outside.length > 5 ? '…' : ''}</p>`;
+            .map(o => `${o.tag || '(no tag)'} at ${o.at[0].toFixed(0)}, ${o.at[1].toFixed(0)}`)
+            .join('; ');
+        out.push(p('warn', `● ${u.outside.length} now outside the area: ${where}${u.outside.length > 5 ? '…' : ''}`));
     }
     if (u.placeables_added || u.placeables_removed)
-        html += `<p>Placeables (objects): ${u.placeables_added} added, ${u.placeables_removed} removed; the others moved where you put them, keeping what the toolset gave them.</p>`;
-    if (u.doors_added) html += `<p>${u.doors_added} new entrance door(s) added: link their transitions in the toolset.</p>`;
-    html += u.atmosphere
-        ? '<p>Light and fog: set from the editor.</p>'
-        : '<p>Light and fog: unchanged in the editor, so the module keeps its own.</p>';
-    html += `<p class="note">Close the module in the toolset before exporting, or saving there will overwrite this update.</p>`;
-    return html;
+        out.push(
+            p(
+                '',
+                `Placeables (objects): ${u.placeables_added} added, ${u.placeables_removed} removed; the others moved where you put them, keeping what the toolset gave them.`,
+            ),
+        );
+    if (u.doors_added) out.push(p('', `${u.doors_added} new entrance door(s) added: link their transitions in the toolset.`));
+    out.push(
+        p(
+            '',
+            u.atmosphere ? 'Light and fog: set from the editor.' : 'Light and fog: unchanged in the editor, so the module keeps its own.',
+        ),
+        p('note', 'Close the module in the toolset before exporting, or saving there will overwrite this update.'),
+    );
+    return out;
 }
 
 function showError(msg) {
-    $('reportBody').innerHTML = `<h3 class="bad">Export failed</h3><p>${msg.replace(/</g, '&lt;')}</p>`;
+    $('reportBody').replaceChildren(el('h3', { className: 'bad', textContent: 'Export failed' }), el('p', { textContent: msg }));
     $('report').hidden = false;
 }
 $('reportClose').onclick = () => {
@@ -2699,7 +2761,7 @@ let reviewArea = null;
     if (review && me.team && me.admin && who && name) {
         if (me.viewing !== who && !sessionStorage.getItem('landscaper.review')) {
             sessionStorage.setItem('landscaper.review', '1');
-            await fetch(`/api/view-as?user=${encodeURIComponent(who)}`, { method: 'POST' });
+            await api(`/api/view-as?user=${encodeURIComponent(who)}`, { method: 'POST' });
             location.reload();
             await new Promise(() => {}); // (the page is reloading)
         }
@@ -2715,7 +2777,7 @@ if (!readOnly) await moveBrowserAreas();
     let opened = null;
     if (current && (!local || reviewArea)) {
         try {
-            const res = await fetch(`/api/area?name=${encodeURIComponent(current)}`);
+            const res = await api(`/api/area?name=${encodeURIComponent(current)}`);
             if (res.ok) opened = Area.fromJSON(await res.json());
         } catch {
             /* not served */
