@@ -1,0 +1,151 @@
+/* SPDX-FileCopyrightText: Copyright (C) 2026 plenarius */
+/* SPDX-License-Identifier: MIT */
+
+/* The Things panel and the area settings. */
+
+/* Things and area settings. */
+#thingsPanel {
+    width: 330px;
+}
+#thingResults {
+    max-height: 240px;
+    overflow: auto;
+    margin: 4px 0 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+#thingResults .bp {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    padding: 5px 8px;
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+}
+#thingResults .bp .txt {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+#thingResults .bp .thumb {
+    display: none;
+    width: 64px;
+    height: 64px;
+    flex: none;
+    border-radius: 4px;
+    background: #1b2028 center / contain no-repeat;
+}
+#thingResults .bp.has-thumb .thumb {
+    display: block;
+}
+#thingResults .bp small {
+    color: var(--muted);
+    font-size: 11px;
+}
+#thingResults .bp.active {
+    border-color: var(--accent);
+}
+.thingprops {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #000;
+    max-height: 46vh;
+    overflow: auto;
+}
+.thingprops h4 {
+    margin: 8px 0 4px;
+    font-size: 13px;
+    color: var(--muted);
+}
+.thingprops label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 5px;
+}
+.thingprops input[type="text"],
+.thingprops input[type="number"],
+.thingprops select,
+.varrow input,
+.varrow select,
+#settingsBody input[type="text"],
+#settingsBody input[type="number"],
+#settingsBody select {
+    width: 100%;
+    padding: 5px 6px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+}
+.thingprops label:has(input[type="checkbox"]) {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+.varrow {
+    display: grid;
+    grid-template-columns: 1fr 70px 1fr 26px;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+button.danger {
+    background: #8a2f22;
+    margin-top: 8px;
+}
+button.danger:hover {
+    background: var(--bad-fill);
+}
+#settingsDialog {
+    width: min(760px, 94vw);
+}
+.settingsbody {
+    max-height: 66vh;
+    overflow: auto;
+    padding-right: 6px;
+}
+.settingsbody h4 {
+    margin: 12px 0 4px;
+    font-size: 13px;
+    color: var(--muted);
+}
+.setgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+}
+.setgrid label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--muted);
+}
+.setgrid label:has(input[type="checkbox"]) {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+.origrow {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    font-size: 12px;
+}
+
+dialog label.check {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 8px 0;
+}
+dialog label.check input {
+    width: auto;
+}

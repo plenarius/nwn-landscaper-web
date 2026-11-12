@@ -1,0 +1,266 @@
+/* SPDX-FileCopyrightText: Copyright (C) 2026 plenarius */
+/* SPDX-License-Identifier: MIT */
+
+/* The top bar menus, the check before publishing, the Things form's groups and contents lists, the Show and
+   right-click menus, and the inspector on the right of the view. */
+
+/* Top bar menus: File, Area and Share hold what is used less often; a menu with nothing visible in it is hidden. */
+.menu {
+    position: relative;
+}
+.menu:not(:has(.menu-item:not([hidden]))) {
+    display: none;
+}
+.menu-btn::after {
+    content: "▾";
+    margin-left: 2px;
+    color: var(--muted);
+    font-size: 12px;
+}
+.menu-btn.active {
+    border-color: var(--accent);
+    background: #3d3a30;
+}
+.menu-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 30;
+    min-width: 230px;
+    padding: 6px;
+    background: var(--panel);
+    border: 1px solid #000;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.menu-right .menu-list {
+    left: auto;
+    right: 0;
+}
+.menu-list[hidden] {
+    display: none;
+}
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+}
+.menu-item:hover {
+    background: #3a4452;
+}
+.menu-item:disabled {
+    opacity: 0.45;
+    cursor: default;
+    pointer-events: none;
+}
+.menu-item.active {
+    color: var(--accent);
+}
+.menu-item .icon {
+    width: 22px;
+    height: 22px;
+    flex: none;
+}
+.menu-item kbd {
+    margin-left: auto;
+    padding-left: 16px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--muted);
+}
+.menu-item[hidden],
+.menu-sep[hidden] {
+    display: none;
+}
+.menu-sep {
+    margin: 6px 4px;
+    border: none;
+    border-top: 1px solid #000;
+}
+.group-sep {
+    width: 1px;
+    height: 28px;
+    background: #000;
+    margin: 0 2px;
+}
+.top-btn.icon-only {
+    padding: 0 8px;
+}
+.top-btn.icon-only .lbl {
+    display: none;
+}
+
+/* The Things panel's kind chips carry the colour that kind has in the view. */
+#thingKinds button::before {
+    content: "";
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--kind, #fff);
+    vertical-align: baseline;
+}
+
+/* The check before publishing: errors red, warnings amber, the rest quiet. */
+.findings {
+    list-style: none;
+    margin: 8px 0;
+    padding: 0;
+    max-height: 220px;
+    overflow: auto;
+    font-size: 13px;
+}
+.finding {
+    padding: 4px 8px 4px 10px;
+    border-left: 3px solid var(--muted);
+    margin-bottom: 3px;
+    background: var(--panel-2);
+    border-radius: 0 4px 4px 0;
+}
+.finding.error {
+    border-left-color: var(--bad);
+}
+.finding.warn {
+    border-left-color: #e0a040;
+}
+.finding b {
+    color: var(--text);
+}
+
+.dest-picker {
+    margin: 4px 0 8px;
+    font-size: 13px;
+}
+.dest-picker summary {
+    cursor: pointer;
+    color: var(--muted);
+}
+.dest-picker input[type="search"] {
+    width: 100%;
+    margin: 6px 0;
+    box-sizing: border-box;
+}
+.dest-picker select {
+    width: 100%;
+    margin-top: 6px;
+}
+
+/* The Things form's groups (lock, trap, hit points...). */
+.fsec {
+    margin: 6px 0;
+}
+.fsec > summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 0;
+}
+.fsec[open] > summary {
+    color: var(--text);
+}
+
+/* The contents list of a container, creature, store or encounter. */
+.stock {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 4px 0 8px;
+    max-height: 220px;
+    overflow: auto;
+    font-size: 13px;
+}
+.stock-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+    background: var(--panel-2);
+    border-radius: 5px;
+}
+.stock-row .name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.stock-row .name small {
+    color: var(--muted);
+    font-size: 11px;
+}
+.stock-row button {
+    padding: 0 8px;
+    line-height: 22px;
+}
+.stock-row label.check {
+    margin: 0;
+}
+.contents input[type="search"] {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 4px 0;
+}
+
+/* The Show menu: a tick and the kind's colour for each kind of thing. */
+.menu-item .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--kind, #fff);
+    flex: none;
+}
+.menu-item input[type="checkbox"] {
+    margin: 0;
+}
+.menu-note {
+    margin: 2px 6px 6px;
+    max-width: 240px;
+    font-size: 12px;
+    color: var(--muted);
+}
+.menu-row {
+    display: flex;
+    gap: 6px;
+    padding: 0 4px 2px;
+}
+.menu-row button {
+    flex: 1;
+    padding: 4px 0;
+}
+
+/* The right-click menu on a marker. */
+.ctx {
+    position: fixed;
+    z-index: 60;
+    min-width: 170px;
+}
+.ctx[hidden] {
+    display: none;
+}
+
+/* The inspector: the selected thing's properties, on the right of the view. */
+.side-panel.right {
+    left: auto;
+    right: 12px;
+    width: 360px;
+}
+#inspector .thingprops {
+    max-height: none;
+    overflow: visible;
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+}
+#inspector .panel-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+}
