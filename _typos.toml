@@ -8,6 +8,7 @@ extend-exclude = [
     "LICENSES/",
     "*.lock",
     "*.min.js",
+    "*.png", # binary; typos reads some compressed PNGs as text
 ]
 
 [default]

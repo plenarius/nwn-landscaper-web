@@ -10,6 +10,8 @@ repository (Rust). The page talks to it over HTTP. Without the engine the page o
 textures to paint with, saving to disk, importing, exporting, the path check, and the game's models and blueprints all come
 from the engine.
 
+![The editor with Dalos Lake, an outdoor area imported from a module, open in the Paint tool](docs/screenshot.png)
+
 What it does (*team* marks what only a team server offers, see landscaper's
 [TEAM-SERVER.md](https://github.com/plenarius/landscaper/blob/master/docs/TEAM-SERVER.md)):
 
