@@ -5,7 +5,7 @@
 // shadows baked into its tiles. The panel opening and closing is app.js's (one panel at a time over the view).
 
 import { PRESETS, copyPreset } from './atmosphere.js';
-import { $, el } from './dom.js';
+import { $, el, store } from './dom.js';
 
 /** What app.js gives this file (initSky): `area()`, `view` and `saveSoon()`. */
 let ctx = null;
@@ -128,9 +128,9 @@ export function initSky(c) {
         };
     // Whether the view shows the area's light and fog (else a plain working
     // light, no fog), remembered.
-    $('skyPreview').checked = localStorage.getItem('landscaper.skyPreview') !== 'off';
+    $('skyPreview').checked = store.get('landscaper.skyPreview') !== 'off';
     $('skyPreview').onchange = () => {
-        localStorage.setItem('landscaper.skyPreview', $('skyPreview').checked ? 'on' : 'off');
+        store.set('landscaper.skyPreview', $('skyPreview').checked ? 'on' : 'off');
         showSky();
     };
 }

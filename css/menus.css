@@ -220,6 +220,20 @@
 .menu-item input[type="checkbox"] {
     margin: 0;
 }
+/* Cut at: its label and height stay on one line; the slider takes what is left. */
+#cutRow label,
+#cutRow output {
+    flex: none;
+    white-space: nowrap;
+}
+#cutRow output {
+    min-width: 6ch;
+    text-align: right;
+}
+#cutRow input {
+    flex: 1;
+    min-width: 0;
+}
 .menu-note {
     margin: 2px 6px 6px;
     max-width: 240px;

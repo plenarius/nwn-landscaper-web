@@ -4,18 +4,18 @@
 // Autosave (each change, a moment later, to the engine's disk, or this browser when that fails), areas left in this browser
 // moved to disk at start, and Save a version (into the team's history).
 
-import { api, engine } from './api.js';
+import { api, engine, failure, json } from './api.js';
 import { ask } from './ask.js';
-import { $ } from './dom.js';
+import { $, store } from './dom.js';
 import { checkSoon } from './live.js';
 
 /** What app.js gives this file (initSave): `area()` and `readOnly()`. */
 let ctx = null;
 
-// Autosave: each area to landscaper (areas/<name>.json on disk) a moment
-// after each change. If that fails, into this browser until it works again,
-// and the status line says so.
 let saveTimer = null;
+
+/** Autosave: the area to landscaper (areas/<name>.json on disk) a moment after each change. If that fails, into this browser
+ *  until it works again, and the status line says so. */
 export function saveSoon() {
     // Looking at someone else's workspace: nothing is saved (not into yours either).
     if (ctx.readOnly()) return;
@@ -26,26 +26,23 @@ export function saveSoon() {
 
 async function saveArea(a) {
     const json = JSON.stringify(a.toJSON());
-    localStorage.setItem('landscaper.current', a.name);
+    store.set('landscaper.current', a.name);
     try {
         await putArea(a.name, json);
-        localStorage.removeItem(`landscaper.area.${a.name}`);
-        localStorage.removeItem(`landscaper.saved.${a.name}`);
+        store.remove(`landscaper.area.${a.name}`);
+        store.remove(`landscaper.saved.${a.name}`);
         if ($('statusMsg').dataset.saveFailed) {
             $('statusMsg').textContent = 'Saved.';
             delete $('statusMsg').dataset.saveFailed;
         }
     } catch (err) {
-        try {
-            localStorage.setItem(`landscaper.area.${a.name}`, json);
-            localStorage.setItem(`landscaper.saved.${a.name}`, String(Date.now()));
+        if (store.set(`landscaper.area.${a.name}`, json) && store.set(`landscaper.saved.${a.name}`, String(Date.now())))
             $('statusMsg').textContent = engine.up
                 ? `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`
                 : `Saved ${a.name} in this browser (no engine to save it to disk).`;
-        } catch {
+        else
             $('statusMsg').textContent =
                 `Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`;
-        }
         $('statusMsg').dataset.saveFailed = '1';
     }
 }
@@ -56,14 +53,15 @@ async function putArea(name, json) {
         headers: { 'Content-Type': 'application/json' },
         body: json,
     });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+    if (!res.ok) throw new Error(await failure(res));
 }
 
 /** Areas kept in this browser (before landscaper saved to disk, or when a
  *  save failed) go to landscaper when newer than its copy, then leave the
  *  browser. */
 export async function moveBrowserAreas() {
-    const names = Object.keys(localStorage)
+    const names = store
+        .keys()
         .filter(k => k.startsWith('landscaper.area.'))
         .map(k => k.slice(16));
     if (!names.length) return;
@@ -77,8 +75,8 @@ export async function moveBrowserAreas() {
     }
     let moved = 0;
     for (const name of names) {
-        const json = localStorage.getItem(`landscaper.area.${name}`);
-        const at = +(localStorage.getItem(`landscaper.saved.${name}`) ?? 0);
+        const json = store.get(`landscaper.area.${name}`);
+        const at = +(store.get(`landscaper.saved.${name}`) ?? 0);
         const there = known.find(a => a.name === name);
         const theirs = Math.max(there?.saved ?? 0, there?.exported ?? 0) * 1000;
         try {
@@ -86,8 +84,8 @@ export async function moveBrowserAreas() {
                 await putArea(name, json);
                 moved++;
             }
-            localStorage.removeItem(`landscaper.area.${name}`);
-            localStorage.removeItem(`landscaper.saved.${name}`);
+            store.remove(`landscaper.area.${name}`);
+            store.remove(`landscaper.saved.${name}`);
         } catch (err) {
             console.warn(`couldn't move ${name} to disk`, err);
         }
@@ -117,8 +115,8 @@ export function initSave(c) {
             const res = await api(`/api/version?name=${encodeURIComponent(ctx.area().name)}&note=${encodeURIComponent(note)}`, {
                 method: 'POST',
             });
-            const body = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(body.error || res.statusText);
+            if (!res.ok) throw new Error(await failure(res));
+            const body = await json(res);
             $('statusMsg').textContent = `Saved a version of ${ctx.area().name} (${String(body.commit).slice(0, 7)}).`;
         } catch (err) {
             $('statusMsg').textContent = `Couldn't save a version: ${err.message}`;

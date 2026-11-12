@@ -9,8 +9,9 @@
 //   `submit(value)`, when given, runs on OK: it returns an error message to show in the dialog (which stays open for another
 //   try) or nothing to accept. That is how a name the server refuses is reported without a popup.
 
-const $ = id => document.getElementById(id);
+import { $ } from './dom.js';
 
+/** Asks with the app's question dialog: see the top of this file for the arguments and what it resolves to. */
 export function ask({ title, text, ok = 'OK', danger = false, input = null, submit = null }) {
     const dlg = $('askDialog');
     $('askTitle').textContent = title;

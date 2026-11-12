@@ -168,9 +168,9 @@ function dig(area, x, y, radius, floor, paintIndex) {
 
 // Rooms snap to this grid and are at least this wide: narrower ones were
 // hard on NWN's tile pathfinding, as cave passages were.
-export const ROOM_GRID = 1.25;
+const ROOM_GRID = 1.25;
 /** Narrowest a room (a corridor) can be. */
-export const ROOM_MIN = 2.5;
+const ROOM_MIN = 2.5;
 
 /** The room a drag from a to b makes: snapped to ROOM_GRID, and fitted to
  *  NWN's tile pathfinding. Routes cross a tile edge only at fixed exit
@@ -228,7 +228,7 @@ export function cutRoom(area, r, floor, paintIndex) {
 }
 
 /** The steepest slope (rise over run) that is walkable: the editor's rule for a sample's neighbours. */
-export const MAX_SLOPE = MAX_RISE / SPACING;
+const MAX_SLOPE = MAX_RISE / SPACING;
 
 /**
  * A ramp from `a` to `b` (area points): where it starts and ends, how long and steep, and whether it had to be eased to stay

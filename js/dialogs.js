@@ -7,21 +7,16 @@
 
 import { scriptPicker } from './scripts.js';
 import { ask } from './ask.js';
-import { api } from './api.js';
+import { api, json } from './api.js';
+import { $, el } from './dom.js';
 
-const json = r => r.json().catch(() => ({}));
-const el = (tag, props = {}, ...kids) => {
-    const e = Object.assign(document.createElement(tag), props);
-    e.append(...kids);
-    return e;
-};
 const excerpt = (t, n = 48) => (t || '(empty)').replace(/\s+/g, ' ').slice(0, n) + ((t || '').length > n ? '…' : '');
 
-export async function openConversation(resref, onMade = null) {
-    const dlg = document.getElementById('dlgDialog');
-    const tree = document.getElementById('dlgTree');
-    const status = document.getElementById('dlgStatus');
-    document.getElementById('dlgTitle').textContent = `Conversation ${resref}`;
+async function openConversation(resref, onMade = null) {
+    const dlg = $('dlgDialog');
+    const tree = $('dlgTree');
+    const status = $('dlgStatus');
+    $('dlgTitle').textContent = `Conversation ${resref}`;
     tree.textContent = 'Loading…';
     status.textContent = '';
     status.className = 'note';
@@ -35,12 +30,12 @@ export async function openConversation(resref, onMade = null) {
     // One that isn't yours (the module's or the game's) is shown to read, with a button to start your own from it.
     const readOnly = !m.mine;
     tree.classList.toggle('ro', readOnly);
-    document.getElementById('dlgCopy').hidden = !readOnly;
-    document.getElementById('dlgTitle').textContent = readOnly ? `Conversation ${resref} (read only)` : `Conversation ${resref}`;
-    document.getElementById('dlgNote').textContent = readOnly
+    $('dlgCopy').hidden = !readOnly;
+    $('dlgTitle').textContent = readOnly ? `Conversation ${resref} (read only)` : `Conversation ${resref}`;
+    $('dlgNote').textContent = readOnly
         ? `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`
         : 'Your own conversation. Changes are saved as you make them and go to review with what uses it.';
-    document.getElementById('dlgCopy').onclick = async () => {
+    $('dlgCopy').onclick = async () => {
         let made = null;
         const ok = await ask({
             title: 'Make your own copy',

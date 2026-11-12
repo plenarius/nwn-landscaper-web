@@ -8,7 +8,8 @@
 
 import { THING_COLOURS, css } from './thingcolours.js';
 import { creaturePreview, itemPreview, modelPreview } from './preview.js';
-import { api, failure } from './api.js';
+import { api, failure, json } from './api.js';
+import { store } from './dom.js';
 
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
@@ -78,7 +79,7 @@ export class ThingsTool {
         this.results = [];
         this.seq = 0;
         try {
-            this.shown = new Set(JSON.parse(localStorage.getItem(SHOW_KEY)) ?? SHOW_DEFAULT);
+            this.shown = new Set(JSON.parse(store.get(SHOW_KEY)) ?? SHOW_DEFAULT);
         } catch {
             this.shown = new Set(SHOW_DEFAULT);
         }
@@ -186,11 +187,7 @@ export class ThingsTool {
     /** Ticks or unticks a kind of thing in the Show menu. */
     setShown(kind, on) {
         this.shown[on ? 'add' : 'delete'](kind);
-        try {
-            localStorage.setItem(SHOW_KEY, JSON.stringify([...this.shown]));
-        } catch {
-            /* not kept */
-        }
+        store.set(SHOW_KEY, JSON.stringify([...this.shown]));
         this.refresh();
     }
 
@@ -259,7 +256,7 @@ export class ThingsTool {
         const mine = ++this.seq,
             q = this.ctx.$('thingSearch').value.trim();
         const res = await api(`/api/blueprints?kind=${k.kind}&q=${encodeURIComponent(q)}&limit=60`);
-        const list = res.ok ? ((await res.json().catch(() => ({}))).blueprints ?? []) : [];
+        const list = res.ok ? ((await json(res)).blueprints ?? []) : [];
         const why = res.ok ? '' : await failure(res);
         if (mine !== this.seq) return;
         const box = this.ctx.$('thingResults');
@@ -282,12 +279,12 @@ export class ThingsTool {
                 for (const x of box.children) x.classList.remove('active');
                 e.classList.add('active');
                 this.ctx.say(`${k.label}: ${b.name}. Click the ground to place it.`);
-                this.bpFinder?.();
+                this.bpFinder();
             };
             box.appendChild(e);
         }
         if (!list.length) box.textContent = why || (q ? 'Nothing matches.' : 'Nothing found.');
-        this.bpFinder?.();
+        this.bpFinder();
     }
 
     /** Watches the thumbnail boxes and fills each in once, as it comes into view. */
@@ -324,7 +321,7 @@ export class ThingsTool {
         return this._previews;
     }
 
-    // --- The mouse -------------------------------------------------------------------------
+    // --- The mouse ---------------------------------------------------------------------------------------------------
 
     /** A press on the terrain at `p` ({x, y}); true if it started something that follows the mouse. */
     down(e, p) {
@@ -524,7 +521,7 @@ export class ThingsTool {
         else this.refresh();
     }
 
-    // --- Things ----------------------------------------------------------------------------
+    // --- Things ------------------------------------------------------------------------------------------------------
 
     /** Selects what `hit` names (a thing's id, or an original's key) for editing: its properties open in the panel. */
     pick(hit) {

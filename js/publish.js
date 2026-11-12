@@ -4,7 +4,7 @@
 // Publish: sends the last export to the team as pull requests through the review service, or, where there is none, builds a
 // package of its files to download. Its dialog checks first and says what would be sent.
 
-import { api } from './api.js';
+import { api, failure, json } from './api.js';
 import { $ } from './dom.js';
 
 /** What app.js gives this file (initPublish): `area()`, `me()` (who is signed in) and `readOnly()`. */
@@ -21,14 +21,12 @@ async function publishCall(dry) {
     // (No review service: a package to download. Its check is the same call with `dry`; the download is a separate one.)
     if (ctx.me().package) {
         const res = await api(`/api/package?name=${encodeURIComponent(ctx.area().name)}&whole=${whole ? 1 : 0}`, { method: 'POST' });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || res.statusText);
-        return body;
+        if (!res.ok) throw new Error(await failure(res));
+        return json(res);
     }
     const res = await api(`${url}&dry=${dry ? 1 : 0}&note=${note}`, { method: 'POST' });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || res.statusText);
-    return body;
+    if (!res.ok) throw new Error(await failure(res));
+    return json(res);
 }
 
 /** The dialog's text and look: 'work' shows a moving bar and the seconds so far, 'err' red, 'ok' green. */
@@ -146,7 +144,7 @@ export function initPublish(c) {
                 const res = await api(
                     `/api/package-download?name=${encodeURIComponent(ctx.area().name)}&whole=${$('pubWhole').checked ? 1 : 0}`,
                 );
-                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+                if (!res.ok) throw new Error(await failure(res));
                 const file =
                     /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `${ctx.area().name}-package.zip`;
                 const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await res.blob()), download: file });

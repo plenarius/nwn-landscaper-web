@@ -11,7 +11,7 @@ import { ThingsTool } from './things.js';
 import { renderVars } from './vars.js';
 import { scriptPicker } from './scripts.js';
 import { conversationPicker } from './dialogs.js';
-import { api } from './api.js';
+import { api, json } from './api.js';
 
 const BOOLEAN = new Set([
     'HasMapNote',
@@ -134,9 +134,6 @@ const label = l =>
         .replace(/^(Script|On)/, m => `${m} `)
         .replace(/([a-z])([A-Z])/g, '$1 $2')
         .trim();
-
-/** Reads a response body as JSON, or {} when it isn't. */
-const json = r => r.json().catch(() => ({}));
 
 /** The creature inventory slots by name, in the order of the game's slot numbers (INVENTORY_SLOT_HEAD is 0). */
 const SLOTS = [

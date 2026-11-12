@@ -4,7 +4,7 @@
 // Test on the dev server: loads the builder's last export of a module onto the team's dev server, to walk it in the game.
 
 import { api } from './api.js';
-import { $, el } from './dom.js';
+import { $, el, store } from './dom.js';
 import { areaRow } from './import.js';
 
 /** What app.js gives this file (initDevTest): `area()` and `readOnly()`. */
@@ -137,7 +137,7 @@ export function initDevTest(c) {
         $('testDialog').showModal();
         // The way in used last time for this module, ready to go.
         try {
-            const last = JSON.parse(localStorage.getItem(testWayKey()) ?? 'null');
+            const last = JSON.parse(store.get(testWayKey()) ?? 'null');
             if (last?.area) {
                 if (last.entry && [...entry.options].some(o => o.value === last.entry)) entry.value = last.entry;
                 $('testFind').value = last.area;
@@ -170,10 +170,7 @@ export function initDevTest(c) {
             const res = await api(`/api/dev-test?${q}`, { method: 'POST' });
             const r = await res.json();
             if (!res.ok) throw new Error(r.error || res.statusText);
-            localStorage.setItem(
-                testWayKey(),
-                JSON.stringify({ area: testPicked, waypoint: $('testWp').value, entry: $('testEntry').value }),
-            );
+            store.set(testWayKey(), JSON.stringify({ area: testPicked, waypoint: $('testWp').value, entry: $('testEntry').value }));
         } catch (err) {
             $('testStatus').textContent = `Couldn't start: ${err.message}`;
             $('testStatus').className = 'note err';

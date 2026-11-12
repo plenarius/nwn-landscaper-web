@@ -4,7 +4,7 @@
 // The live path check: Check paths again a moment after each edit, its result on the Live button and as markers on the map.
 
 import { api, engine, NEEDS_ENGINE } from './api.js';
-import { $ } from './dom.js';
+import { $, store } from './dom.js';
 import { showError } from './report.js';
 import { sendArea } from './export.js';
 
@@ -13,13 +13,15 @@ import { sendArea } from './export.js';
 let ctx = null;
 
 /** Whether the check is on (remembered in this browser), its timer, and the edits it has seen. */
-export const live = { on: localStorage.getItem('landscaper.live') !== 'off', timer: null, running: false, again: false, edits: 0 };
+export const live = { on: store.get('landscaper.live') !== 'off', timer: null, running: false, again: false, edits: 0 };
 
 // Live check: Check paths again a moment after each edit, one at a time
 // (serve does one request at a time; an export waits behind it). A result
 // for an area that has changed since is dropped and the check runs again.
 const LIVE_DELAY = 1500;
 
+/** Shows the live check on its button: `state` is 'ok', 'warn', 'bad', 'busy' or 'off', `text` its label and `title` its
+ *  tooltip. Off (or no engine) shows "Live off" whatever is asked. */
 export function showLive(state, text, title) {
     const b = $('btnLive'),
         on = live.on && engine.up;
@@ -32,6 +34,7 @@ export function showLive(state, text, title) {
           : 'The live path check needs the Landscaper engine, which is not running.';
 }
 
+/** Counts an edit and checks paths again a moment after the last one, when Live is on and the engine is there. */
 export function checkSoon() {
     if (ctx.readOnly()) return;
     live.edits++;
@@ -86,7 +89,7 @@ async function liveCheck() {
 
 // The markers on the map: shown or hidden (M), remembered; the checks go on.
 function showMarkers(on) {
-    localStorage.setItem('landscaper.markers', on ? 'on' : 'off');
+    store.set('landscaper.markers', on ? 'on' : 'off');
     ctx.view.setShowMarkers(on);
     $('btnMarkers').classList.toggle('active', on);
     $('btnMarkers').textContent = on ? 'Markers' : 'Markers hidden';
@@ -96,7 +99,7 @@ function showMarkers(on) {
 export function initLive(c) {
     ctx = c;
     $('btnMarkers').onclick = () => showMarkers(!$('btnMarkers').classList.contains('active'));
-    showMarkers(localStorage.getItem('landscaper.markers') !== 'off');
+    showMarkers(store.get('landscaper.markers') !== 'off');
 
     $('btnLive').onclick = async () => {
         // Off for want of the engine: started since? (Asking again sets engine.up when it answers.) Then the click turns it on.
@@ -107,7 +110,7 @@ export function initLive(c) {
             return;
         }
         live.on = wasDown || !live.on;
-        localStorage.setItem('landscaper.live', live.on ? 'on' : 'off');
+        store.set('landscaper.live', live.on ? 'on' : 'off');
         if (live.on) checkSoon();
         else {
             clearTimeout(live.timer);

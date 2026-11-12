@@ -10,9 +10,11 @@ import { saveSoon } from './save.js';
 /** What app.js gives this file (initWater): `area()` and `view`. */
 let ctx = null;
 
-// Water: a press starts a body (or takes the one clicked) and dragging up
-// or down sets its level; Shift drains the one clicked.
+// How much a body's level moves per pixel the pointer is dragged (m).
 const LEVEL_PER_PIXEL = 0.03;
+
+/** The Water tool's press at `p` (metres): starts a body there or takes the one clicked; Shift drains it. Returns what
+ *  waterDrag() needs, or null. `e` is the pointer event. */
 export function waterDown(e, p) {
     const i = Math.min(Math.max(Math.round(p.x / SPACING), 0), ctx.area().nx - 1);
     const j = Math.min(Math.max(Math.round(p.y / SPACING), 0), ctx.area().ny - 1);
@@ -35,6 +37,7 @@ export function waterDown(e, p) {
     return { body: b, startY: e.clientY, startLevel: b.level, ground: ctx.area().heights[b.j * ctx.area().nx + b.i] };
 }
 
+/** Dragging up or down sets the body's level. `w` is what waterDown() gave. */
 export function waterDrag(e, w) {
     w.body.level = Math.max(w.ground + 0.05, w.startLevel + (w.startY - e.clientY) * LEVEL_PER_PIXEL);
     waterChanged();
@@ -42,6 +45,7 @@ export function waterDrag(e, w) {
         `Water level ${w.body.level.toFixed(2)} m (${(w.body.level - w.ground).toFixed(1)} m deep where you clicked)`;
 }
 
+/** Floods the water again after a change and redraws it. */
 export function waterChanged() {
     ctx.area().floodWater();
     ctx.view.updateWater();

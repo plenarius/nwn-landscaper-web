@@ -9,6 +9,7 @@
 
 import { renderVars } from './vars.js';
 import { scriptPicker } from './scripts.js';
+import { $ } from './dom.js';
 
 const PVP = [
     [0, 'No PvP'],
@@ -67,8 +68,8 @@ const FIELDS = [
 
 /** Opens the dialog for `area`. `template`: what a new area starts with; `onSave()` after OK. */
 export function openSettings(area, template, lists, onSave) {
-    const dlg = document.getElementById('settingsDialog'),
-        body = document.getElementById('settingsBody');
+    const dlg = $('settingsDialog'),
+        body = $('settingsBody');
     const base = structuredClone(area.settings ?? {});
     const current = structuredClone(area.settings ?? template ?? {});
     delete current._note;
@@ -137,7 +138,7 @@ export function openSettings(area, template, lists, onSave) {
         });
     };
     drawVars();
-    const ok = document.getElementById('settingsOk');
+    const ok = $('settingsOk');
     ok.onclick = () => {
         const out = structuredClone(base);
         for (const [f, input, initial] of inputs) {

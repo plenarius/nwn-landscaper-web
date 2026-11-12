@@ -5,7 +5,7 @@
 // properties and the Area settings dialog.
 
 /** A variable's value as its type holds it (a number that isn't one becomes 0). */
-export function coerce(v) {
+function coerce(v) {
     if (v.type === 'string') return String(v.value ?? '');
     const n = Number(v.value);
     return Number.isFinite(n) ? (v.type === 'int' ? Math.trunc(n) : n) : 0;

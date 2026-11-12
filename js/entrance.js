@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// Cave entrances (landscaper src/entrance.rs): a notch carved into the
+// Cave entrances (landscaper src/generator/entrance.rs): a notch carved into the
 // slope (a flat floor, rock walls and a rim round it), with a rock hood and
 // a dark back that landscaper builds into the tile, and a transition door
 // at the back to link in the toolset.
@@ -15,7 +15,7 @@ import { SPACING } from './area.js';
 // this as a rocky outcrop, its outer slope steep so it is one compact
 // obstacle. (A walkable slope round a blocked crest made a ring NWN's
 // in-tile search loses itself in.)
-export const ROOF = 4.5;
+const ROOF = 4.5;
 const WALL = 1.2;
 const MOUND_SLOPE = 2.5;
 // The cut faces beside and behind the floor, painted with the cave's rock.
@@ -25,12 +25,14 @@ const RAMP = 0.5;
 // Open ground before the mouth kept in the notch's tile (fitInTile).
 const APPROACH = 3;
 
+/** Area coordinates (metres) of the point `u` m into entrance `e` along its direction and `v` m across it. */
 export function at(e, u, v) {
     const c = Math.cos(e.dir),
         s = Math.sin(e.dir);
     return [e.x + c * u - s * v, e.y + s * u + c * v];
 }
 
+/** The opposite of at(): area point (`x`, `y`) in metres as `[u, v]`, along entrance `e`'s direction and across it. */
 export function local(e, x, y) {
     const c = Math.cos(e.dir),
         s = Math.sin(e.dir),
@@ -175,7 +177,7 @@ export function nearest(entrances, x, y, within = 4) {
     return best;
 }
 
-// --- The cave mouth's shape (landscaper src/entrance.rs: keep in step) ---
+// --- The cave mouth's shape (landscaper src/generator/entrance.rs: keep in step) -------------------------------------
 
 const LIP = -0.6,
     SIDE = 0.3,
@@ -185,7 +187,7 @@ const LIP = -0.6,
 const seed = e => e.x * 0.37 + e.y * 0.61;
 
 /** u of the lip's edge at v: ragged. */
-export function lip(e, v) {
+function lip(e, v) {
     const s = seed(e);
     return LIP + 0.22 * Math.sin(2.3 * v + s) + 0.13 * Math.sin(5.1 * v + 2 * s);
 }

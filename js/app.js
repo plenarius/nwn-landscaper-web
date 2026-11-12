@@ -1,7 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// NWN Landscaper: sculpt an NWN area, export it with `landscaper serve`.
+// The page's start-up and wiring: makes the view and the tools, gives each feature file what it needs of the editor through its
+// init function, and handles the keys. Here: the tool buttons, the Paint tool's textures and eyedropper, Open, the Show menu, who
+// is signed in, the area's undo and settings, the keys, and opening the last area at start. Elsewhere: placeables (place.js),
+// importing (import.js), scatter (scatter.js), sky & fog (sky.js), the menus (menus.js), the pointer and its strokes (strokes.js),
+// water (water.js), entrances (entrancetool.js), activity, publish and the dev server (activity.js, publish.js, devtest.js),
+// autosave (save.js), the live path check (live.js), New area (newarea.js), and Export and Check paths (export.js).
 
 import { Area, DEFAULT_TEXTURE, SPACING } from './area.js';
 import { View } from './view.js';
@@ -14,8 +19,8 @@ import './newbp.js'; // (adds the builder's own blueprints to ThingsTool)
 import { ask } from './ask.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
-import { api, engine } from './api.js';
-import { $, el } from './dom.js';
+import { api, engine, failure, json, NEEDS_ENGINE } from './api.js';
+import { $, el, session, store } from './dom.js';
 import { initImport, reimport } from './import.js';
 import { initSky, showAreaSky } from './sky.js';
 import { initMenus } from './menus.js';
@@ -56,8 +61,6 @@ let tool = 'raise';
  *  `area`, `tool`, `me` and `readOnly` change (another area opened, another tool picked, /api/me answered), so they are getters,
  *  read each time they are needed. */
 const editor = { area: () => area, tool: () => tool, me: () => me, readOnly: () => readOnly, view };
-
-// --- Tools -----------------------------------------------------------------
 
 for (const [id, t] of Object.entries(TOOLS)) {
     const b = document.createElement('button');
@@ -131,8 +134,6 @@ $('btnWalk').onclick = () => {
     view.setShowWalkability(on);
 };
 
-// --- Textures ------------------------------------------------------------------
-
 const library = new TextureLibrary();
 let paintTexture = DEFAULT_TEXTURE;
 
@@ -175,10 +176,11 @@ function selectTexture(id) {
     library.layerPixels(id).catch(() => {});
 }
 
-library.load().then(ok => {
+// The library comes from the engine; it is loaded once /api/me has said whether there is one (see the start, at the end).
+async function loadLibrary() {
+    if (engine.up && (await library.load())) view.setLibrary(library);
     buildPalette();
-    if (ok) view.setLibrary(library);
-});
+}
 
 // The eyedropper: click the ground to paint with what is there. Ground you painted gives its library texture; the ground of an
 // imported area gives the tileset's own texture under the click, which the server puts in the library (as "Tileset") the first time.
@@ -234,14 +236,9 @@ async function pickTexture(p) {
     say(r.added ? `Picked ${r.name}: added to the Tileset textures.` : `Picked ${library.byId.get(r.id)?.name ?? r.name}.`);
 }
 
-// --- Placeables (place.js) --------------------------------------------------------------
-
 initPlace(editor);
 
-// --- Import an NWN area (import.js) -----------------------------------------------------
 initImport({ ...editor, openArea });
-
-// --- Open --------------------------------------------------------------------------------
 
 $('btnOpen').onclick = async () => {
     const list = $('openList');
@@ -272,7 +269,8 @@ $('btnOpen').onclick = async () => {
         who.append('Workspace', pick);
     }
     // Areas only saved here (never exported) too.
-    const local = Object.keys(localStorage)
+    const local = store
+        .keys()
         .filter(k => k.startsWith('landscaper.area.'))
         .map(k => k.slice(16));
     for (const name of local) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
@@ -305,21 +303,20 @@ $('btnOpen').onclick = async () => {
         }
         list.appendChild(row);
     }
-    if (!areas.length) list.textContent = 'No areas yet: export one first.';
+    if (!areas.length) list.textContent = engine.up ? 'No areas yet: export one first.' : NEEDS_ENGINE;
 };
 
 /** Opens area `a`: from landscaper (its saved copy, else its last export),
  *  or from this browser if it only lives here (a save that failed). */
 async function openArea(a) {
-    const local = localStorage.getItem(`landscaper.area.${a.name}`);
+    const local = store.get(`landscaper.area.${a.name}`);
     try {
         if (local && a.local) {
             setArea(Area.fromJSON(JSON.parse(local)));
         } else {
             const res = await api(`/api/area?name=${encodeURIComponent(a.name)}`);
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || res.statusText);
-            setArea(Area.fromJSON(json));
+            if (!res.ok) throw new Error(await failure(res));
+            setArea(Area.fromJSON(await res.json()));
         }
         $('statusMsg').textContent = `Opened ${area.name} (module ${area.module}).`;
         saveSoon();
@@ -328,11 +325,7 @@ async function openArea(a) {
     }
 }
 
-// --- Scatter (scatter.js) ------------------------------------------------------------------
-
 initScatter(editor);
-
-// --- Sky & fog (sky.js), the top bar's menus (menus.js) --------------------------------
 
 initSky({ ...editor, saveSoon });
 initMenus();
@@ -345,8 +338,6 @@ $('skyClose').onclick = () => {
     skyOpen = false;
     updatePanels();
 };
-
-// --- Sculpting: the pointer and its strokes (strokes.js), water (water.js), entrances (entrancetool.js) ----------
 
 const canvas = view.renderer.domElement;
 initWater(editor);
@@ -390,7 +381,7 @@ initStrokes({
         cutH = $('cutHeight'),
         cutOut = $('cutOut');
     try {
-        const k = JSON.parse(localStorage.getItem('landscaper.cut') ?? 'null');
+        const k = JSON.parse(store.get('landscaper.cut') ?? 'null');
         if (k) {
             cutOn.checked = !!k.on;
             cutH.value = k.h ?? 3;
@@ -402,11 +393,7 @@ initStrokes({
         cutOut.textContent = `${cutH.value} m`;
         $('cutRow').style.opacity = cutOn.checked ? '1' : '0.5';
         view.setCut(cutOn.checked ? +cutH.value : null);
-        try {
-            localStorage.setItem('landscaper.cut', JSON.stringify({ on: cutOn.checked, h: +cutH.value }));
-        } catch {
-            /* not kept */
-        }
+        store.set('landscaper.cut', JSON.stringify({ on: cutOn.checked, h: +cutH.value }));
     };
     cutOn.onchange = cut;
     cutH.oninput = cut;
@@ -415,8 +402,6 @@ initStrokes({
     $('showNone').onclick = () => all(false);
     label();
 }
-
-// --- Area: open one, who is signed in, undo -------------------------------------------
 
 function setArea(a) {
     area = a;
@@ -437,8 +422,7 @@ let readOnly = false;
 
 async function loadMe() {
     const res = await api('/api/me');
-    if (res.status === 401 || res.status === 403)
-        showError((await res.json().catch(() => ({}))).error || 'You are not signed in.', 'Not signed in');
+    if (res.status === 401 || res.status === 403) showError((await json(res)).error || 'You are not signed in.', 'Not signed in');
     else if (res.ok) {
         try {
             me = await res.json();
@@ -451,10 +435,14 @@ async function loadMe() {
     showEngine();
 }
 
-/** Without the engine the page sculpts and paints; the banner says so once, and Live stays off. */
+/** Without the engine the page sculpts; the banner says so once, and Live stays off. The texture library comes from the engine:
+ *  loaded the first time it answers (without it, the Paint panel says why it is empty). */
 function showEngine() {
     $('noEngine').hidden = engine.up;
     if (!engine.up) showLive('off');
+    if (library.catalog.length) return;
+    if (engine.up) loadLibrary();
+    else buildPalette();
 }
 $('noEngineClose').onclick = () => {
     $('noEngine').hidden = true;
@@ -496,8 +484,6 @@ function showWho() {
     }
 }
 
-// --- Activity (activity.js), Publish (publish.js), Test on the dev server (devtest.js) ----------
-
 initActivity();
 initPublish(editor);
 initDevTest(editor);
@@ -510,8 +496,6 @@ async function viewAs(user) {
     await api(`/api/view-as?user=${encodeURIComponent(user)}`, { method: 'POST' });
     location.reload();
 }
-
-// --- The live path check and the markers (live.js) ------------------------------------------
 
 initLive({ ...editor, stroke: currentStroke, showEngine });
 
@@ -568,14 +552,10 @@ $('btnRedo').onclick = () => {
 // The New area dialog (newarea.js).
 initNewArea({ ...editor, setArea, saveSoon, thingsTool });
 
-// --- Export and Check paths (export.js) ----------------------------------------------------
-
 initExport(editor);
 
 // The report box (report.js).
 initReport();
-
-// --- Keys -------------------------------------------------------------------------
 
 const STEP = Math.PI / 36; // 5 degrees
 function cameraKey(e) {
@@ -601,7 +581,7 @@ function cameraKey(e) {
 }
 
 window.addEventListener('keydown', e => {
-    // F5 / Ctrl+R reload, as in a browser (the app's window has no such keys).
+    // F5 / Ctrl+R reload. A browser tab does that itself; a window opened with `--app` (Chrome, Edge) has no reload key.
     if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r')) {
         e.preventDefault();
         location.reload();
@@ -614,6 +594,12 @@ window.addEventListener('keydown', e => {
     // The camera: arrows move along the ground, Shift+arrows turn the view, + and - zoom, Home looks straight down (F frames).
     if (!transformer.active && !e.ctrlKey && !e.metaKey && !e.altKey && cameraKey(e)) {
         e.preventDefault();
+        return;
+    }
+    // Escape closes Sky & fog, which lies over the tools' panels.
+    if (e.key === 'Escape' && skyOpen) {
+        skyOpen = false;
+        updatePanels();
         return;
     }
     if (tool === 'things' && !readOnly && thingsTool.key(e)) {
@@ -677,31 +663,30 @@ window.addEventListener('keydown', e => {
     else if (key === 'm') $('btnMarkers').click();
 });
 
-// --- Start ---------------------------------------------------------------------------
-
 // The area last open: from landscaper, or this browser if it couldn't take it.
 await loadMe();
+loadLibrary();
 // A reviewer's link (?review=<builder>/<area>, in a pull request): an admin looks at that builder's area, read-only.
 let reviewArea = null;
 {
     const review = new URLSearchParams(location.search).get('review');
     const [who, name] = (review ?? '').split('/');
     if (review && me.team && me.admin && who && name) {
-        if (me.viewing !== who && !sessionStorage.getItem('landscaper.review')) {
-            sessionStorage.setItem('landscaper.review', '1');
+        if (me.viewing !== who && !session.get('landscaper.review')) {
+            session.set('landscaper.review', '1');
             await api(`/api/view-as?user=${encodeURIComponent(who)}`, { method: 'POST' });
             location.reload();
             await new Promise(() => {}); // (the page is reloading)
         }
-        sessionStorage.removeItem('landscaper.review');
+        session.remove('landscaper.review');
         if (me.viewing === who) reviewArea = name;
         history.replaceState(null, '', location.pathname);
     }
 }
 if (!readOnly) await moveBrowserAreas();
 {
-    const current = reviewArea ?? localStorage.getItem('landscaper.current');
-    const local = !reviewArea && current && localStorage.getItem(`landscaper.area.${current}`);
+    const current = reviewArea ?? store.get('landscaper.current');
+    const local = !reviewArea && current && store.get(`landscaper.area.${current}`);
     let opened = null;
     if (current && (!local || reviewArea)) {
         try {

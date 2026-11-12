@@ -5,6 +5,7 @@
 
 import { $, el } from './dom.js';
 
+/** Shows what an export or a path check (`checkOnly`) found in the report box: `r` is the engine's report. */
 export function showReport(r, checkOnly = false) {
     const failed = r.warnings.filter(w => w.kind === 'failed_route').length;
     const closed = r.warnings.filter(w => w.kind === 'closed_passage').length;
