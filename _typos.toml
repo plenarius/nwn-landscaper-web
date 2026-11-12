@@ -23,7 +23,7 @@ conver = "conver" # the GFF field `EndConverAbort`
 lod = "lod" # level of detail
 metalness = "metalness" # PBR materials (glTF, three.js)
 
-# Short names from the game's formulas and the research notes (`pn`: a path node), kept as the game names them.
+# Short names in the game's formulas and in notes on how the game behaves (`pn`: a path node).
 iy = "iy"
 pn = "pn"
 ba = "ba"

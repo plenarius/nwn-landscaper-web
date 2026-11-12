@@ -122,7 +122,7 @@ fi
 # A nested project is checked again by the outer one: its licences and secrets are part of the outer repository.
 if [[ -z "${CHECK_NESTED:-}" ]]; then
     step "REUSE (every file has its copyright and licence)"
-    # --root: in a folder of a larger repository (nwn-bake in crates/), lint the folder, not the whole repository.
+    # --root: in a folder of a larger repository (a nested project), lint the folder, not the whole repository.
     have reuse && run reuse reuse --root . lint --quiet
     step "gitleaks (the tree, then every commit)"
     if have gitleaks; then
