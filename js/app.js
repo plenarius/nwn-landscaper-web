@@ -9,6 +9,7 @@ import { TOOLS } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { ThingsTool } from './things.js';
+import './thingprops.js'; // (adds the properties panel to ThingsTool)
 import './newbp.js'; // (adds the builder's own blueprints to ThingsTool)
 import { ask } from './ask.js';
 import { THING_COLOURS, css } from './thingcolours.js';
