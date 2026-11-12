@@ -1,0 +1,412 @@
+/* SPDX-FileCopyrightText: Copyright (C) 2026 plenarius */
+/* SPDX-License-Identifier: MIT */
+
+/* The Open and Import dialogs, who is editing, the activity list, the Publish dialog's progress, the selected
+   placeable's numbers and the question dialog. */
+
+.open-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 60vh;
+    overflow-y: auto;
+    min-width: 360px;
+}
+.open-list button {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    text-align: left;
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 8px;
+}
+.open-list button:hover {
+    background: #3a4452;
+}
+.open-list small {
+    color: var(--muted);
+}
+.entrance-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
+    border-bottom: 1px solid #000;
+    font-size: 13px;
+}
+.entrance-row select {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+#importDialog {
+    width: min(1000px, 92vw);
+}
+#openDialog {
+    width: min(760px, 92vw);
+}
+#importDialog input {
+    box-sizing: border-box;
+    width: 100%;
+}
+.import-list {
+    max-height: 40vh;
+    min-width: 0;
+}
+.import-list button.selected {
+    border-color: var(--accent);
+    background: #3d3a30;
+}
+#importStatus:empty {
+    display: none;
+}
+/* The two ways to bring an area in, set apart: the module's areas, then (after an "or") one's own file. */
+.import-src {
+    border: 1px solid #000;
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.02);
+}
+.import-src h3 {
+    margin: 0 0 8px;
+    font-size: 15px;
+}
+.import-src label {
+    margin-top: 0;
+}
+.import-or {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+.import-or::before,
+.import-or::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid #3a4452;
+}
+.import-own {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+.import-own h3 {
+    margin-bottom: 4px;
+}
+.import-own small {
+    display: block;
+    color: var(--muted);
+}
+.file-pick {
+    position: relative;
+    margin: 0;
+    flex: none;
+    padding: 8px 14px;
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.file-pick:hover {
+    background: #3a4452;
+}
+.file-pick:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+#importDialog .file-pick input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+.import-name {
+    margin-top: 14px;
+}
+@media (max-width: 560px) {
+    .import-own {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .file-pick {
+        text-align: center;
+    }
+}
+.size-free {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+}
+.size-free label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+.size-free input {
+    width: 4.5em;
+}
+.open-row {
+    display: flex;
+    gap: 6px;
+}
+.open-row > button:first-child {
+    flex: 1;
+}
+.open-list button.reimport {
+    flex: none;
+    justify-content: center;
+    align-items: center;
+    color: var(--muted);
+}
+.open-list button.reimport:hover {
+    color: var(--text);
+}
+#report details {
+    margin: -4px 0 10px 14px;
+}
+#report summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 13px;
+}
+#report details p {
+    margin: 6px 0 0;
+    line-height: 1.45;
+}
+/* Buttons that can't be used now (a re-import or import running): greyed,
+   no hover, no clicks; the one doing the work stays readable. */
+dialog button:disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+dialog button:disabled:hover {
+    background: var(--panel-2);
+}
+dialog button.busy:disabled {
+    opacity: 1;
+    color: var(--accent);
+}
+#who {
+    margin-right: 14px;
+    color: var(--muted);
+}
+#who.viewing {
+    color: var(--warn);
+    font-weight: 600;
+}
+#who button {
+    margin-left: 8px;
+    padding: 1px 8px;
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+}
+.open-who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.open-who select {
+    flex: 1;
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 5px;
+}
+#activityDialog {
+    width: min(1200px, 94vw);
+}
+.activity-filters {
+    display: flex;
+    align-items: end;
+    gap: 14px;
+    margin-bottom: 10px;
+}
+.activity-filters label {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+}
+.activity-filters input,
+.activity-filters select {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 5px 8px;
+}
+.activity-filters button {
+    padding: 6px 14px;
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 8px;
+}
+.activity-table {
+    max-height: 62vh;
+    overflow: auto;
+    border: 1px solid #000;
+    border-radius: 8px;
+}
+.activity-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.activity-table th {
+    position: sticky;
+    top: 0;
+    text-align: left;
+    background: #1f252c;
+    padding: 7px 10px;
+    color: var(--muted);
+    font-weight: 600;
+}
+.activity-table td {
+    padding: 5px 10px;
+    border-top: 1px solid #1d2228;
+    vertical-align: top;
+}
+.activity-table td.bad {
+    color: var(--bad);
+}
+.activity-table td.ok {
+    color: var(--good);
+}
+.activity-table tr:hover td {
+    background: #2b323b;
+}
+
+/* Publish dialog: a moving bar while it works, errors in red, done in green. */
+#publishDialog {
+    width: min(640px, 92vw);
+}
+#pubText.err,
+#testStatus.err {
+    color: var(--bad);
+    font-weight: 600;
+}
+#pubText.ok,
+#testStatus.ok {
+    color: #5cc46a;
+}
+#testStatus.work {
+    color: #8fb3e0;
+}
+.progress {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--panel-2);
+    overflow: hidden;
+    margin: 10px 0 4px;
+}
+.progress span {
+    display: block;
+    height: 100%;
+    width: 35%;
+    border-radius: 3px;
+    background: var(--accent);
+    animation: progressSlide 1.2s ease-in-out infinite;
+}
+@keyframes progressSlide {
+    0% {
+        margin-left: -35%;
+    }
+    100% {
+        margin-left: 100%;
+    }
+}
+.elapsed {
+    color: var(--muted);
+    font-size: 12px;
+    margin: 0 0 8px;
+}
+
+/* The selected placeable's numbers. */
+#objPanel {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #000;
+}
+#objPanel h4 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+}
+.numgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+}
+.numgrid label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--muted);
+}
+.numgrid input {
+    width: 100%;
+    padding: 5px 6px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+}
+#objPanel .note {
+    font-size: 12px;
+}
+
+/* A question to the person (in place of the browser's own pop-ups). */
+#askDialog {
+    width: min(520px, 92vw);
+}
+#askText p {
+    margin: 0 0 10px;
+}
+#askLabel {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0 4px;
+    font-size: 14px;
+}
+#askLabel input {
+    padding: 8px 10px;
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 8px;
+}
+#askOk.danger {
+    background: #8a2f22;
+    border-color: #000;
+}
+#askOk.danger:hover {
+    background: var(--bad-fill);
+}

@@ -1,0 +1,198 @@
+/* SPDX-FileCopyrightText: Copyright (C) 2026 plenarius */
+/* SPDX-License-Identifier: MIT */
+
+/* The review summary in the Publish dialog, the blueprint, dialogue and script editors, and the ramp and descent panels. */
+
+/* The summary a reviewer will read, shown in the Publish dialog. */
+.review-box {
+    margin: 8px 0;
+    font-size: 13px;
+}
+.review-box summary {
+    cursor: pointer;
+    color: var(--muted);
+}
+.review-box pre {
+    max-height: 220px;
+    overflow: auto;
+    margin: 6px 0 0;
+    padding: 8px;
+    white-space: pre-wrap;
+    background: var(--panel-2);
+    border-radius: 6px;
+    font:
+        12px / 1.4 ui-monospace,
+        monospace;
+}
+
+.thingmake {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+.thingmake button {
+    text-align: left;
+    white-space: normal;
+}
+#bpDialog {
+    width: min(560px, 92vw);
+}
+#bpBody {
+    max-height: 60vh;
+    overflow: auto;
+    padding-right: 6px;
+}
+#bpBody fieldset {
+    border: 1px solid #000;
+    border-radius: 8px;
+    margin: 0 0 10px;
+    padding: 4px 10px 10px;
+}
+#bpBody legend {
+    color: var(--muted);
+    padding: 0 6px;
+}
+#bpBody label {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 8px;
+    align-items: center;
+    margin: 6px 0;
+}
+#bpBody input,
+#bpBody textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#dlgDialog {
+    width: min(780px, 94vw);
+}
+.dlgtree {
+    max-height: 66vh;
+    overflow: auto;
+    padding-right: 6px;
+}
+.dlgnode {
+    border-left: 3px solid var(--accent);
+    margin: 8px 0 8px 0;
+    padding: 4px 0 4px 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0 6px 6px 0;
+}
+.dlgnode.pc {
+    border-left-color: #5b9bd5;
+}
+.dlgnode .dlgkids {
+    margin-left: 14px;
+}
+.dlghead {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.dlghead button {
+    padding: 0 8px;
+}
+.dlgnode textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+.dlgmore {
+    margin: 4px 0;
+}
+.dlgmore label {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 8px;
+    margin: 4px 0;
+}
+.dlgbar {
+    display: flex;
+    gap: 8px;
+    margin: 6px 0 2px 14px;
+}
+.dlgnode textarea,
+#bpBody textarea {
+    background: var(--panel-2);
+    color: inherit;
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font: inherit;
+}
+
+.propform {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+}
+.propmore {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+#scriptDialog {
+    width: min(900px, 96vw);
+}
+.scripthost {
+    height: 56vh;
+    border: 1px solid #000;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.scripthost .cm-editor {
+    height: 100%;
+}
+.scriptbtns {
+    display: flex;
+    gap: 6px;
+    grid-column: 1 / -1;
+}
+.scriptbtns button.small {
+    padding: 2px 10px;
+    font-size: 12px;
+}
+
+.dlgtree.ro .dlgbar,
+.dlgtree.ro .dlghead button {
+    display: none;
+}
+.dlgtree.ro textarea,
+.dlgtree.ro input {
+    opacity: 0.85;
+}
+#bpBody input[type="number"],
+#bpBody input[type="search"] {
+    background: var(--panel-2);
+    color: inherit;
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font: inherit;
+}
+#rampPanel label,
+#descentPanel label {
+    display: block;
+    margin: 10px 0 4px;
+}
+#rampPanel input[type="number"],
+#descentPanel input[type="number"] {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--panel-2);
+    color: inherit;
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font: inherit;
+}
+#rampPanel label.check,
+#descentPanel label.check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
