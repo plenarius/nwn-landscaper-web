@@ -224,7 +224,7 @@
 
     <div id="noEngine" role="status" hidden>
         <b>No engine: sculpting only.</b>
-        <span>The Landscaper engine (<code>landscaper serve</code>) isn't running, so importing, exporting, the path check, the texture library and the game's models and blueprints are off. Sculpting and painting work, and the browser keeps your area.</span>
+        <span>The Landscaper engine (<code>landscaper serve</code>) isn't running, so importing, exporting, the path check, the texture library and the game's models and blueprints are off. Sculpting works, and the browser keeps your area.</span>
         <a href="https://github.com/plenarius/landscaper-web#run" target="_blank" rel="noopener">How to start the engine</a>
         <button type="button" id="noEngineClose" title="Hide this" aria-label="Hide this">×</button>
     </div>
@@ -235,7 +235,7 @@
         <span id="statusMsg"></span>
     </footer>
 
-    <dialog id="scriptDialog">
+    <dialog id="scriptDialog" aria-labelledby="scriptTitle">
         <h2 id="scriptTitle">Script</h2>
         <p class="note">Your own script. It is saved and checked by the game's own compiler as you type, and goes to review with what uses it.</p>
         <div id="scriptHost" class="scripthost"></div>
@@ -246,7 +246,7 @@
             <button type="button" onclick="document.getElementById('scriptDialog').close()">Close</button>
         </div>
     </dialog>
-    <dialog id="dlgDialog">
+    <dialog id="dlgDialog" aria-labelledby="dlgTitle">
         <h2 id="dlgTitle">Conversation</h2>
         <p class="note" id="dlgNote">Your own conversation. Changes are saved as you make them and go to review with what uses it.</p>
         <div id="dlgTree" class="dlgtree"></div>
@@ -256,7 +256,7 @@
             <button type="button" onclick="document.getElementById('dlgDialog').close()">Close</button>
         </div>
     </dialog>
-    <dialog id="bpDialog">
+    <dialog id="bpDialog" aria-labelledby="bpTitle">
         <h2 id="bpTitle">Blueprint</h2>
         <p class="note">Your own blueprint. Changes are saved as you make them and go to review with the area that uses it.</p>
         <div id="bpBody" class="bpbody"></div>
@@ -266,9 +266,9 @@
             <button type="button" onclick="document.getElementById('bpDialog').close()">Close</button>
         </div>
     </dialog>
-    <dialog id="newDialog">
+    <dialog id="newDialog" aria-labelledby="newTitle">
         <form method="dialog">
-            <h2>New area</h2>
+            <h2 id="newTitle">New area</h2>
             <label>Name <small>1–9 letters, digits or _ (prefixes every resref)</small>
                 <input type="text" id="newName" required pattern="[a-z0-9_]{1,9}" maxlength="9" value="myarea"></label>
             <label>Module <small>its NWN module; another area's to link to it (a cave beside its surface). Empty: its own</small>
@@ -297,16 +297,16 @@
         </form>
     </dialog>
 
-    <dialog id="openDialog">
+    <dialog id="openDialog" aria-labelledby="openTitle">
         <form method="dialog">
-            <h2>Open an area</h2>
+            <h2 id="openTitle">Open an area</h2>
             <div id="openWho" class="open-who" hidden></div>
             <div id="openList" class="open-list"></div>
             <div class="dialog-buttons"><button type="button" id="btnImport">Import an NWN area…</button><button type="submit" value="cancel">Cancel</button></div>
         </form>
     </dialog>
 
-    <dialog id="publishDialog">
+    <dialog id="publishDialog" aria-labelledby="pubTitle">
         <form method="dialog">
             <h2 id="pubTitle">Publish to the team</h2>
             <p class="note" id="pubText"></p>
@@ -322,9 +322,9 @@
         </form>
     </dialog>
 
-    <dialog id="testDialog">
+    <dialog id="testDialog" aria-labelledby="testTitle">
         <form method="dialog">
-            <h2>Test on the dev server</h2>
+            <h2 id="testTitle">Test on the dev server</h2>
             <p class="note" id="testStatus"></p>
             <div id="testForm">
                 <p class="note">Puts your last export of this module on the dev server, with a temporary way in from an existing area. One person tests at a time; it frees itself after an hour of nothing.</p>
@@ -343,9 +343,9 @@
         </form>
     </dialog>
 
-    <dialog id="activityDialog">
+    <dialog id="activityDialog" aria-labelledby="activityTitle">
         <form method="dialog">
-            <h2>Activity</h2>
+            <h2 id="activityTitle">Activity</h2>
             <div class="activity-filters">
                 <label>Who <input type="text" id="actUser" placeholder="anyone" autocomplete="off"></label>
                 <label>What <select id="actAction">
@@ -359,15 +359,15 @@
         </form>
     </dialog>
 
-    <dialog id="settingsDialog">
+    <dialog id="settingsDialog" aria-labelledby="settingsTitle">
         <form method="dialog">
-            <h2>Area settings</h2>
+            <h2 id="settingsTitle">Area settings</h2>
             <div id="settingsBody" class="settingsbody"></div>
             <div class="dialog-buttons"><button type="submit" value="ok" id="settingsOk">OK</button><button type="submit" value="cancel">Cancel</button></div>
         </form>
     </dialog>
 
-    <dialog id="askDialog">
+    <dialog id="askDialog" aria-labelledby="askTitle">
         <form method="dialog">
             <h2 id="askTitle">Question</h2>
             <div id="askText" class="note"></div>
@@ -377,9 +377,9 @@
         </form>
     </dialog>
 
-    <dialog id="importDialog">
+    <dialog id="importDialog" aria-labelledby="importTitle">
         <form method="dialog">
-            <h2>Import an NWN area</h2>
+            <h2 id="importTitle">Import an NWN area</h2>
             <p class="note">Its ground, cliffs, trees and water come in on the tileset's own textures; its placeables, creatures, doors and scripts come with it on export.</p>
             <section class="import-src">
                 <h3>From the module</h3>

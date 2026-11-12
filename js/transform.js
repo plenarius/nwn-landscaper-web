@@ -21,6 +21,7 @@ const SCALE_RANGE = [0.1, 5];
 
 const LABEL = { move: 'Move', rotate: 'Turn', scale: 'Size' };
 
+/** Moving, turning and sizing the selected object, from the keys and from its handles: see the top of this file. */
 export class Transformer {
     /**
      * @param {object} d
@@ -45,7 +46,7 @@ export class Transformer {
         return this.mode !== null;
     }
 
-    // --- The handles -----------------------------------------------------------------------
+    // --- The handles -------------------------------------------------------------------------------------------------
 
     /** Draws the handles at the selected object (or removes them). */
     show(o) {
@@ -123,7 +124,7 @@ export class Transformer {
         return hits[0]?.object.userData.handle ?? null;
     }
 
-    // --- Starting, following, finishing ----------------------------------------------------
+    // --- Starting, following, finishing ------------------------------------------------------------------------------
 
     /** Starts a transform of the selected object. `held`: from a handle, so releasing confirms. */
     begin(mode, axis = null, held = false, at = null) {

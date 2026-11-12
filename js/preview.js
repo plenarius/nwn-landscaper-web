@@ -122,8 +122,10 @@ export async function modelPreview(models, kind, resref) {
     }
 }
 
-/** An item blueprint's inventory icon (the review service says which one it is and draws it): a URL, or null. */
+// Each item's icon, asked for once.
 const icons = new Map();
+
+/** An item blueprint's inventory icon (the review service says which one it is and draws it): a URL, or null. */
 export function itemPreview(resref) {
     if (!icons.has(resref)) {
         icons.set(

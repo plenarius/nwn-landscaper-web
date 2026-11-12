@@ -11,9 +11,8 @@ import { ThingsTool } from './things.js';
 import { conversationPicker } from './dialogs.js';
 import { scriptPicker } from './scripts.js';
 import { ask } from './ask.js';
-import { api } from './api.js';
-
-const json = r => r.json().catch(() => ({}));
+import { api, failure, json } from './api.js';
+import { $ } from './dom.js';
 
 /** The blueprint file type of each kind the builder can make their own of. */
 const EXT = { creature: 'utc', item: 'uti', placeable: 'utp', door: 'utd', store: 'utm' };
@@ -297,8 +296,8 @@ ThingsTool.prototype.bpCreateForm = function (box, from) {
 
 /** The dialog that changes one of the builder's blueprints. Each setting is saved as it is changed. */
 ThingsTool.prototype.bpEdit = async function (ext, resref) {
-    const dlg = document.getElementById('bpDialog');
-    const body = document.getElementById('bpBody');
+    const dlg = $('bpDialog');
+    const body = $('bpBody');
     body.textContent = 'Loading…';
     dlg.showModal();
     const res = await api(`/api/new-blueprint?ext=${ext}&resref=${encodeURIComponent(resref)}`);
@@ -307,9 +306,9 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         body.textContent = d.error || res.statusText;
         return;
     }
-    document.getElementById('bpTitle').textContent = `${d.name || d.resref} (${d.resref})`;
+    $('bpTitle').textContent = `${d.name || d.resref} (${d.resref})`;
     body.textContent = '';
-    const status = document.getElementById('bpStatus');
+    const status = $('bpStatus');
     status.textContent = '';
     const byLabel = new Map(d.fields.map(f => [f.label, f]));
     const order = (NAMES[ext] ?? []).filter(([l]) => byLabel.has(l));
@@ -348,7 +347,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
             status.className = r.ok ? 'note' : 'note err';
             status.textContent = r.ok ? 'Saved.' : out.error || r.statusText;
             if (r.ok) {
-                document.getElementById('bpTitle').textContent = `${out.name || out.resref} (${out.resref})`;
+                $('bpTitle').textContent = `${out.name || out.resref} (${out.resref})`;
                 this.search();
             }
         };
@@ -361,7 +360,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     }
     if (ext === 'uti') await this.bpProperties(resref, body);
     if (ext === 'utc' || ext === 'utm' || (ext === 'utp' && byLabel.get('HasInventory'))) await this.bpGear(resref, body, ext);
-    document.getElementById('bpDelete').onclick = async () => {
+    $('bpDelete').onclick = async () => {
         if (
             !(await ask({
                 title: `Delete ${resref}?`,
@@ -373,9 +372,9 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
             return;
         const res = await api(`/api/new-blueprint-delete?ext=${ext}&resref=${encodeURIComponent(resref)}`, { method: 'POST' });
         if (!res.ok) {
-            const status = document.getElementById('bpStatus');
+            const status = $('bpStatus');
             status.className = 'note err';
-            status.textContent = `Not deleted: ${(await json(res)).error || res.statusText}`;
+            status.textContent = `Not deleted: ${await failure(res)}`;
             return;
         }
         dlg.close();
@@ -415,7 +414,7 @@ ThingsTool.prototype.bpProperties = async function (resref, body) {
         });
         if (!(d.properties ?? []).length) list.textContent = 'None.';
         cost.textContent = `Worth ${(d.cost ?? 0).toLocaleString()} gold (worked out as the game does).`;
-        const t = document.getElementById('bpStatus');
+        const t = $('bpStatus');
         if (d.error) {
             t.className = 'note err';
             t.textContent = d.error;
@@ -513,7 +512,7 @@ ThingsTool.prototype.bpGear = async function (resref, body, ext = 'utc') {
     const put = async patch => {
         const r = await api(url, { method: 'POST', body: JSON.stringify(patch) });
         const out = await json(r);
-        const st = document.getElementById('bpStatus');
+        const st = $('bpStatus');
         st.className = r.ok ? 'note' : 'note err';
         st.textContent = r.ok ? 'Saved.' : out.error || r.statusText;
         if (r.ok) c = await json(await api(`/api/blueprint-contents?kind=${kind}&resref=${encodeURIComponent(resref)}`));

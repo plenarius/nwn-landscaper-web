@@ -13,4 +13,6 @@ export const THING_COLOURS = {
     door: 0xc08a5a,
     placeable: 0x9aa7b4,
 };
+
+/** A colour from THING_COLOURS (a number, 0xrrggbb) as CSS `#rrggbb`. */
 export const css = hex => `#${hex.toString(16).padStart(6, '0')}`;

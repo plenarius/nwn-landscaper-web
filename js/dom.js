@@ -16,3 +16,38 @@ export function el(tag, props = {}, ...kids) {
 
 /** The page's element with id `id` (null when there is none). */
 export const $ = id => document.getElementById(id);
+
+/**
+ * Storage in this browser that never throws. With the site's data blocked (cookies off for it, some private modes) even
+ * reading `localStorage` throws `SecurityError`, and a full one throws on writing; the page works without it, so `get` then
+ * answers null, `keys` an empty list, and `set` and `remove` return false. `which()` names the browser's storage.
+ */
+function storage(which) {
+    const guard = (f, otherwise) => {
+        try {
+            return f(which());
+        } catch {
+            return otherwise;
+        }
+    };
+    return {
+        get: key => guard(s => s.getItem(key), null),
+        set: (key, value) =>
+            guard(s => {
+                s.setItem(key, value);
+                return true;
+            }, false),
+        remove: key =>
+            guard(s => {
+                s.removeItem(key);
+                return true;
+            }, false),
+        keys: () => guard(s => Object.keys(s), []),
+    };
+}
+
+/** `localStorage` through storage(): kept in this browser. */
+export const store = storage(() => localStorage);
+
+/** `sessionStorage` through storage(): kept until the tab closes. */
+export const session = storage(() => sessionStorage);

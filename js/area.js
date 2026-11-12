@@ -12,7 +12,7 @@ import { defaultAtmosphere, copyPreset, PRESETS } from './atmosphere.js';
 export const TILE = 10;
 export const DEFAULT_TEXTURE = 'grassMedium';
 export const SPACING = 0.625;
-export const SAMPLES_PER_TILE = TILE / SPACING;
+const SAMPLES_PER_TILE = TILE / SPACING;
 // landscaper's slope limit: a sample is walkable if no neighbour rises more
 // than this over one spacing (normal z >= 0.64, about 50 degrees).
 const WALKABLE_NZ = 0.64;
@@ -24,6 +24,8 @@ export const SHALLOW = 0.5;
 export const CAVE_ROCK = 6;
 export const VOID_BELOW = 0.3;
 
+/** An area being edited: its ground (heights and textures on a 0.625 m grid), and the objects, water, entrances, things and
+ *  settings on it, with undo. Saved and sent to the engine as JSON (toJSON, fromJSON). */
 export class Area {
     /** `tiles` across (west to east), `tilesY` up (south to north). */
     constructor(name, tiles, heights, materials, palette, tilesY = tiles) {

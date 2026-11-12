@@ -10,8 +10,10 @@
 // turns by rotation.y = its bearing.
 
 import * as THREE from 'three';
-import { api } from './api.js';
+import { api, json } from './api.js';
 
+/** The game's placeable models from the engine: the list to search, each model's outline (`flat`), its 3D group, its textures
+ *  and a thumbnail, each loaded once and kept. */
 export class ModelLibrary {
     constructor() {
         this.list = null; // [{ row, label, name, model }]
@@ -26,7 +28,7 @@ export class ModelLibrary {
     async load() {
         if (this.list?.length) return this.list;
         const res = await api('/api/placeables');
-        this.list = res.ok ? ((await res.json().catch(() => ({}))).placeables ?? []) : [];
+        this.list = res.ok ? ((await json(res)).placeables ?? []) : [];
         return this.list;
     }
 

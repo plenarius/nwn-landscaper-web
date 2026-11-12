@@ -41,6 +41,7 @@ export async function modelResults(box, query, pick) {
 }
 
 let placeShown = null;
+/** Fills the Place panel with the placeables matching its search box (rocks when empty), unless they already show. */
 export async function showPlaceables() {
     const query = $('placeSearch').value.trim() || 'rock';
     if (query === placeShown) return;
@@ -85,6 +86,7 @@ export function groundUnder(o, flat) {
     return Math.min(...corners.map(([x, y]) => ctx.area().heightAt(o.x + (c * x - s * y) * o.scale, o.y + (s * x + c * y) * o.scale)));
 }
 
+/** Removes placed object `o` from the area (undoable), and deselects it. */
 export function removeObject(o) {
     ctx.area().beginStroke();
     ctx.area().objects = ctx.area().objects.filter(x => x !== o);
@@ -102,6 +104,7 @@ function showPlaceMode(baked) {
 /** placeables.2da's row of a model (placeable mode's appearance). */
 export const appearanceOf = model => models.list?.find(p => p.model === model)?.row;
 
+/** Selects placed object `o` (null: none): its handles, its panel and the keys it takes on the status line. */
 export function selectObject(o) {
     ctx.view.select(o);
     transformer.show(o);
@@ -118,6 +121,8 @@ export function selectObject(o) {
     }
 }
 
+/** The Place tool's press on the ground at `p` (metres): selects the object under the pointer (Shift: removes it), or places
+ *  the chosen model. Resolves to what placeDrag() needs, or null when there is nothing to drag. `e` is the pointer event. */
 export async function placeDown(e, p) {
     // On an object: Shift removes it, else select it and drag to move it.
     const hit = ctx.view.pickObject(e.clientX, e.clientY);
@@ -177,8 +182,8 @@ export async function placeDown(e, p) {
     return { object: o, flat, from: p };
 }
 
-// Dragging a new object turns it (towards the pointer); dragging a
-// selected one moves it, kept on the ground.
+/** Dragging a new object turns it (towards the pointer); dragging a selected one moves it, kept on the ground. `s` is what
+ *  placeDown() gave. */
 export function placeDrag(e, s) {
     const p = ctx.view.pick(e.clientX, e.clientY);
     if (!p) return;
@@ -193,7 +198,8 @@ export function placeDrag(e, s) {
     ctx.view.updateObjects();
 }
 
-// The selected object: turn, resize, remove.
+/** Changes the selected object with `change(o)` (undoable), then settles it on the ground and saves. False when nothing is
+ *  selected. */
 export async function changeSelected(change) {
     const o = ctx.view.selected;
     if (!o) return false;
@@ -205,7 +211,7 @@ export async function changeSelected(change) {
     return true;
 }
 
-// --- Moving, turning and sizing the selected placeable (G / R / S, handles, numbers) -----------
+// --- Moving, turning and sizing the selected placeable (G / R / S, handles, numbers) ---------------------------------
 
 /** The selected object's numbers in the Place panel (or hides them). */
 function showObjectPanel(o) {

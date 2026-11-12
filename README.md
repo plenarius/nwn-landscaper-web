@@ -27,8 +27,11 @@ What it does (*team* marks what only a team server offers, see landscaper's
 - **Check paths**: simulate NWN's pathfinding on random routes, after each edit or on demand, and show ground too steep to walk.
 - **Export to NWN**: the hak and module, ready to play.
 - **Publish**: on your own machine, a package (a zip) to unzip into your module's repository; on a team server, pull requests
-  opened by the team's review service (*team*).
+  opened by a review service (*team*).
 - **Test on the dev server**, **Save version** into the team's history, and an **Activity** log for admins (*team*).
+
+Pull requests, the dev server, and the pictures of items and creatures need a review service: one you run yourself that answers
+the calls in landscaper's [REVIEW-SERVICE.md](https://github.com/plenarius/landscaper/blob/master/docs/REVIEW-SERVICE.md).
 
 ## You need
 
@@ -67,6 +70,11 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   Place `8`, Scatter `9`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r` (shown on every
   area). Brush size `[` `]`, strength slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel
   zooms; `F` reframes. Undo/redo with Ctrl+Z / Ctrl+Y.
+- **Other keys**: `N` new area, `O` open, `L` sky & fog, `M` shows or hides the markers. The camera: the arrow keys move along
+  the ground, Shift+arrows turn the view, `+` and `-` zoom, `Home` looks straight down.
+- **A selected placeable** (Place tool): `G` moves it, `R` turns it, `S` sizes it (then the mouse or a number; click or Enter
+  keeps it, Esc cancels), `Q` and `E` turn it 15°, `Delete` removes it, `Esc` deselects. A selected thing (Things tool) takes
+  `Q`, `E`, `Delete` and `Esc` the same way.
 - **Pick a texture up**: in the Paint tool press `I` (or the **Pick from the ground** button, or Alt-click) and click the ground. On painted
   ground it picks that texture; on an imported area it picks the tileset's own texture under the click and adds it to the library
   (under **Tileset**) the first time.

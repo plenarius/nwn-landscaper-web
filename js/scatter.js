@@ -15,6 +15,7 @@ let ctx = null;
 export const scatterMix = new Set();
 
 let scatterShown = null;
+/** Fills the Scatter panel with the models matching its search box (rocks when empty), unless they already show. */
 export async function showScatterables() {
     const query = $('scatterSearch').value.trim() || 'rock';
     if (query === scatterShown) return;

@@ -87,6 +87,8 @@ const SPLAT_FRAGMENT = `
         diffuseColor.rgb *= splat.rgb;
     }`;
 
+/** The 3D view in `container`: the ground, objects, water, things and markers of the area, the camera, and picking with the
+ *  pointer. */
 export class View {
     constructor(container) {
         this.container = container;
@@ -352,7 +354,7 @@ export class View {
         this.controls.update();
     }
 
-    // --- The camera from the keyboard (the mouse's: right-drag turns, middle-drag moves, wheel zooms) ---------------
+    // --- The camera from the keyboard (the mouse's: right-drag turns, middle-drag moves, wheel zooms) ----------------
 
     /** Moves the view along the ground: `right` and `forward` in steps of a tenth of the distance to what it looks at. */
     panBy(right, forward) {

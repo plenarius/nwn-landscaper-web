@@ -10,6 +10,7 @@ import { api } from './api.js';
 
 const LAYER = 512;
 
+/** The texture library: its catalog from the engine, and each texture's pixels at the layer size, loaded once and kept. */
 export class TextureLibrary {
     constructor() {
         this.catalog = []; // [{ id, name, category, render, swatch, ... }]

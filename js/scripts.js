@@ -7,19 +7,13 @@
 import { EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, oneDark } from '../vendor/codemirror/codemirror.js';
 
 import { ask } from './ask.js';
-import { api } from './api.js';
-
-const json = r => r.json().catch(() => ({}));
-const el = (tag, props = {}, ...kids) => {
-    const e = Object.assign(document.createElement(tag), props);
-    e.append(...kids);
-    return e;
-};
+import { api, failure, json } from './api.js';
+import { $, el } from './dom.js';
 
 // The question is asked once: several boxes ask at the same time while a panel opens. When the engine doesn't answer, it is
 // asked again next time.
 let canWrite = null;
-export function scriptsWritable() {
+function scriptsWritable() {
     canWrite ??= api('/api/scripts?q=zzzz').then(async res => {
         if (!res.ok) canWrite = null;
         return !!(await json(res)).canWrite;
@@ -28,11 +22,11 @@ export function scriptsWritable() {
 }
 
 /** The script editor for one of your own scripts, in its dialog. Saved (and checked) as you type. */
-export async function openScript(resref, onMade = null) {
-    const dlg = document.getElementById('scriptDialog');
-    const host = document.getElementById('scriptHost');
-    const status = document.getElementById('scriptStatus');
-    document.getElementById('scriptTitle').textContent = `Script ${resref}`;
+async function openScript(resref, onMade = null) {
+    const dlg = $('scriptDialog');
+    const host = $('scriptHost');
+    const status = $('scriptStatus');
+    $('scriptTitle').textContent = `Script ${resref}`;
     host.textContent = 'Loading…';
     status.textContent = '';
     status.className = 'note';
@@ -46,10 +40,10 @@ export async function openScript(resref, onMade = null) {
     host.textContent = '';
     // One that isn't yours (the module's or the game's) is shown to read, with a button to make your own copy.
     const mineAlready = !!d.mine;
-    const copy = document.getElementById('scriptCopy');
+    const copy = $('scriptCopy');
     copy.hidden = mineAlready;
-    document.getElementById('scriptDelete').hidden = !mineAlready;
-    document.getElementById('scriptTitle').textContent = mineAlready ? `Script ${resref}` : `Script ${resref} (read only)`;
+    $('scriptDelete').hidden = !mineAlready;
+    $('scriptTitle').textContent = mineAlready ? `Script ${resref}` : `Script ${resref} (read only)`;
     let timer = null,
         saving = Promise.resolve(),
         view = null;
@@ -127,7 +121,7 @@ export async function openScript(resref, onMade = null) {
         onMade?.(made);
         await openScript(made, onMade);
     };
-    document.getElementById('scriptDelete').onclick = async () => {
+    $('scriptDelete').onclick = async () => {
         if (
             !(await ask({
                 title: `Delete ${resref}?`,
@@ -140,7 +134,7 @@ export async function openScript(resref, onMade = null) {
         const res = await api(`/api/script-delete?resref=${encodeURIComponent(resref)}`, { method: 'POST' });
         if (!res.ok) {
             status.className = 'note err';
-            status.textContent = `Not deleted: ${(await json(res)).error || res.statusText}`;
+            status.textContent = `Not deleted: ${await failure(res)}`;
             return;
         }
         dlg.close();

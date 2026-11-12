@@ -85,6 +85,8 @@ function nearestWall(p) {
     return best;
 }
 
+/** The Entrance tool's press on the ground at `p` (metres): adds a cave entrance there, or with Shift removes the nearest.
+ *  `e` is the pointer event. */
 export function entranceDown(e, p) {
     if (e.shiftKey) {
         const hit = nearestEntrance(ctx.area().entrances, p.x, p.y);

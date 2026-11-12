@@ -4,7 +4,7 @@
 // An area's light and fog: the .are's sun and moon colours, fog and view
 // distance, and whether it cycles day and night. Colours are #rrggbb
 // (landscaper stores them as the .are wants). Presets follow the lighting
-// of Layonara's outdoor areas.
+// of a persistent world's outdoor areas.
 
 const sky = (ambient, diffuse, fog, fogAmount, shadows = true) => ({ ambient, diffuse, fog, fogAmount, shadows });
 
@@ -86,10 +86,12 @@ export const PRESETS = [
     },
 ];
 
+/** The light and fog a new area starts with: a copy of the first preset. */
 export function defaultAtmosphere() {
     return copyPreset(PRESETS[0]);
 }
 
+/** An area's light and fog from preset `p`: a copy, so changing it leaves the preset alone. */
 export function copyPreset(p) {
     return { preset: p.id, time: p.time, fogClip: p.fogClip, sun: { ...p.sun }, moon: { ...p.moon } };
 }
@@ -101,9 +103,4 @@ export function fogRange(atmosphere, night) {
     const s = night ? atmosphere.moon : atmosphere.sun;
     const end = atmosphere.fogClip;
     return { start: Math.min(30 - s.fogAmount, end - 1), end, color: s.fog };
-}
-
-/** Whether the game shows the area at night when it isn't cycling. */
-export function nightOnly(atmosphere) {
-    return atmosphere.time === 'night';
 }
