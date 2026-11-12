@@ -1,11 +1,13 @@
 # Code and documentation standard
 
-One standard for nwn-bake and the two projects built on it (an area editor's Rust engine and its web page). Each repository keeps
-an identical copy of this file at its root, and of the shared configuration files listed under [The checks](#the-checks). While
-nwn-bake is still a folder (`crates/`) of the engine's repository, that folder has its own copy too.
+One standard for every repository that follows it: [nwn-bake](https://github.com/plenarius/nwn-bake) and the projects built on
+it, an area editor's Rust engine ([github.com/plenarius/landscaper](https://github.com/plenarius/landscaper)) and its web page
+([github.com/plenarius/landscaper-web](https://github.com/plenarius/landscaper-web)). Each repository keeps an identical copy of
+this file at its root, and of the shared configuration files listed under [The checks](#the-checks).
 
-**nwn-bake's copy is the master.** Change it there first, then copy it word for word to the other two in one pull request each,
-on the same day, so they never drift. The other copies follow it and are not edited on their own.
+**nwn-bake's copy is the master.** Change it there first, then copy it word for word to every other repository that follows this
+standard, in one pull request each, on the same day, so they never drift. The other copies follow it and are not edited on their
+own.
 
 `scripts/check.sh` runs every check below, the way CI runs them. Run it before you push.
 
@@ -202,7 +204,7 @@ The game's shaders (`.shd`, GLSL) and shader code in JavaScript strings follow t
 
 - A shader based on one of the game's stock shaders is not kept as a file. The program reads the stock shader (`fslit`) from the
   player's install and makes its change at run time, so no copy of Beamdog's shader is in a repository or a release; the code that
-  changes it says what it changes and why. (The engine's `src/shared.rs` does this for its shadow shaders.)
+  changes it says what it changes and why. The area editor's engine does this for its shadow shaders.
 - A shader written from scratch is ours and starts with the two SPDX lines, then a comment saying what it draws.
 - A shader file's name is a resref: lower case, at most 16 characters before the extension, because the game looks it up by
   that name.
@@ -235,10 +237,10 @@ Every file says who owns it and under which licence, the [REUSE](https://reuse.s
 The licences:
 
 - **nwn-bake:** GPL-3.0-or-later.
-- **The area editor's engine:** GPL-3.0-or-later, like nwn-bake. Both build on Moonglow, which is GPL-3.0, so their binaries are
-  GPL-3.0 in any case.
-- **The area editor's web page:** MIT. It started from ergin3d's MIT-licensed code, and its `LICENSE` keeps ergin3d's copyright
-  line above ours.
+- **The area editor's engine** ([github.com/plenarius/landscaper](https://github.com/plenarius/landscaper)):
+  GPL-3.0-or-later, like nwn-bake. Both build on Moonglow, which is GPL-3.0, so their binaries are GPL-3.0 in any case.
+- **The area editor's web page** ([github.com/plenarius/landscaper-web](https://github.com/plenarius/landscaper-web)): MIT. It
+  started from ergin3d's MIT-licensed code, and its `LICENSE` keeps ergin3d's copyright line above ours.
 
 Each repository's licence is also in its `REUSE.toml`, `Cargo.toml` (Rust) and README. `cargo-deny` and `cargo-about` check that
 every Rust dependency's licence is on the list in `deny.toml` and `about.toml`.
@@ -247,10 +249,20 @@ every Rust dependency's licence is on the list in `deny.toml` and `about.toml`.
 
 Decompiled game code (a decompiler's output from the game's binaries, cleaned up or not), the game's own files or extracts of
 them (models, textures, 2da files, talk tables, scripts, shaders), and anything else taken from the game. None of it is ours to
-license. The one exception is layout data measured from how the game behaves, when a program can't work without it and the game
-has no file to read it from: the engine's path node layouts (`src/pathnodes.json`, measured from the server), marked as Beamdog's
-in `REUSE.toml`. Tests write the small made-up game files they need; notes on how the game behaves are written in our own words
-and name their source (a function of the game, a measurement).
+license. The one exception for data is layout data measured from how the game behaves, when a program can't work without it and
+the game has no file to read it from: the area editor's path node layouts, measured from the server and marked as Beamdog's in
+that repository's `REUSE.toml`.
+
+The one exception for code is the area editor's route simulator (`src/sim.rs`, `src/sim/` in
+[github.com/plenarius/landscaper](https://github.com/plenarius/landscaper)): our own reimplementation of how the NWN:EE game
+server plans a creature's walk inside an area, kept so that the areas we export walk the way the server routes them
+(interoperability with the game). It holds no decompiler output, binary addresses, the engine's internal names or its data
+layouts; the code and its comments are ours and describe what it does in our own words. It reproduces the server's behaviour,
+down to the order of its arithmetic, its tie-breaks and its limits, because a route depends on them, and it is checked against
+routes recorded on a real server (the editor's `oracle` and `sim-check` commands).
+
+Tests write the small made-up game files they need; notes on how the game behaves are written in our own words and name their
+source (a behaviour of the game, a measurement).
 
 ## The checks
 
