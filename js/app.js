@@ -562,7 +562,7 @@ $('btnRedo').onclick = () => {
 };
 
 // The New area dialog (newarea.js).
-initNewArea({ setArea, thingsTool });
+initNewArea({ setArea, thingsTool, library });
 
 initExport(editor);
 
