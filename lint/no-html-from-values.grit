@@ -3,7 +3,9 @@
 
 // Biome plugin: HTML may only be set from a fixed string. Anything built from a value (a template with ${}, a +, a variable)
 // is refused: area data and the engine's answers went in this way and could run script. Build the elements
-// with el() from js/dom.js, textContent or new Option(text, value) instead.
+// with el() from js/dom.js, textContent or new Option(text, value) instead. The sinks: assigning innerHTML, outerHTML or srcdoc
+// (also as `e['innerHTML']`, and as an object's key, which el() and Object.assign copy onto an element), insertAdjacentHTML,
+// createContextualFragment, setHTMLUnsafe, parseHTMLUnsafe, DOMParser's parseFromString and document.write.
 language js
 
 or {
@@ -11,8 +13,15 @@ or {
     `$obj.innerHTML += $value`,
     `$obj.outerHTML = $value`,
     `$obj.outerHTML += $value`,
+    `$obj.srcdoc = $value`,
+    `$obj[$key] = $value` where { $key <: or { r".innerHTML.", r".outerHTML.", r".srcdoc." } },
+    `$obj[$key] += $value` where { $key <: or { r".innerHTML.", r".outerHTML.", r".srcdoc." } },
+    JsPropertyObjectMember(name = $key, value = $value) where { $key <: or { r".?innerHTML.?", r".?outerHTML.?", r".?srcdoc.?" } },
     `$obj.insertAdjacentHTML($where, $value)`,
     `$obj.createContextualFragment($value)`,
+    `$obj.setHTMLUnsafe($value)`,
+    `$obj.parseHTMLUnsafe($value)`,
+    `$obj.parseFromString($value, $type)`,
     `document.write($value)`,
     `document.writeln($value)`
 } as $sink where {
