@@ -121,9 +121,9 @@ const endStroke = () => {
         $('statusMsg').textContent = '';
     }
     // The ground moved: its shadows too.
-    if (!stroke.water && !stroke.place && !stroke.scatter && ctx.tool() !== 'paint') ctx.view.updateShade();
+    if (!stroke.water && !stroke.place && !stroke.scatter && stroke.tool !== 'paint') ctx.view.updateShade();
     // Sculpting may have flooded or drained hollows.
-    if (!stroke.water && ctx.area().water.length && ctx.tool() !== 'paint') waterChanged();
+    if (!stroke.water && ctx.area().water.length && stroke.tool !== 'paint') waterChanged();
     if (stroke.water) $('statusMsg').textContent = '';
     stroke = null;
     saveSoon();
@@ -222,6 +222,11 @@ export function initStrokes(c) {
             }
             return;
         }
+        // Someone else's workspace, read-only: nothing can change (and nothing would be saved). Picking a texture up still works.
+        if (ctx.readOnly() && !(ctx.tool() === 'paint' && (ctx.picking() || e.altKey))) {
+            $('statusMsg').textContent = "You are looking at someone else's area, read-only: it can't be changed here.";
+            return;
+        }
         if (ctx.tool() === 'entrance') {
             entranceDown(e, p);
             return;
@@ -287,8 +292,17 @@ export function initStrokes(c) {
             ctx.pickTexture(p);
             return;
         }
+        // A texture the area has no room for (255 at most) stops the stroke before it starts, not halfway with no paint.
+        const texture = { paint: ctx.paintTexture(), dig: ctx.paintTexture() === DEFAULT_TEXTURE ? 'dirt' : ctx.paintTexture() }[
+            ctx.tool()
+        ];
+        if (texture && !ctx.area().palette.includes(texture) && ctx.area().palette.length >= 255) {
+            $('statusMsg').textContent = 'This area has 255 textures, the most it can: paint with one it already has.';
+            return;
+        }
         ctx.area().beginStroke();
-        stroke = { flattenTo: ctx.area().heightAt(p.x, p.y), last: performance.now() };
+        // The tool is kept with the stroke: it is the one that stamps until the button comes up.
+        stroke = { tool: ctx.tool(), flattenTo: ctx.area().heightAt(p.x, p.y), last: performance.now() };
         if (ctx.tool() === 'paint') {
             stroke.paintIndex = ctx.area().materialIndex(ctx.paintTexture());
             ctx.view.syncPalette();
@@ -334,7 +348,7 @@ export function initStrokes(c) {
             // the floor painted with the picked texture (dirt unless painted).
             const start = ctx.area().heightAt(p.x, p.y);
             stroke.flattenTo = ctx.area().enclosed() && start >= ctx.area().roof - 0.5 ? ctx.area().roof - CAVE_ROCK : start;
-            stroke.paintIndex = ctx.area().materialIndex(ctx.paintTexture() === DEFAULT_TEXTURE ? 'dirt' : ctx.paintTexture());
+            stroke.paintIndex = ctx.area().materialIndex(texture);
             ctx.view.syncPalette();
         }
         dbg.strokes++;
@@ -483,7 +497,7 @@ export function initStrokes(c) {
             const dt = (now - stroke.last) / 1000;
             stroke.last = now;
             ctx.view.markDirty(
-                stamp(ctx.area(), ctx.tool(), p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
+                stamp(ctx.area(), stroke.tool, p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
             );
             dbg.stamps++;
             if (dbg.stamps % 10 === 0) showDebug();

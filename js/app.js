@@ -635,9 +635,10 @@ window.addEventListener('keydown', e => {
             return;
         }
     }
-    const t = !e.ctrlKey && !e.metaKey && !e.altKey && Object.entries(TOOLS).find(([, v]) => v.key === key);
+    // (no other tool while a stroke is under way: it keeps the tool it started with)
+    const t = !e.ctrlKey && !e.metaKey && !e.altKey && !currentStroke() && Object.entries(TOOLS).find(([, v]) => v.key === key);
     if (e.key === 'Escape' && picking) setPicking(false);
-    else if (key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    else if (key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey && !currentStroke()) {
         selectTool('paint');
         setPicking(true);
     } else if (t) selectTool(t[0]);
