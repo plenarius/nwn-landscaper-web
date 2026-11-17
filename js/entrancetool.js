@@ -32,8 +32,9 @@ export async function showEntrances() {
     }
     if (mine !== entranceRender) return;
     box.textContent = '';
-    ctx.area().entrances.forEach((e, k) => {
-        const tag = `${ctx.area().name}_ent${k + 1}`;
+    ctx.area().entrances.forEach(e => {
+        // (from the entrance's id, not its place: taking another one out never renames this door)
+        const tag = ctx.area().doorTag(e);
         const row = document.createElement('div');
         row.className = 'entrance-row';
         const others = doors.filter(d => !d.tag.startsWith(`${ctx.area().name}_ent`));
@@ -41,7 +42,7 @@ export async function showEntrances() {
         for (const d of others) select.add(new Option(`${d.tag} (area ${d.area})`, d.tag, e.link === d.tag, e.link === d.tag));
         if (e.link && !others.some(d => d.tag === e.link)) select.add(new Option(e.link, e.link, true, true));
         row.append(
-            el('b', { textContent: `Entrance ${k + 1}` }),
+            el('b', { textContent: `Entrance ${e.id}` }),
             el('span', {}, 'door ', el('code', { textContent: tag }), ' leads to'),
             select,
         );
@@ -123,6 +124,8 @@ export function entranceDown(e, p) {
     const moved = fitInTile(ent, TILE, ctx.area().sizeX, ctx.area().sizeY);
     ent.floor = ctx.area().heightAt(ent.x, ent.y);
     ctx.area().beginStroke();
+    // Its id comes after the snapshot: undoing this entrance leaves the counter past it, so the id is never given again.
+    ent.id = ctx.area().newEntranceId();
     ctx.area().entrances.push(ent);
     // Rock that suits the slope: what's painted right behind the mouth.
     const [bx, by] = entranceAt(ent, ent.depth + 2, 0);
@@ -138,7 +141,7 @@ export function entranceDown(e, p) {
     ctx.view.updateShade(true);
     showEntrances();
     $('statusMsg').textContent =
-        `Entrance ${ctx.area().entrances.length}: its door will be tagged ${ctx.area().name}_ent${ctx.area().entrances.length}` +
+        `Entrance ${ent.id}: its door will be tagged ${ctx.area().doorTag(ent)}` +
         (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '');
     saveSoon();
 }

@@ -50,8 +50,12 @@ export class Area {
         this.water = [];
         // Baked shadows' strength, 0 (none) to 1.
         this.shadow = 0.6;
-        // Cave entrances (entrance.js).
+        // Cave entrances (entrance.js), each with an `id` that tags its door (`<area>_ent<id>`), and the next id to give.
+        // An id is never given twice or changed: transitions and scripts name the door by its tag (the engine refuses an
+        // export that reuses a taken-out entrance's id). So the counter only goes up: undo puts entrances back with their
+        // ids but leaves it as it is.
         this.entrances = [];
+        this.entranceNextId = 1;
         // Placeables: { id, model, appearance, x, y, z, bearing, scale,
         // solid, baked }; baked: false is a real placeable (object mode).
         this.objects = [];
@@ -300,6 +304,34 @@ export class Area {
     }
 
     /** One undo step: the area as it is now, or `before` (a snapshot() taken earlier, for a change confirmed later). */
+    /**
+     * Gives the entrances their ids when they have none (an area saved before ids): each its place in the list plus one, the
+     * number its door's tag already had, so no tag changes. `next`: the counter saved with the area; it is raised past
+     * every id there is, never lowered.
+     */
+    giveEntranceIds(next = 1) {
+        const used = new Set(this.entrances.map(e => e.id).filter(id => Number.isInteger(id) && id > 0));
+        let top = Math.max(0, ...used);
+        this.entrances.forEach((e, k) => {
+            if (Number.isInteger(e.id) && e.id > 0) return;
+            // (one without an id among ones with: its place when free, else a new one)
+            e.id = used.has(k + 1) ? ++top : k + 1;
+            used.add(e.id);
+            top = Math.max(top, e.id);
+        });
+        this.entranceNextId = Math.max(Number.isInteger(next) ? next : 1, top + 1);
+    }
+
+    /** A new entrance's id: the counter's, which then moves on. */
+    newEntranceId() {
+        return this.entranceNextId++;
+    }
+
+    /** The tag of entrance `e`'s door, as the engine tags it (`entrance::door_tag`). */
+    doorTag(e) {
+        return `${this.name}_ent${e.id}`;
+    }
+
     beginStroke(before = this.snapshot()) {
         this.undoStack.push(before);
         if (this.undoStack.length > 40) this.undoStack.shift();
@@ -367,6 +399,7 @@ export class Area {
             module: this.module,
             things: this.things,
             nextThingId: this.nextThingId,
+            entranceNextId: this.entranceNextId,
             settings: this.settings,
             originals: this.originals,
         };
@@ -379,6 +412,7 @@ export class Area {
         if (o.atmosphere) area.atmosphere = o.atmosphere;
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.entrances) area.entrances = o.entrances;
+        area.giveEntranceIds(o.entranceNextId);
         if (o.objects) area.objects = o.objects;
         if (o.kind) {
             area.kind = o.kind;
