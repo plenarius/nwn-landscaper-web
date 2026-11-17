@@ -34,7 +34,7 @@ import { initScatter, showScatterables } from './scatter.js';
 import { initWater } from './water.js';
 import { initEntranceTool, showEntrances } from './entrancetool.js';
 import { initStrokes, currentStroke } from './strokes.js';
-import { initSave, saveSoon, moveBrowserAreas } from './save.js';
+import { initSave, saveSoon, flushSave, moveBrowserAreas, browserCopy, browserCopies, noteSaved } from './save.js';
 import { initLive, showLive, checkSoon } from './live.js';
 import { initExport } from './export.js';
 
@@ -268,12 +268,9 @@ $('btnOpen').onclick = async () => {
         pick.onchange = () => viewAs(pick.value);
         who.append('Workspace', pick);
     }
+    noteSaved(areas);
     // Areas only saved here (never exported) too.
-    const local = store
-        .keys()
-        .filter(k => k.startsWith('landscaper.area.'))
-        .map(k => k.slice(16));
-    for (const name of local) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
+    for (const name of browserCopies()) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
     list.textContent = '';
     for (const a of areas) {
         const row = document.createElement('div');
@@ -309,7 +306,7 @@ $('btnOpen').onclick = async () => {
 /** Opens area `a`: from landscaper (its saved copy, else its last export),
  *  or from this browser if it only lives here (a save that failed). */
 async function openArea(a) {
-    const local = store.get(`landscaper.area.${a.name}`);
+    const local = browserCopy(a.name);
     try {
         if (local && a.local) {
             setArea(Area.fromJSON(JSON.parse(local)));
@@ -404,6 +401,8 @@ initStrokes({
 }
 
 function setArea(a) {
+    // The area open until now: its last change is saved before it goes (not 800 ms later, or never).
+    flushSave();
     area = a;
     view.setArea(a);
     thingsTool.selectedId = null;
@@ -493,6 +492,7 @@ initSave(editor);
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
 async function viewAs(user) {
+    await flushSave();
     await api(`/api/view-as?user=${encodeURIComponent(user)}`, { method: 'POST' });
     location.reload();
 }
@@ -584,7 +584,8 @@ window.addEventListener('keydown', e => {
     // F5 / Ctrl+R reload. A browser tab does that itself; a window opened with `--app` (Chrome, Edge) has no reload key.
     if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r')) {
         e.preventDefault();
-        location.reload();
+        // The last change first: a reload stops a save that is still waiting or on its way.
+        flushSave().then(() => location.reload());
         return;
     }
     // Not while typing or choosing (a box, a list, a text area, an editor, a dialog).
@@ -688,7 +689,7 @@ let reviewArea = null;
 if (!readOnly) await moveBrowserAreas();
 {
     const current = reviewArea ?? store.get('landscaper.current');
-    const local = !reviewArea && current && store.get(`landscaper.area.${current}`);
+    const local = !reviewArea && current && browserCopy(current);
     let opened = null;
     if (current && (!local || reviewArea)) {
         try {

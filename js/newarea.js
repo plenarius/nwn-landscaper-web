@@ -5,10 +5,10 @@
 
 import { Area, TILE } from './area.js';
 import { descentPlan, cutDescent } from './tools.js';
-import { $, el, store } from './dom.js';
+import { $, el } from './dom.js';
 import { api } from './api.js';
 import { ask } from './ask.js';
-import { saveNew } from './save.js';
+import { browserCopy, saveNew } from './save.js';
 
 /** What app.js gives this file (initNewArea): `setArea(a)` and the Things tool (`thingsTool`). */
 let ctx = null;
@@ -132,7 +132,7 @@ async function create(name, form) {
 
 /** Whether an area called `name` exists: in the engine's list, or kept in this browser. */
 async function nameTaken(name) {
-    if (store.get(`landscaper.area.${name}`) !== null) return true;
+    if (browserCopy(name) !== null) return true;
     try {
         const res = await api('/api/areas');
         if (res.ok) return ((await res.json()).areas ?? []).some(a => a.name === name);
