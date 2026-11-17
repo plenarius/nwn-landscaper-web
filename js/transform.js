@@ -136,7 +136,9 @@ export class Transformer {
         this.held = held;
         this.o = o;
         this.orig = { x: o.x, y: o.y, bearing: o.bearing, scale: o.scale };
-        this.area().beginStroke(); // one undo step for the whole transform
+        // One undo step for the whole transform, kept when it is confirmed: a cancelled one leaves the undo and redo
+        // history as it was.
+        this.before = this.area().snapshot();
         this.view.controls.enabled = false; // no camera moves while the mouse drives the object
         this.start = at ?? this.ground(this.last ?? null);
         this.startAngle = this.start ? Math.atan2(this.start.y - o.y, this.start.x - o.x) : 0;
@@ -279,6 +281,7 @@ export class Transformer {
 
     confirm() {
         if (!this.mode) return;
+        this.area().beginStroke(this.before);
         this.finish();
         this.say('');
         this.changed(this.o, true);
@@ -286,10 +289,8 @@ export class Transformer {
 
     cancel() {
         if (!this.mode) return;
-        const o = this.o,
-            a = this.area();
+        const o = this.o;
         Object.assign(o, this.orig);
-        a.undoStack.pop(); // the step begin() made
         this.finish();
         this.flat(o).then(f => {
             o.z = this.settle(o, f);
@@ -306,5 +307,6 @@ export class Transformer {
         this.typed = '';
         this.held = false;
         this.view.controls.enabled = true;
+        this.before = null;
     }
 }
