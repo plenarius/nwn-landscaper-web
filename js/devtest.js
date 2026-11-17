@@ -64,10 +64,14 @@ function testCanGo() {
     $('testGo').textContent = claim && claim.user !== testState?.me ? 'Take over and load' : 'Load on the dev server';
 }
 
+// How many times an area has been picked to walk in from (see testPickArea).
+let wpSeq = 0;
+
 /** Chooses the existing area you walk in from, and lists its waypoints (`waypoint` picked when it has it). */
 async function testPickArea(name, waypoint = '') {
     testPicked = name;
-    const sel = $('testWp');
+    const mine = ++wpSeq,
+        sel = $('testWp');
     sel.textContent = '';
     let wp = [];
     try {
@@ -75,6 +79,8 @@ async function testPickArea(name, waypoint = '') {
     } catch {
         /* none */
     }
+    // Another area picked meanwhile: its list is the one to show (two answers mixed sent one area with the other's waypoint).
+    if (mine !== wpSeq) return;
     for (const w of wp) sel.add(new Option(`${w.tag}  (${Math.round(w.x)}, ${Math.round(w.y)})`, w.tag));
     if (!wp.length) sel.add(new Option('this area has no waypoints: pick another', ''));
     if (waypoint && wp.some(w => w.tag === waypoint)) sel.value = waypoint;

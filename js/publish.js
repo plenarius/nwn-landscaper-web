@@ -47,9 +47,14 @@ function pubShow(text, mode = '') {
     }
 }
 
+// How many checks have been asked (see pubCheck).
+let pubSeq = 0;
+
 /** Says what the pull requests would hold (the area, or with the box ticked its whole module). */
 async function pubCheck() {
-    const whole = $('pubWhole').checked;
+    // (ticking "whole module" twice quickly: only the last check's answer is shown)
+    const mine = ++pubSeq,
+        whole = $('pubWhole').checked;
     $('pubGo').hidden = true;
     $('pubNote').disabled = true;
     pubShow(
@@ -58,6 +63,7 @@ async function pubCheck() {
     );
     try {
         const { plan, findings = [] } = await publishCall(true);
+        if (mine !== pubSeq) return;
         // What the pull request will say about it (the review service writes it: what is new, or what changed against production).
         $('pubReview').textContent = (plan.review ?? '').replace(/^### /gm, '').replace(/[*`]/g, '');
         $('pubReviewBox').hidden = !plan.review;
@@ -85,6 +91,7 @@ async function pubCheck() {
                 'err',
             );
     } catch (err) {
+        if (mine !== pubSeq) return;
         showFindings([]);
         $('pubReviewBox').hidden = true;
         pubShow(`Can't publish yet: ${err.message}`, 'err');
@@ -151,6 +158,8 @@ export function initPublish(c) {
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
+                // The zip is held in memory until its URL is let go: a minute is time enough for the browser to start saving it.
+                setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
                 pubShow(
                     `Downloaded ${file}. Unzip it into your module's repository (MANIFEST.md says what goes where), build the haks, and commit.`,
                     'ok',

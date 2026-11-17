@@ -104,7 +104,11 @@ export function initLive(c) {
     $('btnLive').onclick = async () => {
         // Off for want of the engine: started since? (Asking again sets engine.up when it answers.) Then the click turns it on.
         const wasDown = !engine.up;
-        if (wasDown && (await api('/api/me')).ok) ctx.showEngine();
+        if (wasDown) {
+            // (api() says the engine is up only for its JSON answer, not for a file server's page)
+            await api('/api/me');
+            if (engine.up) ctx.showEngine();
+        }
         if (!engine.up) {
             showError(NEEDS_ENGINE, 'Live check needs the engine');
             return;
