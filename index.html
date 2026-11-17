@@ -270,7 +270,7 @@
         <form method="dialog">
             <h2 id="newTitle">New area</h2>
             <label>Name <small>1–9 letters, digits or _ (prefixes every resref)</small>
-                <input type="text" id="newName" required pattern="[a-z0-9_]{1,9}" maxlength="9" value="myarea"></label>
+                <input type="text" id="newName" required pattern="[a-z0-9_]{1,9}" maxlength="9" placeholder="a new name"></label>
             <label>Module <small>its NWN module; another area's to link to it (a cave beside its surface). Empty: its own</small>
                 <input type="text" id="newModule" pattern="[a-z0-9_]{0,16}" maxlength="16" placeholder="same as the name"></label>
             <label>Size <small>NWN tiles of 10 m</small></label>
@@ -292,7 +292,7 @@
                 <input id="newBase" type="number" min="0" max="100" step="1" value="5"></label>
             <div class="dialog-buttons">
                 <button type="submit" value="cancel" formnovalidate>Cancel</button>
-                <button type="submit" value="ok" class="primary">Create</button>
+                <button type="submit" value="ok" class="primary" id="newCreate">Create</button>
             </div>
         </form>
     </dialog>

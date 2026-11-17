@@ -550,7 +550,7 @@ $('btnRedo').onclick = () => {
 };
 
 // The New area dialog (newarea.js).
-initNewArea({ ...editor, setArea, saveSoon, thingsTool });
+initNewArea({ setArea, thingsTool });
 
 initExport(editor);
 
@@ -657,9 +657,11 @@ window.addEventListener('keydown', e => {
         /* the browser's own (Ctrl+F, Ctrl+N, Ctrl+O...) */
     } else if (key === 'w') $('btnWalk').click();
     else if (key === 'l') $('btnSky').click();
-    else if (key === 'n') $('btnNew').click();
-    else if (key === 'o') $('btnOpen').click();
-    else if (key === 'f') view.frame();
+    else if (key === 'n' || key === 'o') {
+        // (not typed into the dialog's first box as well)
+        e.preventDefault();
+        $(key === 'n' ? 'btnNew' : 'btnOpen').click();
+    } else if (key === 'f') view.frame();
     else if (key === 'm') $('btnMarkers').click();
 });
 
