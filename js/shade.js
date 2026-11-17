@@ -65,14 +65,43 @@ export function shadeArea(area, strength) {
     const out = new Uint8Array(mx * my).fill(255);
     // No shadow maps at 0 (landscaper writes none), so no dark entrances either.
     if (strength <= 0) return { mx, my, data: out };
+    shadeRect(area, strength, out, { x0: 0, y0: 0, x1: area.sizeX, y1: area.sizeY });
+    return { mx, my, data: out };
+}
+
+// How far a change of the ground reaches into the shadows, in metres: a cast shadow is looked for up to 80 m towards the sun,
+// and the ambient occlusion 13 m round (castShadow, STEPS), plus a sample for the interpolation.
+const SUN_REACH = 80,
+    AROUND = 14;
+
+/**
+ * Bakes again, into `data` (shadeArea's grid), the shadows the ground changed in `r` (metres: x0, y0, x1, y1) can reach: the
+ * points from which the sun is looked for across `r`, and those near it. The rest of the grid stays as it is: on a 32×32
+ * area a whole bake takes 250 to 900 ms, too long after each stroke.
+ */
+export function shadeChanged(area, strength, data, r) {
+    if (strength <= 0) return;
+    const horizontal = Math.hypot(SUN[0], SUN[1]);
+    const reach = { x: (SUN[0] / horizontal) * SUN_REACH, y: (SUN[1] / horizontal) * SUN_REACH };
+    // (the sun is towards +x and +y: the points that look across r lie that far to the south-west of it)
+    shadeRect(area, strength, data, { x0: r.x0 - reach.x - AROUND, y0: r.y0 - reach.y - AROUND, x1: r.x1 + AROUND, y1: r.y1 + AROUND });
+}
+
+/** Bakes the grid's points inside `r` (metres) into `data`. */
+function shadeRect(area, strength, data, r) {
+    const mx = Math.round(area.sizeX / SHADE_STEP) + 1,
+        my = Math.round(area.sizeY / SHADE_STEP) + 1;
     const height = (x, y) => area.heightAt(x, y);
-    for (let j = 0; j < my; j++) {
-        for (let i = 0; i < mx; i++) {
+    const i0 = Math.max(0, Math.floor(r.x0 / SHADE_STEP)),
+        i1 = Math.min(mx - 1, Math.ceil(r.x1 / SHADE_STEP)),
+        j0 = Math.max(0, Math.floor(r.y0 / SHADE_STEP)),
+        j1 = Math.min(my - 1, Math.ceil(r.y1 / SHADE_STEP));
+    for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
             const x = i * SHADE_STEP,
                 y = j * SHADE_STEP;
             const s = shade(x, y, strength, height, !area.enclosed());
-            out[j * mx + i] = Math.round(255 * s * darkness(area.entrances, x, y));
+            data[j * mx + i] = Math.round(255 * s * darkness(area.entrances, x, y));
         }
     }
-    return { mx, my, data: out };
 }

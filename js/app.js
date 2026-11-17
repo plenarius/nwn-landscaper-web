@@ -499,12 +499,15 @@ async function viewAs(user) {
 
 initLive({ ...editor, stroke: currentStroke, showEngine });
 
+/** Redraws the area after undo or redo: the ground and its shadows only where they changed (area.lastChange). */
 function refreshAll() {
     if (view.selected && !area.objects.includes(view.selected)) selectObject(null);
-    view.markDirty(view.everything());
+    const change = area.lastChange ?? { rect: view.everything(), entrances: true };
+    area.lastChange = null;
+    view.markDirty(change.rect);
     view.updateEntrances();
     view.updateObjects();
-    view.updateShade();
+    view.updateShade(change.entrances);
     view.updateWater();
     view.syncPalette();
     thingsTool.refreshAll();
