@@ -139,7 +139,12 @@ export function openSettings(area, template, lists, onSave) {
     };
     drawVars();
     const ok = $('settingsOk');
-    ok.onclick = () => {
+    ok.onclick = e => {
+        // Nothing is applied while a value is out of range: the browser shows which one, and the dialog stays open.
+        if (!dlg.querySelector('form').reportValidity()) {
+            e.preventDefault();
+            return;
+        }
         const out = structuredClone(base);
         for (const [f, input, initial] of inputs) {
             const now = f.t === 'check' ? input.checked : input.value;
