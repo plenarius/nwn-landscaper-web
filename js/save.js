@@ -24,11 +24,28 @@ export function saveSoon() {
     checkSoon();
 }
 
-async function saveArea(a) {
-    const json = JSON.stringify(a.toJSON());
-    store.set('landscaper.current', a.name);
+/**
+ * The first save of a new area `a`: true once saved (on disk, or in this browser without an engine), false when the engine
+ * refuses because an area of that name exists. `replace`: the builder agreed to replace it (sends `replace=1`).
+ */
+export async function saveNew(a, replace) {
+    if (ctx.readOnly()) return true;
     try {
-        await putArea(a.name, json);
+        await saveArea(a, `&new=1${replace ? '&replace=1' : ''}`);
+        return true;
+    } catch (err) {
+        if (err.status === 409) return false;
+        throw err;
+    }
+}
+
+// `also`: more of the query (`&new=1` on a new area's first save). The engine's 409 (a new area over an existing one) is
+// thrown: the area is not kept in this browser either, so it can't replace the other one later.
+async function saveArea(a, also = '') {
+    const json = JSON.stringify(a.toJSON());
+    try {
+        await putArea(a.name, json, also);
+        store.set('landscaper.current', a.name);
         store.remove(`landscaper.area.${a.name}`);
         store.remove(`landscaper.saved.${a.name}`);
         if ($('statusMsg').dataset.saveFailed) {
@@ -36,6 +53,8 @@ async function saveArea(a) {
             delete $('statusMsg').dataset.saveFailed;
         }
     } catch (err) {
+        if (err.status === 409) throw err;
+        store.set('landscaper.current', a.name);
         if (store.set(`landscaper.area.${a.name}`, json) && store.set(`landscaper.saved.${a.name}`, String(Date.now())))
             $('statusMsg').textContent = engine.up
                 ? `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`
@@ -47,13 +66,13 @@ async function saveArea(a) {
     }
 }
 
-async function putArea(name, json) {
-    const res = await api(`/api/save?name=${encodeURIComponent(name)}`, {
+async function putArea(name, json, also = '') {
+    const res = await api(`/api/save?name=${encodeURIComponent(name)}${also}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: json,
     });
-    if (!res.ok) throw new Error(await failure(res));
+    if (!res.ok) throw Object.assign(new Error(await failure(res)), { status: res.status });
 }
 
 /** Areas kept in this browser (before landscaper saved to disk, or when a

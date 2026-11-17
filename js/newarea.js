@@ -5,9 +5,12 @@
 
 import { Area, TILE } from './area.js';
 import { descentPlan, cutDescent } from './tools.js';
-import { $, el } from './dom.js';
+import { $, el, store } from './dom.js';
+import { api } from './api.js';
+import { ask } from './ask.js';
+import { saveNew } from './save.js';
 
-/** What app.js gives this file (initNewArea): `area()`, `setArea(a)`, `saveSoon()` and the Things tool (`thingsTool`). */
+/** What app.js gives this file (initNewArea): `setArea(a)` and the Things tool (`thingsTool`). */
 let ctx = null;
 
 // Square sizes to pick, or any width and height (3 to 32 tiles each).
@@ -33,7 +36,7 @@ function seedDescent(created, starter) {
     created.clearance = starter.ceiling;
 }
 
-/** Wires the New area dialog. `c`: { area(), setArea(a), saveSoon(), thingsTool } from app.js. */
+/** Wires the New area dialog. `c`: { setArea(a), thingsTool } from app.js. */
 export function initNewArea(c) {
     ctx = c;
     for (const s of SIZES) {
@@ -60,32 +63,81 @@ export function initNewArea(c) {
             }
         });
     }
+    // The name box starts empty: with the open area's name in it, Create replaced the open area. The dialog's returnValue is
+    // cleared too: Escape closes a dialog keeping its last one, and a stale "ok" used to create an area.
     $('btnNew').onclick = () => {
-        if (ctx.area()) $('newName').value = ctx.area().name;
+        $('newName').value = '';
+        $('newDialog').returnValue = '';
         $('newDialog').showModal();
     };
-    $('newDialog').addEventListener('close', () => {
-        if ($('newDialog').returnValue !== 'ok') return;
-        const start = new FormData($('newDialog').querySelector('form')).get('start');
-        const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
-        const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
-        const starter = DESCENT_STARTERS[start];
-        const created = Area.create(
-            $('newName').value.trim().toLowerCase(),
-            tiles($('newW').value),
-            starter?.from ?? start,
-            base,
-            tiles($('newH').value),
-        );
-        if (starter) seedDescent(created, starter);
-        created.module = $('newModule').value.trim().toLowerCase() || created.name;
-        // A new area starts with the project's template (the standard scripts and so on; the server's, or a plain one).
-        ctx.thingsTool.loadMeta().then(meta => {
-            created.settings = { ...structuredClone(meta.template ?? {}), tag: created.name };
-            delete created.settings._note;
-            ctx.saveSoon();
-        });
-        ctx.setArea(created);
-        ctx.saveSoon();
-    });
+    // Create makes the area from its own click, not from the dialog's close (which Escape fires too), and only once the name
+    // is free or the builder has said to replace the area that has it.
+    $('newCreate').onclick = async e => {
+        e.preventDefault();
+        const form = $('newDialog').querySelector('form');
+        if (!form.reportValidity()) return;
+        const name = $('newName').value.trim().toLowerCase();
+        const button = $('newCreate');
+        button.disabled = true;
+        try {
+            await create(name, form);
+        } finally {
+            button.disabled = false;
+        }
+    };
+}
+
+/** Asks whether to replace the area called `name`; true to replace it. */
+const replaceIt = name =>
+    ask({
+        title: `Replace ${name}?`,
+        text: `There is already an area called ${name}. A new area with that name replaces it: its ground, things and settings are lost.\n\nPick another name to keep it.`,
+        ok: `Replace ${name}`,
+        danger: true,
+    }).then(answer => answer === true);
+
+/** Makes area `name` from the dialog's `form` and opens it. Asks first when an area of that name exists: the engine's list
+ *  and this browser's copies are looked at here, and the engine refuses (409) a new area's first save over one it has
+ *  unless `replace=1` says the builder agreed. */
+async function create(name, form) {
+    let replace = false;
+    if (await nameTaken(name)) {
+        if (!(await replaceIt(name))) {
+            $('newName').focus();
+            return;
+        }
+        replace = true;
+    }
+    const start = new FormData(form).get('start');
+    const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
+    const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
+    const starter = DESCENT_STARTERS[start];
+    const created = Area.create(name, tiles($('newW').value), starter?.from ?? start, base, tiles($('newH').value));
+    if (starter) seedDescent(created, starter);
+    created.module = $('newModule').value.trim().toLowerCase() || created.name;
+    // A new area starts with the project's template (the standard scripts and so on; the server's, or a plain one).
+    const meta = await ctx.thingsTool.loadMeta();
+    created.settings = { ...structuredClone(meta.template ?? {}), tag: created.name };
+    delete created.settings._note;
+    // The engine has the last word: an area made since the list was read (another tab, a teammate) is refused with 409.
+    if (!(await saveNew(created, replace))) {
+        if (!(await replaceIt(name)) || !(await saveNew(created, true))) {
+            $('newName').focus();
+            return;
+        }
+    }
+    $('newDialog').close('ok');
+    ctx.setArea(created);
+}
+
+/** Whether an area called `name` exists: in the engine's list, or kept in this browser. */
+async function nameTaken(name) {
+    if (store.get(`landscaper.area.${name}`) !== null) return true;
+    try {
+        const res = await api('/api/areas');
+        if (res.ok) return ((await res.json()).areas ?? []).some(a => a.name === name);
+    } catch {
+        /* no list: the engine's answer to the save decides */
+    }
+    return false;
 }
