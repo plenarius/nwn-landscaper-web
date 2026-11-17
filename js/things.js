@@ -260,6 +260,8 @@ export class ThingsTool {
         const why = res.ok ? '' : await failure(res);
         if (mine !== this.seq) return;
         const box = this.ctx.$('thingResults');
+        // The entries going now are watched no more (the observer holds on to each until it scrolls into view).
+        this._previews?.clear();
         box.textContent = '';
         for (const b of list) {
             const e = document.createElement('button');
@@ -317,6 +319,7 @@ export class ThingsTool {
                 what.set(el, [kind, resref]);
                 io.observe(el);
             },
+            clear: () => io.disconnect(),
         };
         return this._previews;
     }

@@ -220,6 +220,8 @@ export class View {
                 this.scene.remove(o);
                 o.traverse?.(c => {
                     c.geometry?.dispose();
+                    // (a marker's label is a texture drawn for it, as setMarkers disposes it)
+                    if (o === this.markers) c.material?.map?.dispose();
                     c.material?.dispose?.();
                 });
             }
@@ -533,9 +535,13 @@ export class View {
         this.scene.add(this.entranceGroup);
     }
 
-    /** Placed objects, from the model library (set by the app). */
+    /** Placed objects, from the model library (set by the app). The models' geometry and materials are the library's,
+     *  shared by every copy and kept; what this group made itself (the ground patches) is freed with it. */
     async updateObjects() {
-        if (this.objectGroup) this.scene.remove(this.objectGroup);
+        if (this.objectGroup) {
+            this.scene.remove(this.objectGroup);
+            for (const c of this.objectGroup.children) if (c.userData.decal) disposeDecal(c);
+        }
         const group = new THREE.Group();
         this.objectGroup = group;
         this.scene.add(group);
@@ -561,6 +567,27 @@ export class View {
                 if (o === this.selected) this.showSelection(inst);
             }),
         );
+    }
+
+    /** Draws object `o` where it now is (moved, turned or sized), its model and its ground patch, without rebuilding the
+     *  others: a drag calls it on every pointer move. Rebuilds them all when `o` isn't drawn yet. */
+    moveObject(o) {
+        const group = this.objectGroup;
+        const inst = group?.children.find(c => c.userData.object === o && !c.userData.decal);
+        if (!inst) {
+            this.updateObjects();
+            return;
+        }
+        inst.position.set(o.x, o.z, this.area.sizeY - o.y);
+        inst.rotation.y = o.bearing;
+        inst.scale.setScalar(o.scale);
+        const old = group.children.find(c => c.userData.object === o && c.userData.decal);
+        if (old) {
+            group.remove(old);
+            disposeDecal(old);
+        }
+        this.addDecal(group, o, inst.userData.flat);
+        if (o === this.selected) this.showSelection(inst);
     }
 
     /** An imported thing's patch of ground, draped on the ground where it
@@ -664,7 +691,11 @@ export class View {
     /** Takes objects (a Set) out of the view. */
     removeObjects(gone) {
         if (!this.objectGroup) return;
-        for (const c of [...this.objectGroup.children]) if (gone.has(c.userData.object)) this.objectGroup.remove(c);
+        for (const c of [...this.objectGroup.children])
+            if (gone.has(c.userData.object)) {
+                this.objectGroup.remove(c);
+                if (c.userData.decal) disposeDecal(c);
+            }
     }
 
     /**
@@ -1100,6 +1131,7 @@ export class View {
         if (this.water) {
             this.scene.remove(this.water);
             this.water.geometry.dispose();
+            this.water.material.dispose();
         }
         this.water = null;
         const pos = [];
@@ -1214,6 +1246,7 @@ export class View {
         if (this.roomLine) {
             this.scene.remove(this.roomLine);
             this.roomLine.geometry.dispose();
+            this.roomLine.material.dispose();
             this.roomLine = null;
         }
         if (!r) return;
@@ -1239,6 +1272,7 @@ export class View {
         if (this.descentLine) {
             this.scene.remove(this.descentLine);
             this.descentLine.geometry.dispose();
+            this.descentLine.material.dispose();
             this.descentLine = null;
         }
         if (!plan) return;
@@ -1271,6 +1305,7 @@ export class View {
         if (this.rampLine) {
             this.scene.remove(this.rampLine);
             this.rampLine.geometry.dispose();
+            this.rampLine.material.dispose();
             this.rampLine = null;
         }
         if (!plan || plan.len < 0.1) return;
@@ -1363,4 +1398,10 @@ function makeLabel(text, color) {
     );
     sprite.scale.set((0.024 * canvas.width) / canvas.height, 0.024, 1);
     return sprite;
+}
+
+/** Frees a ground patch made by addDecal: its geometry and material are its own (its picture is the model library's, shared). */
+function disposeDecal(mesh) {
+    mesh.geometry.dispose();
+    mesh.material.dispose();
 }
