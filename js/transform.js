@@ -25,7 +25,7 @@ const LABEL = { move: 'Move', rotate: 'Turn', scale: 'Size' };
 export class Transformer {
     /**
      * @param {object} d
-     * @param {object} d.view  the 3D view (scene, camera, pick, selected, updateObjects, controls)
+     * @param {object} d.view  the 3D view (scene, camera, pick, selected, moveObject, controls)
      * @param {() => object} d.area
      * @param {(o) => Promise<object>} d.flat  an object's model outline
      * @param {(o, flat) => number} d.settle  an object's height on the ground
@@ -53,6 +53,11 @@ export class Transformer {
         const view = this.view;
         if (this.group) {
             view.scene.remove(this.group);
+            // (the handles' geometry and materials are made for each selection)
+            this.group.traverse(c => {
+                c.geometry?.dispose();
+                c.material?.dispose();
+            });
             this.group = null;
         }
         if (!o) return;
@@ -207,7 +212,7 @@ export class Transformer {
     async refresh() {
         const o = this.o;
         o.z = this.settle(o, await this.flat(o));
-        this.view.updateObjects();
+        this.view.moveObject(o);
         this.place(o);
         this.say(this.text());
         this.changed(o, false);
@@ -294,7 +299,7 @@ export class Transformer {
         this.finish();
         this.flat(o).then(f => {
             o.z = this.settle(o, f);
-            this.view.updateObjects();
+            this.view.moveObject(o);
             this.place(o);
             this.changed(o, false);
         });

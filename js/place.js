@@ -200,7 +200,7 @@ export function placeDrag(e, s) {
         s.object.bearing = Math.atan2(p.y - s.from.y, p.x - s.from.x);
     }
     s.object.z = settle(s.object, s.flat);
-    ctx.view.updateObjects();
+    ctx.view.moveObject(s.object);
 }
 
 /** Changes the selected object with `change(o)` (undoable), then settles it on the ground and saves. False when nothing is
@@ -211,7 +211,7 @@ export async function changeSelected(change, step = true) {
     if (step) ctx.area().beginStroke();
     change(o);
     o.z = settle(o, await models.flat(o.model));
-    ctx.view.updateObjects();
+    ctx.view.moveObject(o);
     saveSoon();
     return true;
 }
