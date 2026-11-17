@@ -89,6 +89,10 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   to play), then simulates NWN's pathfinding on random routes. Red markers: a route stops short.
   Orange: a tile whose walkable ground is too winding for NWN's in-tile search; straighten or widen
   the passage.
+- **Autosave** writes each change to the engine a moment later, and at once before another area opens or the page reloads.
+  A copy the engine didn't get (no engine, a failed save, a tab closed before its save finished) stays in the browser, per
+  user on a team server, and goes to the engine at the next start. When the engine's copy was saved after it (another tab or
+  computer), the page asks which copy to keep.
 
 ## Development
 

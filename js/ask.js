@@ -4,15 +4,16 @@
 // The app's own question dialog (`#askDialog`): a title, some text, optionally one text box, and OK / Cancel. Used instead of the
 // browser's prompt/confirm/alert so it looks like the rest of the app.
 //
-// ask({ title, text, ok, danger, input: { label, value, placeholder }, submit })
+// ask({ title, text, ok, cancel, danger, input: { label, value, placeholder }, submit })
 //   resolves to true (OK, no text box), the trimmed text (OK with a text box), or null (cancelled).
+//   `cancel`, when given, names the Cancel button as a second answer: it then resolves to false, and only Escape gives null.
 //   `submit(value)`, when given, runs on OK: it returns an error message to show in the dialog (which stays open for another
 //   try) or nothing to accept. That is how a name the server refuses is reported without a popup.
 
 import { $ } from './dom.js';
 
 /** Asks with the app's question dialog: see the top of this file for the arguments and what it resolves to. */
-export function ask({ title, text, ok = 'OK', danger = false, input = null, submit = null }) {
+export function ask({ title, text, ok = 'OK', cancel = null, danger = false, input = null, submit = null }) {
     const dlg = $('askDialog');
     $('askTitle').textContent = title;
     $('askText').textContent = '';
@@ -29,6 +30,7 @@ export function ask({ title, text, ok = 'OK', danger = false, input = null, subm
     }
     $('askError').hidden = true;
     $('askOk').textContent = ok;
+    $('askCancel').textContent = cancel ?? 'Cancel';
     $('askOk').classList.toggle('danger', danger);
     $('askOk').disabled = false;
     $('askOk').onclick = submit
@@ -48,9 +50,11 @@ export function ask({ title, text, ok = 'OK', danger = false, input = null, subm
         : null;
     return new Promise(resolve => {
         dlg.returnValue = '';
-        dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok' ? (input ? $('askInput').value.trim() : true) : null), {
-            once: true,
-        });
+        const answer = () => {
+            if (dlg.returnValue === 'ok') return input ? $('askInput').value.trim() : true;
+            return cancel && dlg.returnValue === 'cancel' ? false : null;
+        };
+        dlg.addEventListener('close', () => resolve(answer()), { once: true });
         dlg.showModal();
         (input ? $('askInput') : $('askCancel')).focus();
     });
