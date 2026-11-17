@@ -110,7 +110,7 @@ export function initSky(c) {
         ctx.area().shadow = +e.target.value;
         showSky();
         clearTimeout(shadeTimer);
-        shadeTimer = setTimeout(() => ctx.view.updateShade(), 150);
+        shadeTimer = setTimeout(() => ctx.view.updateShade(true), 150);
         ctx.saveSoon();
     };
     for (const r of document.querySelectorAll('[name=skyTime]')) {

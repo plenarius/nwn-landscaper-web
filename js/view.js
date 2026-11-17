@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE, VOID_BELOW } from './area.js';
 import { fogRange } from './atmosphere.js';
-import { shadeArea, SHADE_STEP } from './shade.js';
+import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { at as entranceAt, scenery as entranceScenery } from './entrance.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
@@ -243,7 +243,8 @@ export class View {
         this.uniforms.uMat.value = mat;
         this.uniforms.uN.value.set(nx, ny);
         this.uniforms.uSize.value.set(sizeX, sizeY);
-        this.updateShade();
+        this.shadeDirty = null;
+        this.updateShade(true);
         this.mesh = new THREE.Mesh(geo, this.splatMaterial());
         this.scene.add(this.mesh);
         this.buildSkirt();
@@ -251,6 +252,8 @@ export class View {
             new THREE.BufferGeometry(),
             new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }),
         );
+        // (its lines are moved in place, so a bounding sphere worked out once would go stale)
+        this.grid.frustumCulled = false;
         this.scene.add(this.grid);
         this.paletteKey = null;
         this.markDirty(this.everything());
@@ -283,8 +286,23 @@ export class View {
         return material;
     }
 
-    /** Bakes the shadows again (after the ground or their strength changed). */
-    updateShade() {
+    /** Bakes the shadows again after the ground changed: where the changes since the last bake (markDirty) can reach.
+     *  `all`: the whole area (another area, the shadows' strength or the entrances changed). */
+    updateShade(all = false) {
+        const r = this.shadeDirty,
+            baked = this.uniforms.uShade.value;
+        this.shadeDirty = null;
+        if (!all && !r) return;
+        if (!all && baked?.image.data && r) {
+            shadeChanged(this.area, this.area.shadow, baked.image.data, {
+                x0: r.i0 * SPACING,
+                y0: r.j0 * SPACING,
+                x1: r.i1 * SPACING,
+                y1: r.j1 * SPACING,
+            });
+            baked.needsUpdate = true;
+            return;
+        }
         const { mx, my, data } = shadeArea(this.area, this.area.shadow);
         const old = this.uniforms.uShade.value;
         const tex = new THREE.DataTexture(data, mx, my, THREE.RedFormat, THREE.UnsignedByteType);
@@ -403,16 +421,15 @@ export class View {
         return { i0: 0, i1: this.area.nx - 1, j0: 0, j1: this.area.ny - 1 };
     }
 
+    /** Samples `r` (i0..i1, j0..j1) changed: redrawn at the next frame (flush), and their shadows at the next updateShade. */
     markDirty(r) {
         if (!r) return;
-        this.dirty = this.dirty
-            ? {
-                  i0: Math.min(this.dirty.i0, r.i0),
-                  i1: Math.max(this.dirty.i1, r.i1),
-                  j0: Math.min(this.dirty.j0, r.j0),
-                  j1: Math.max(this.dirty.j1, r.j1),
-              }
-            : { ...r };
+        const join = d =>
+            d
+                ? { i0: Math.min(d.i0, r.i0), i1: Math.max(d.i1, r.i1), j0: Math.min(d.j0, r.j0), j1: Math.max(d.j1, r.j1) }
+                : { i0: r.i0, i1: r.i1, j0: r.j0, j1: r.j1 };
+        this.dirty = join(this.dirty);
+        this.shadeDirty = join(this.shadeDirty);
     }
 
     /** Vertex index of sample (i, j): plane rows run north to south. */
@@ -428,21 +445,23 @@ export class View {
         const pos = this.mesh.geometry.attributes.position;
         const col = this.mesh.geometry.attributes.color;
         // Heights of the changed rows and a margin (walkability uses neighbours).
-        // (A roof that follows the floor moves with any edit: everything is redone.)
+        // (A roof that follows the floor moves with any edit: everything is redone. A flat roof doesn't.)
         const fit = area.ceilingFit(),
-            all = fit || area.enclosed();
+            all = !!fit;
         const i0 = all ? 0 : Math.max(0, d.i0 - 1),
             i1 = all ? n - 1 : Math.min(n - 1, d.i1 + 1),
             j0 = all ? 0 : Math.max(0, d.j0 - 1),
             j1 = all ? area.ny - 1 : Math.min(area.ny - 1, d.j1 + 1);
         const gap = this.mesh.geometry.attributes.aGap,
             shownHeights = fit ? fit.shown : area.heights;
+        // The colour range of the untextured ground (with the library's textures it isn't used).
         let lo = Infinity,
             hi = -Infinity;
-        for (const v of area.heights) {
-            if (v < lo) lo = v;
-            if (v > hi) hi = v;
-        }
+        if (!this.textured)
+            for (const v of area.heights) {
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
+            }
         const span = Math.max(hi - lo, 1);
         const c = new THREE.Color();
         for (let j = j0; j <= j1; j++) {
@@ -470,11 +489,56 @@ export class View {
         gap.needsUpdate = true;
         col.needsUpdate = true;
         this.uniforms.uMat.value.needsUpdate = true;
-        this.mesh.geometry.computeVertexNormals();
-        this.mesh.geometry.computeBoundingSphere();
-        this.mesh.geometry.computeBoundingBox();
-        this.updateGrid();
+        // Only what the change reaches: on a 32×32 area each of these over the whole mesh took most of a 245 ms frame.
+        this.updateNormals(i0 - 1, i1 + 1, j0 - 1, j1 + 1);
+        this.updateBounds(i0, i1, j0, j1);
+        this.updateGrid({ i0, i1, j0, j1 });
         this.updateSkirt();
+    }
+
+    /** The ground's normals at samples i0..i1, j0..j1 (clamped to the area), from its drawn heights: each sample's slope
+     *  between its neighbours, as a regular grid's averaged triangle normals give it. */
+    updateNormals(i0, i1, j0, j1) {
+        const { nx, ny } = this.area,
+            geo = this.mesh.geometry,
+            y = geo.attributes.position.array,
+            nor = geo.attributes.normal;
+        const h = (i, j) => y[this.vertex(i, j) * 3 + 1];
+        for (let j = Math.max(0, j0); j <= Math.min(ny - 1, j1); j++) {
+            for (let i = Math.max(0, i0); i <= Math.min(nx - 1, i1); i++) {
+                const w = Math.max(i - 1, 0),
+                    e = Math.min(i + 1, nx - 1),
+                    s = Math.max(j - 1, 0),
+                    n = Math.min(j + 1, ny - 1);
+                // Rise per metre east and north; three.js's z runs south, so north's rise turns the normal towards +z.
+                const east = (h(e, j) - h(w, j)) / ((e - w) * SPACING),
+                    north = (h(i, n) - h(i, s)) / ((n - s) * SPACING);
+                const len = Math.hypot(east, 1, north);
+                nor.setXYZ(this.vertex(i, j), -east / len, 1 / len, north / len);
+            }
+        }
+        nor.needsUpdate = true;
+    }
+
+    /** The ground's bounds (for picking): worked out whole when everything changed, else grown to the changed heights. A
+     *  box that is too tall after the ground is lowered only costs the picking an early miss. */
+    updateBounds(i0, i1, j0, j1) {
+        const geo = this.mesh.geometry,
+            { nx, ny } = this.area;
+        if (!geo.boundingBox || (i0 === 0 && j0 === 0 && i1 === nx - 1 && j1 === ny - 1)) {
+            geo.computeBoundingBox();
+            geo.computeBoundingSphere();
+            return;
+        }
+        const y = geo.attributes.position.array,
+            box = geo.boundingBox;
+        for (let j = j0; j <= j1; j++)
+            for (let i = i0; i <= i1; i++) {
+                const v = y[this.vertex(i, j) * 3 + 1];
+                if (v < box.min.y) box.min.y = v;
+                if (v > box.max.y) box.max.y = v;
+            }
+        box.getBoundingSphere(geo.boundingSphere);
     }
 
     /** Entrances as the game will show them: the roof in the hill's paint,
@@ -1204,31 +1268,40 @@ export class View {
         this.markDirty(this.everything());
     }
 
-    /** The tile grid, draped 5 cm above the ground. */
-    updateGrid() {
+    /** The tile grid, draped 5 cm above the ground: the lines along the tile edges, one segment between each two samples,
+     *  moved where samples `r` (i0..i1, j0..j1; the whole area when not given) changed. */
+    updateGrid(r = this.everything()) {
         const area = this.area,
-            size = area.sizeY;
-        const pts = [];
-        // Lines of constant x (running north), then of constant y (running east).
-        for (let t = 0; t <= area.tiles; t++) {
-            const along = t * TILE;
-            for (let k = 0; k < area.ny - 1; k++) {
-                const a = k * SPACING,
-                    b = (k + 1) * SPACING;
-                pts.push(along, area.heightAt(along, a) + 0.05, size - a, along, area.heightAt(along, b) + 0.05, size - b);
-            }
+            { nx, ny } = area,
+            size = area.sizeY,
+            h = area.heights,
+            per = Math.round(TILE / SPACING); // samples along a tile
+        // Segments: lines of constant x (running north, ny - 1 each), then of constant y (running east, nx - 1 each).
+        const north = (area.tiles + 1) * (ny - 1),
+            segments = north + (area.tilesY + 1) * (nx - 1);
+        let attr = this.grid.geometry.attributes.position;
+        if (attr?.count !== segments * 2) {
+            this.grid.geometry.dispose();
+            this.grid.geometry = new THREE.BufferGeometry();
+            attr = new THREE.BufferAttribute(new Float32Array(segments * 6), 3);
+            this.grid.geometry.setAttribute('position', attr);
+            r = this.everything();
         }
-        for (let t = 0; t <= area.tilesY; t++) {
-            const along = t * TILE;
-            for (let k = 0; k < area.nx - 1; k++) {
-                const a = k * SPACING,
-                    b = (k + 1) * SPACING;
-                pts.push(a, area.heightAt(a, along) + 0.05, size - along, b, area.heightAt(b, along) + 0.05, size - along);
-            }
+        const a = attr.array;
+        const put = (seg, x0, y0, z0, x1, y1, z1) => a.set([x0, z0 + 0.05, size - y0, x1, z1 + 0.05, size - y1], seg * 6);
+        for (let t = Math.ceil(r.i0 / per); t * per <= r.i1 && t <= area.tiles; t++) {
+            const i = t * per,
+                along = t * TILE;
+            for (let k = Math.max(0, r.j0 - 1); k <= Math.min(ny - 2, r.j1); k++)
+                put(t * (ny - 1) + k, along, k * SPACING, h[k * nx + i], along, (k + 1) * SPACING, h[(k + 1) * nx + i]);
         }
-        this.grid.geometry.dispose();
-        this.grid.geometry = new THREE.BufferGeometry();
-        this.grid.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+        for (let t = Math.ceil(r.j0 / per); t * per <= r.j1 && t <= area.tilesY; t++) {
+            const j = t * per,
+                along = t * TILE;
+            for (let k = Math.max(0, r.i0 - 1); k <= Math.min(nx - 2, r.i1); k++)
+                put(north + t * (nx - 1) + k, k * SPACING, along, h[j * nx + k], (k + 1) * SPACING, along, h[j * nx + k + 1]);
+        }
+        attr.needsUpdate = true;
     }
 
     /** Area point (NWN metres) under the mouse, or null. */

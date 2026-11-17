@@ -309,15 +309,41 @@ export class Area {
     undo() {
         if (!this.undoStack.length) return false;
         this.redoStack.push(this.snapshot());
-        this.restore(this.undoStack.pop());
+        this.restore(this.noteChange(this.undoStack.pop()));
         return true;
     }
 
     redo() {
         if (!this.redoStack.length) return false;
         this.undoStack.push(this.snapshot());
-        this.restore(this.redoStack.pop());
+        this.restore(this.noteChange(this.redoStack.pop()));
         return true;
+    }
+
+    /**
+     * What going back to snapshot `s` changes, in `lastChange`, for the view to redraw only that: `rect`, the samples whose
+     * height or paint differ (i0..i1, j0..j1; null when none do, the whole area when the ceiling height differs), and
+     * `entrances`, whether they differ (their dark mouths are in the shadows). Returns `s`.
+     */
+    noteChange(s) {
+        const { nx, heights: h, materials: m } = this;
+        let i0 = Infinity,
+            i1 = -1,
+            j0 = Infinity,
+            j1 = -1;
+        for (let k = 0; k < h.length; k++) {
+            if (h[k] === s.h[k] && m[k] === s.m[k]) continue;
+            const i = k % nx,
+                j = (k - i) / nx;
+            if (i < i0) i0 = i;
+            if (i > i1) i1 = i;
+            if (j < j0) j0 = j;
+            j1 = j;
+        }
+        let rect = i1 < 0 ? null : { i0, i1, j0, j1 };
+        if ('c' in s && s.c !== this.clearance) rect = { i0: 0, i1: nx - 1, j0: 0, j1: this.ny - 1 };
+        this.lastChange = { rect, entrances: JSON.stringify(s.e) !== JSON.stringify(this.entrances) };
+        return s;
     }
 
     // Saved in the browser between sessions.
