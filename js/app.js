@@ -44,6 +44,8 @@ function setIcon(e, name) {
     e.innerHTML = ICONS[name];
 }
 for (const e of document.querySelectorAll('[data-icon]')) setIcon(e, e.dataset.icon);
+// A dialog's Close button names its dialog (`data-close`): the page's Content-Security-Policy runs no inline `onclick`.
+for (const b of document.querySelectorAll('[data-close]')) b.onclick = () => $(b.dataset.close).close();
 
 // No WebGL: say why instead of showing a blank page.
 const probe = document.createElement('canvas');

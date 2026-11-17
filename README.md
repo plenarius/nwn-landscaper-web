@@ -102,6 +102,10 @@ Two rules of this repository's own, as Biome plugins in `lint/`:
 - Every request to the engine goes through `api()` in `js/api.js`, which sends the `X-Landscaper: 1` header the engine
   checks. Another site's page can't send that header, so the engine can refuse requests that don't carry it.
 
+`index.html` carries a Content-Security-Policy: only the page's own files run, the import map is allowed by its SHA-256, and
+requests go to the page's own server. A change to the import map changes that hash; Chrome's console then names the hash
+it expected, which goes into the policy.
+
 ## Credits
 
 Forked from [ergin3d/heightmap-generator](https://github.com/ergin3d/heightmap-generator) (MIT), which supplied the three.js
