@@ -131,8 +131,8 @@ export async function placeDown(e, p) {
         return null;
     }
     if (hit) {
+        // Its undo step is taken when the drag first moves it: a click that only selects it makes none.
         selectObject(hit);
-        ctx.area().beginStroke();
         return { object: hit, flat: await models.flat(hit.model), from: p, move: { dx: hit.x - p.x, dy: hit.y - p.y } };
     }
     if (e.shiftKey) {
@@ -188,6 +188,11 @@ export function placeDrag(e, s) {
     const p = ctx.view.pick(e.clientX, e.clientY);
     if (!p) return;
     if (s.move) {
+        if (!s.stepped) {
+            if (Math.hypot(p.x - s.from.x, p.y - s.from.y) < 0.05) return;
+            ctx.area().beginStroke();
+            s.stepped = true;
+        }
         s.object.x = Math.min(ctx.area().sizeX, Math.max(0, p.x + s.move.dx));
         s.object.y = Math.min(ctx.area().sizeY, Math.max(0, p.y + s.move.dy));
     } else {
@@ -199,11 +204,11 @@ export function placeDrag(e, s) {
 }
 
 /** Changes the selected object with `change(o)` (undoable), then settles it on the ground and saves. False when nothing is
- *  selected. */
-export async function changeSelected(change) {
+ *  selected. `step`: false to add to the undo step taken before (a slider being dragged takes one step for the drag). */
+export async function changeSelected(change, step = true) {
     const o = ctx.view.selected;
     if (!o) return false;
-    ctx.area().beginStroke();
+    if (step) ctx.area().beginStroke();
     change(o);
     o.z = settle(o, await models.flat(o.model));
     ctx.view.updateObjects();
@@ -254,13 +259,20 @@ export function initPlace(c) {
         $('placeChips').appendChild(b);
     }
     $('placeSearch').oninput = () => searchSoon(showPlaceables);
+    // The selected object takes the size too: one undo step for a drag of the slider (each input event took one, and 40 of
+    // them pushed every earlier step out of the history). `change` ends the drag (or one key press).
+    let sizing = false;
     $('placeScale').oninput = () => {
         showScale();
-        // The selected object takes the size too.
-        if (ctx.view.selected && ctx.tool() === 'place')
+        if (ctx.view.selected && ctx.tool() === 'place') {
             changeSelected(o => {
                 o.scale = +$('placeScale').value;
-            });
+            }, !sizing);
+            sizing = true;
+        }
+    };
+    $('placeScale').onchange = () => {
+        sizing = false;
     };
     showScale();
     for (const b of $('placeMode').children) {

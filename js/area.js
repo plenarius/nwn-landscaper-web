@@ -281,6 +281,7 @@ export class Area {
             t: structuredClone(this.things),
             s: structuredClone(this.settings),
             r: structuredClone(this.originals),
+            c: this.clearance,
         };
     }
     restore(s) {
@@ -293,11 +294,14 @@ export class Area {
         this.things = structuredClone(s.t ?? []);
         this.settings = structuredClone(s.s ?? null);
         this.originals = structuredClone(s.r ?? { removed: [], moved: {}, edited: {} });
+        // (the Descent tool sets the ceiling height with its floors)
+        if ('c' in s) this.clearance = s.c;
         this.floodWater();
     }
 
-    beginStroke() {
-        this.undoStack.push(this.snapshot());
+    /** One undo step: the area as it is now, or `before` (a snapshot() taken earlier, for a change confirmed later). */
+    beginStroke(before = this.snapshot()) {
+        this.undoStack.push(before);
         if (this.undoStack.length > 40) this.undoStack.shift();
         this.redoStack = [];
     }
