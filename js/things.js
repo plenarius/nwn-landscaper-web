@@ -349,7 +349,9 @@ export class ThingsTool {
             if (!g) return false;
             this.selectedId = null;
             this.selectedKey = hit;
-            this.drag = { orig: hit, from: p, x: g.x, y: g.y, bearing: g.bearing };
+            // (with its reshaped outline, if it has one, to move along with it)
+            const outline = area.originals.moved[hit]?.outline?.map(q => [...q]);
+            this.drag = { orig: hit, from: p, x: g.x, y: g.y, bearing: g.bearing, outline };
             this.refresh();
             this.ctx.say(
                 `${g.name || g.tag || g.resref} (original ${g.kind}): drag to move · Q/E to turn · Delete takes it out${g.outline?.length ? ' · drag a corner, Alt+click an edge to add one, Shift+click a corner to remove it' : ''} · Esc to deselect`,
@@ -415,12 +417,20 @@ export class ThingsTool {
         }
         if (d.orig) {
             const a = this.area(),
-                clamp = (v, hi) => Math.min(hi, Math.max(0, v));
+                clamp = (v, hi) => Math.min(hi, Math.max(0, v)),
+                dx = p.x - d.from.x,
+                dy = p.y - d.from.y;
             a.originals.moved[d.orig] = {
-                x: round(clamp(d.x + p.x - d.from.x, a.sizeX)),
-                y: round(clamp(d.y + p.y - d.from.y, a.sizeY)),
+                x: round(clamp(d.x + dx, a.sizeX)),
+                y: round(clamp(d.y + dy, a.sizeY)),
                 bearing: d.bearing,
             };
+            // A reshaped outline moves with it (without one, ghosts() shifts the imported shape).
+            if (d.outline)
+                a.originals.moved[d.orig].outline = d.outline.map(([x, y]) => [
+                    round(clamp(x + dx, a.sizeX)),
+                    round(clamp(y + dy, a.sizeY)),
+                ]);
             this.refreshSoon();
             return;
         }
@@ -647,7 +657,8 @@ export class ThingsTool {
             if (g && turn && !e.ctrlKey && !e.metaKey) {
                 const a = this.area();
                 a.beginStroke();
-                a.originals.moved[g.key] = { x: g.x, y: g.y, bearing: round(g.bearing + turn, 3) };
+                // (keeping a reshaped outline)
+                a.originals.moved[g.key] = { ...a.originals.moved[g.key], x: g.x, y: g.y, bearing: round(g.bearing + turn, 3) };
                 this.changed();
                 return true;
             }

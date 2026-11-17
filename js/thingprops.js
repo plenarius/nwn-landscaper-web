@@ -367,12 +367,23 @@ ThingsTool.prototype.propsForm = function (box, t, k, original) {
                     this.changed();
                 };
                 into(label(f.label), sel);
-            } else if (BOOLEAN.has(f.label))
-                into(
-                    label(f.label),
-                    field('checkbox', !!t.fields[f.label], v => setv(v ? 1 : undefined)),
-                );
-            else if ('bifwdh'.includes(f.type))
+            } else if (BOOLEAN.has(f.label)) {
+                // On, off, or (not for an original, which shows what it has) left to the blueprint: a tick box could only
+                // turn a setting on, since unticking dropped the change and the blueprint's value came back.
+                const sel = document.createElement('select');
+                sel.dataset.keep = String(t.id);
+                if (!original) sel.add(new Option(t.blueprint ? "The blueprint's" : 'Not set', ''));
+                sel.add(new Option('On', '1'));
+                sel.add(new Option('Off', '0'));
+                const v = t.fields[f.label];
+                sel.value = v === undefined || v === '' ? (original ? '0' : '') : v ? '1' : '0';
+                sel.onchange = () => {
+                    this.area().beginStroke();
+                    setv(sel.value === '' ? undefined : +sel.value);
+                    this.changed();
+                };
+                into(label(f.label), sel);
+            } else if ('bifwdh'.includes(f.type))
                 into(
                     label(f.label),
                     field('number', t.fields[f.label] ?? '', v => setv(v === '' ? undefined : +v), { step: f.type === 'f' ? 0.5 : 1 }),
