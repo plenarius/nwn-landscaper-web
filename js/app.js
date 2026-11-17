@@ -305,17 +305,24 @@ $('btnOpen').onclick = async () => {
     if (!areas.length) list.textContent = engine.up ? 'No areas yet: export one first.' : NEEDS_ENGINE;
 };
 
+// How many times Open has been asked: each opening's answer counts only if no later one was asked meanwhile.
+let opening = 0;
+
 /** Opens area `a`: from landscaper (its saved copy, else its last export),
  *  or from this browser if it only lives here (a save that failed). */
 async function openArea(a) {
     const local = browserCopy(a.name);
     try {
+        // (an area opened after this one, whose answer came first, stays open)
+        const mine = ++opening;
         if (local && a.local) {
             setArea(Area.fromJSON(JSON.parse(local)));
         } else {
             const res = await api(`/api/area?name=${encodeURIComponent(a.name)}`);
             if (!res.ok) throw new Error(await failure(res));
-            setArea(Area.fromJSON(await res.json()));
+            const opened = Area.fromJSON(await res.json());
+            if (mine !== opening) return;
+            setArea(opened);
         }
         $('statusMsg').textContent = `Opened ${area.name} (module ${area.module}).`;
         saveSoon();

@@ -51,7 +51,10 @@ export async function api(url, opts = {}) {
     try {
         // biome-ignore lint/plugin: the one fetch() the page has; everything else calls api()
         const res = await fetch(url, { ...opts, headers, credentials: 'same-origin' });
-        if (res.ok && engineRoute) {
+        // Only a JSON answer is the engine's: a file server that answers every path with the page (a common single-page
+        // setting) also answers 200, and isn't an engine coming back. (The engine's files, a package or a picture, leave
+        // engine.up as it is.)
+        if (res.ok && engineRoute && (res.headers.get('Content-Type') ?? '').includes('json')) {
             engine.up = true; // (started again since)
             if (where.pathname !== '/api/me') answered = true;
         }
@@ -66,7 +69,8 @@ export async function api(url, opts = {}) {
 async function isBack() {
     if (!answered || Date.now() - askedAt < ASK_AGAIN_MS) return false;
     askedAt = Date.now();
-    return (await api('/api/me')).ok;
+    await api('/api/me');
+    return engine.up;
 }
 
 /** A 503 answer made here, with `text` as its status text and its JSON `error`. */
