@@ -299,6 +299,9 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     const dlg = $('bpDialog');
     const body = $('bpBody');
     body.textContent = 'Loading…';
+    // Nothing to delete until this blueprint has loaded: the button still held the one opened before.
+    $('bpDelete').hidden = true;
+    $('bpDelete').onclick = null;
     dlg.showModal();
     const res = await api(`/api/new-blueprint?ext=${ext}&resref=${encodeURIComponent(resref)}`);
     const d = await json(res);
@@ -360,6 +363,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     }
     if (ext === 'uti') await this.bpProperties(resref, body);
     if (ext === 'utc' || ext === 'utm' || (ext === 'utp' && byLabel.get('HasInventory'))) await this.bpGear(resref, body, ext);
+    $('bpDelete').hidden = false;
     $('bpDelete').onclick = async () => {
         if (
             !(await ask({
