@@ -20,6 +20,9 @@ async function openConversation(resref, onMade = null) {
     tree.textContent = 'Loading…';
     status.textContent = '';
     status.className = 'note';
+    // Nothing to copy until this conversation has loaded: the button still held the one opened before.
+    $('dlgCopy').hidden = true;
+    $('dlgCopy').onclick = null;
     dlg.showModal();
     const res = await api(`/api/dialog?resref=${encodeURIComponent(resref)}&any=1`);
     const m = await json(res);
@@ -52,6 +55,7 @@ async function openConversation(resref, onMade = null) {
             },
         });
         if (!ok || !made) return;
+        myDialogs = null;
         dlg.close();
         onMade?.(made);
         await openConversation(made, onMade);
@@ -246,6 +250,17 @@ async function openConversation(resref, onMade = null) {
 
 let listId = 0;
 
+// The builder's own conversations, asked once for every picker: each redraw of a properties panel built its button again,
+// and each asked the engine. Forgotten when one is made or copied.
+let myDialogs = null;
+function mineList() {
+    myDialogs ??= api('/api/dialogs').then(async res => {
+        if (!res.ok) myDialogs = null; // (asked again next time)
+        return (await json(res)).dialogs ?? [];
+    });
+    return myDialogs;
+}
+
 /** Beside a creature's (or door's, placeable's) Conversation box: conversations found by name as you type, and a button to
  *  write one (new, named by `suggest`), look at the module's (read only, with a copy button) or change one of yours. */
 export function conversationPicker(input, suggest = '') {
@@ -264,7 +279,7 @@ export function conversationPicker(input, suggest = '') {
     });
     const row = el('span', { className: 'scriptbtns' }, list);
     const b = el('button', { type: 'button', className: 'small' });
-    const mine = async () => ((await json(await api('/api/dialogs'))).dialogs ?? []).includes(input.value.trim().toLowerCase());
+    const mine = async () => (await mineList()).includes(input.value.trim().toLowerCase());
     const sync = async () => {
         b.textContent = (await mine()) ? 'Edit conversation' : input.value.trim() ? 'View conversation' : 'Write a conversation';
     };
@@ -295,6 +310,7 @@ export function conversationPicker(input, suggest = '') {
             },
         });
         if (!ok || !r) return;
+        myDialogs = null;
         made(r.resref);
         await openConversation(r.resref, made);
         sync();

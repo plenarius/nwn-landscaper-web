@@ -21,6 +21,23 @@ function scriptsWritable() {
     return canWrite;
 }
 
+// Whether a script is the builder's own, asked once per name: every redraw of a properties panel or a conversation built
+// each box's button again, and each asked the engine (about 150 requests for one edit of a 50-line conversation). Forgotten
+// when a script is made, copied or deleted.
+const ownScripts = new Map();
+function isMine(name) {
+    if (!name) return Promise.resolve(false);
+    if (!ownScripts.has(name))
+        ownScripts.set(
+            name,
+            api(`/api/scripts?q=${encodeURIComponent(name)}`).then(async res => {
+                if (!res.ok) ownScripts.delete(name); // (asked again next time)
+                return ((await json(res)).scripts ?? []).some(s => s.source === 'mine' && s.resref === name);
+            }),
+        );
+    return ownScripts.get(name);
+}
+
 /** The script editor for one of your own scripts, in its dialog. Saved (and checked) as you type. */
 async function openScript(resref, onMade = null) {
     const dlg = $('scriptDialog');
@@ -30,6 +47,11 @@ async function openScript(resref, onMade = null) {
     host.textContent = 'Loading…';
     status.textContent = '';
     status.className = 'note';
+    // Nothing to copy or delete until this script has loaded: the buttons still held the one opened before.
+    for (const id of ['scriptCopy', 'scriptDelete']) {
+        $(id).hidden = true;
+        $(id).onclick = null;
+    }
     dlg.showModal();
     const res = await api(`/api/script?resref=${encodeURIComponent(resref)}&any=1`);
     const d = await json(res);
@@ -117,6 +139,7 @@ async function openScript(resref, onMade = null) {
             },
         });
         if (!ok || !made) return;
+        ownScripts.clear();
         dlg.close();
         onMade?.(made);
         await openScript(made, onMade);
@@ -137,6 +160,7 @@ async function openScript(resref, onMade = null) {
             status.textContent = `Not deleted: ${await failure(res)}`;
             return;
         }
+        ownScripts.clear();
         dlg.close();
     };
     await new Promise(done => {
@@ -176,12 +200,12 @@ export function scriptPicker(input, kind = 'action') {
     scriptsWritable().then(ok => {
         if (!ok) return;
         const b = el('button', { type: 'button', className: 'small' });
-        const mine = async () =>
-            ((await json(await api(`/api/scripts?q=${encodeURIComponent(input.value.trim().toLowerCase())}`))).scripts ?? []).some(
-                s => s.source === 'mine' && s.resref === input.value.trim().toLowerCase(),
-            );
         const sync = async () => {
-            b.textContent = (await mine()) ? 'Edit script' : input.value.trim() ? 'View script' : 'Write a script';
+            b.textContent = (await isMine(input.value.trim().toLowerCase()))
+                ? 'Edit script'
+                : input.value.trim()
+                  ? 'View script'
+                  : 'Write a script';
         };
         sync();
         input.addEventListener('change', sync);
@@ -212,6 +236,7 @@ export function scriptPicker(input, kind = 'action') {
                 },
             });
             if (!ok || !created) return;
+            ownScripts.clear();
             input.value = created;
             input.dispatchEvent(new Event('change'));
             await openScript(created);
