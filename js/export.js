@@ -50,6 +50,15 @@ export async function sendArea(what) {
     return await res.json();
 }
 
+/** The markers of `report` (an export's or a path check's of area `a`) on the ground, when `a` is still the area open: another
+ *  area opened meanwhile gets none of them, and the status line says whose the report is. */
+function showMarkers(a, report) {
+    if (ctx.area() === a) {
+        ctx.view.setMarkers(report.warnings || []);
+        $('statusMsg').textContent = '';
+    } else $('statusMsg').textContent = `The report is ${a.name}'s, which is no longer open: open it again to see where on the ground.`;
+}
+
 /** Sets up the Export and Check paths buttons. */
 export function initExport(c) {
     ctx = c;
@@ -58,12 +67,12 @@ export function initExport(c) {
         if (!ctx.area()) return;
         const btn = $('btnExport');
         btn.disabled = true;
-        $('statusMsg').textContent = `Exporting ${ctx.area().name}…`;
+        const a = ctx.area();
+        $('statusMsg').textContent = `Exporting ${a.name}…`;
         try {
             const report = await sendArea('export');
             showReport(report);
-            ctx.view.setMarkers(report.warnings || []);
-            $('statusMsg').textContent = '';
+            showMarkers(a, report);
         } catch (err) {
             $('statusMsg').textContent = '';
             showError(err.message, engine.up ? 'Export failed' : 'Export needs the engine');
@@ -78,12 +87,12 @@ export function initExport(c) {
         if (!ctx.area()) return;
         const btn = $('btnCheck');
         btn.disabled = true;
+        const a = ctx.area();
         $('statusMsg').textContent = 'Checking how NWN will path this area…';
         try {
             const report = await sendArea('check');
             showReport(report, true);
-            ctx.view.setMarkers(report.warnings || []);
-            $('statusMsg').textContent = '';
+            showMarkers(a, report);
         } catch (err) {
             $('statusMsg').textContent = '';
             showError(err.message, engine.up ? 'Path check failed' : 'Check paths needs the engine');

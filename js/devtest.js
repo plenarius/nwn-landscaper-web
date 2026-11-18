@@ -6,6 +6,7 @@
 import { api } from './api.js';
 import { $, el, store } from './dom.js';
 import { areaRow } from './import.js';
+import { userKey } from './save.js';
 
 /** What app.js gives this file (initDevTest): `area()` and `readOnly()`. */
 let ctx = null;
@@ -87,8 +88,8 @@ async function testPickArea(name, waypoint = '') {
     testCanGo();
 }
 
-/** The way in last used for a module, kept in this browser. */
-const testWayKey = () => `landscaper.testway.${ctx.area()?.module || ctx.area()?.name}`;
+/** The way in this user last used for a module, kept in this browser. */
+const testWayKey = () => userKey('testway', ctx.area()?.module || ctx.area()?.name);
 
 async function testAreas() {
     const mine = ++testSeq,

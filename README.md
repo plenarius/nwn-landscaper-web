@@ -99,6 +99,10 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 There is no build step: edit the files and reload the page. `scripts/check.sh` runs every check the way CI does (Biome,
 html-validate, spelling, writing, Markdown, links, licences, secrets); [STYLE.md](STYLE.md) is the standard it checks.
 
+`node --test 'tests/*.test.js'` (Node 24) runs the tests, without a browser: `tests/browser.js` gives the page's modules a
+stand-in for the page, the browser's storage and the engine, and swaps the modules that draw or ask for the stubs in
+`tests/stubs/`.
+
 Two rules of this repository's own, as Biome plugins in `lint/`:
 
 - Data goes into the page as text: build elements with `el()` from `js/dom.js`, `textContent` or `new Option()`.

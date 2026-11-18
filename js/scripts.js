@@ -7,7 +7,7 @@
 import { EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, oneDark } from '../vendor/codemirror/codemirror.js';
 
 import { ask } from './ask.js';
-import { api, failure, json } from './api.js';
+import { api, failure, json, viewing } from './api.js';
 import { $, el } from './dom.js';
 
 // The question is asked once: several boxes ask at the same time while a panel opens. When the engine doesn't answer, it is
@@ -60,10 +60,11 @@ async function openScript(resref, onMade = null) {
         return;
     }
     host.textContent = '';
-    // One that isn't yours (the module's or the game's) is shown to read, with a button to make your own copy.
-    const mineAlready = !!d.mine;
+    // One that isn't yours (the module's or the game's) is shown to read, with a button to make your own copy. In someone
+    // else's workspace (read-only) every script is shown to read: theirs too, with no copy to make.
+    const mineAlready = !!d.mine && !viewing.user;
     const copy = $('scriptCopy');
-    copy.hidden = mineAlready;
+    copy.hidden = mineAlready || !!viewing.user;
     $('scriptDelete').hidden = !mineAlready;
     $('scriptTitle').textContent = mineAlready ? `Script ${resref}` : `Script ${resref} (read only)`;
     let timer = null,
@@ -119,7 +120,9 @@ async function openScript(resref, onMade = null) {
     if (mineAlready) save();
     else {
         status.className = 'note';
-        status.textContent = `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`;
+        status.textContent = viewing.user
+            ? `You are looking at ${viewing.user}'s workspace: its scripts are shown to read.`
+            : `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`;
     }
     copy.onclick = async () => {
         let made = null;
@@ -201,11 +204,10 @@ export function scriptPicker(input, kind = 'action') {
         if (!ok) return;
         const b = el('button', { type: 'button', className: 'small' });
         const sync = async () => {
-            b.textContent = (await isMine(input.value.trim().toLowerCase()))
-                ? 'Edit script'
-                : input.value.trim()
-                  ? 'View script'
-                  : 'Write a script';
+            const name = input.value.trim().toLowerCase();
+            // (in someone else's workspace, read-only: a script to look at, never one to write)
+            b.hidden = !name && !!viewing.user;
+            b.textContent = !viewing.user && (await isMine(name)) ? 'Edit script' : name ? 'View script' : 'Write a script';
         };
         sync();
         input.addEventListener('change', sync);

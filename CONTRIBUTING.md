@@ -12,7 +12,9 @@ Issues and pull requests are welcome. For a change to how areas are built, expor
   tools and how to install them.
 - Keep the two rules in [README.md](README.md#development): data goes into the page as text, and every request to the engine
   goes through `api()`.
-- There is no build step and no test suite: say in the pull request what you tried in the browser, against which engine.
+- Run the tests: `node --test 'tests/*.test.js'` (Node 24; CI runs them too). They cover what runs without the browser's
+  drawing: the area, its undo and JSON, the save queue and the requests to the engine. A change to that logic comes with a
+  test; for the rest, say in the pull request what you tried in the browser, against which engine.
 - Don't change `STYLE.md` or the other shared files listed in it here alone: they are identical in every repository that
   follows it, and nwn-bake's copy is the master. `scripts/shared-files.sh` checks ours against nwn-bake's at the release
   pinned in `scripts/shared-files.sha256` (CI runs it with `--online`, which also checks the pins against nwn-bake). To take a

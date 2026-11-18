@@ -76,6 +76,10 @@ export class Area {
         // The NWN module it is exported into (another area's, to link them).
         this.module = name;
         this.waterLevel = new Float32Array(this.nx * this.ny).fill(NaN);
+        // An id given when the area is made (New), kept in its saves: the engine refuses a save whose `created` differs from
+        // its saved copy's, which is another area of the same name made since (from another tab or computer). null for an
+        // area made before ids, or by the engine (an import).
+        this.created = null;
         this.undoStack = [];
         this.redoStack = [];
     }
@@ -95,6 +99,7 @@ export class Area {
      *  high to dig valleys and canyons down into it. */
     static create(name, tiles, start, base = 5, tilesY = tiles) {
         const area = new Area(name, tiles, undefined, undefined, undefined, tilesY);
+        area.created = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
         const { nx, ny } = area;
         if (start === 'interior') {
             // A solid mass with walls of stone; rooms are cut out of it.
@@ -402,6 +407,7 @@ export class Area {
             entranceNextId: this.entranceNextId,
             settings: this.settings,
             originals: this.originals,
+            created: this.created,
         };
     }
 
@@ -420,6 +426,7 @@ export class Area {
             area.clearance = o.clearance ?? null;
         }
         if (o.module) area.module = o.module;
+        if (typeof o.created === 'string' && o.created) area.created = o.created;
         if (Array.isArray(o.things)) area.things = o.things;
         area.nextThingId = o.nextThingId ?? Math.max(0, ...area.things.map(x => x.id ?? 0)) + 1;
         if (o.settings) area.settings = o.settings;
