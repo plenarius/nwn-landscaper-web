@@ -77,6 +77,9 @@ function draw(scene, textures) {
 
 async function make(resref) {
     const { key } = await api(`/api/preview/creature?resref=${encodeURIComponent(resref)}`).then(json);
+    // The review service's name for the picture: 64 hexadecimal digits (anything else, `../` or a `?`, would make these
+    // requests to other paths of the engine).
+    if (!/^[0-9a-f]{64}$/.test(key ?? '')) throw new Error('no picture');
     const base = `/api/preview-file/${key}`;
     const scene = await api(`${base}/scene.json`).then(json);
     const loader = new THREE.TextureLoader();

@@ -76,6 +76,19 @@ const descentOptions = () => ({
     drop: +$('descentDrop').value,
     flip: $('descentFlip').checked,
 });
+/** What a room or descent says when its floor can't take its texture. */
+const FULL_PALETTE = 'this area has 255 textures, the most it can';
+/**
+ * The floor texture of a room or a descent (the Paint tool's when it is a floor, else old wood): its palette `index`, or
+ * undefined to leave the floor as it is when the library lacks the texture, or when the area has 255 textures without it
+ * (`bare`: the builder is told). Paint and Dig refuse to start then; a room or a descent is cut all the same.
+ */
+function floorPaint() {
+    const id = ctx.library.byId.get(ctx.paintTexture())?.category === 'Floors' ? ctx.paintTexture() : 'woodOld';
+    if (!ctx.library.byId.has(id)) return { index: undefined, bare: false };
+    if (!ctx.area().canPaint(id)) return { index: undefined, bare: true };
+    return { index: ctx.area().materialIndex(id), bare: false };
+}
 /** Ends the stroke under way: a room, ramp or descent is cut, the shadows and water follow the ground, and the area is saved
  *  a moment later. Also before another area opens, so a stroke never carries on into it. */
 export const endStroke = () => {
@@ -104,15 +117,13 @@ export const endStroke = () => {
             // The same headroom all the way down, or the walls grow as the floors drop.
             const headroom = +$('descentCeiling').value;
             if (headroom >= 2 && headroom <= 20) ctx.area().clearance = headroom;
-            const floorTexture = ctx.library.byId.get(ctx.paintTexture())?.category === 'Floors' ? ctx.paintTexture() : 'woodOld';
-            const rect = cutDescent(
-                ctx.area(),
-                plan,
-                ctx.library.byId.has(floorTexture) ? ctx.area().materialIndex(floorTexture) : undefined,
-            );
+            const floor = floorPaint();
+            const rect = cutDescent(ctx.area(), plan, floor.index);
             ctx.view.markDirty(rect);
             ctx.view.syncPalette();
-            $('statusMsg').textContent = `A descent of ${plan.floors} floors, down to ${plan.bottom.toFixed(1)} m.`;
+            $('statusMsg').textContent =
+                `A descent of ${plan.floors} floors, down to ${plan.bottom.toFixed(1)} m.` +
+                (floor.bare ? ` Its floors aren't painted: ${FULL_PALETTE}.` : '');
         }
     }
     if (stroke.room) {
@@ -120,7 +131,7 @@ export const endStroke = () => {
         ctx.view.markDirty(cutRoom(ctx.area(), r, stroke.room.floor, stroke.paintIndex));
         ctx.view.setRoomOutline(null);
         ctx.view.syncPalette();
-        $('statusMsg').textContent = '';
+        $('statusMsg').textContent = stroke.bare ? `The room's floor isn't painted: ${FULL_PALETTE}.` : '';
     }
     // The ground moved: its shadows too.
     if (!stroke.water && !stroke.place && !stroke.scatter && stroke.tool !== 'paint') ctx.view.updateShade();
@@ -298,7 +309,7 @@ export function initStrokes(c) {
         const texture = { paint: ctx.paintTexture(), dig: ctx.paintTexture() === DEFAULT_TEXTURE ? 'dirt' : ctx.paintTexture() }[
             ctx.tool()
         ];
-        if (texture && !ctx.area().palette.includes(texture) && ctx.area().palette.length >= 255) {
+        if (texture && !ctx.area().canPaint(texture)) {
             $('statusMsg').textContent = 'This area has 255 textures, the most it can: paint with one it already has.';
             return;
         }
@@ -341,8 +352,9 @@ export function initStrokes(c) {
                 to: p,
                 floor: ctx.area().enclosed() && start >= ctx.area().roof - 0.5 ? ctx.area().roof - CAVE_ROCK : start,
             };
-            const floorTexture = ctx.library.byId.get(ctx.paintTexture())?.category === 'Floors' ? ctx.paintTexture() : 'woodOld';
-            stroke.paintIndex = ctx.library.byId.has(floorTexture) ? ctx.area().materialIndex(floorTexture) : undefined;
+            const floor = floorPaint();
+            stroke.paintIndex = floor.index;
+            stroke.bare = floor.bare;
             ctx.view.setRoomOutline(roomRect(p, p, ctx.area().sizeX, ctx.area().sizeY), stroke.room.floor);
         }
         if (ctx.tool() === 'dig') {

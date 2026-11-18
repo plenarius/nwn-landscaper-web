@@ -217,7 +217,7 @@ ThingsTool.prototype.blueprintFields = function (t) {
     const cache = this.fieldsCache;
     if (!cache.has(key)) {
         cache.set(key, null);
-        api(`/api/blueprint-fields?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
+        api(`/api/blueprint-fields?kind=${encodeURIComponent(t.kind)}&resref=${encodeURIComponent(t.blueprint)}`)
             .then(async res => {
                 const v = res.ok ? await json(res) : null;
                 if (v?.fields && typeof v.fields === 'object') cache.set(key, v.fields);
@@ -581,7 +581,7 @@ ThingsTool.prototype.contentsSection = function (box, t, original = false) {
     // The blueprint's own list, fetched once (an original's is what it holds, sent with it).
     if (!original && !this.contentsCache.has(key)) {
         this.contentsCache.set(key, null);
-        api(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
+        api(`/api/blueprint-contents?kind=${encodeURIComponent(t.kind)}&resref=${encodeURIComponent(t.blueprint)}`)
             .then(json)
             .then(v => {
                 this.contentsCache.set(key, v);
@@ -716,7 +716,7 @@ ThingsTool.prototype.equipmentSection = function (box, t, original = false) {
     });
     if (!original && !this.contentsCache.has(key)) {
         this.contentsCache.set(key, null);
-        api(`/api/blueprint-contents?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
+        api(`/api/blueprint-contents?kind=${encodeURIComponent(t.kind)}&resref=${encodeURIComponent(t.blueprint)}`)
             .then(json)
             .then(v => {
                 this.contentsCache.set(key, v);

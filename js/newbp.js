@@ -295,10 +295,18 @@ ThingsTool.prototype.bpCreateForm = function (box, from) {
     name.focus();
 };
 
+// How many times the blueprint dialog has been opened: an answer for an earlier opening is dropped (closed while it loaded and
+// opened on another blueprint, the dialog showed the first and its Delete deleted the second).
+let bpOpening = 0;
+
 /** The dialog that changes one of the builder's blueprints. Each setting is saved as it is changed. */
 ThingsTool.prototype.bpEdit = async function (ext, resref) {
+    const turn = ++bpOpening;
     const dlg = $('bpDialog');
+    const stale = () => turn !== bpOpening || !dlg.open;
     const body = $('bpBody');
+    // (while it loads, the title is this one's, not the one shown before)
+    $('bpTitle').textContent = resref;
     body.textContent = 'Loading…';
     // Nothing to delete until this blueprint has loaded: the button still held the one opened before.
     $('bpDelete').hidden = true;
@@ -306,6 +314,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     dlg.showModal();
     const res = await api(`/api/new-blueprint?ext=${ext}&resref=${encodeURIComponent(resref)}`);
     const d = await json(res);
+    if (stale()) return;
     if (!res.ok) {
         body.textContent = d.error || res.statusText;
         return;
@@ -365,6 +374,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     }
     if (ext === 'uti') await this.bpProperties(resref, body);
     if (ext === 'utc' || ext === 'utm' || (ext === 'utp' && byLabel.get('HasInventory'))) await this.bpGear(resref, body, ext);
+    if (stale()) return;
     $('bpDelete').hidden = false;
     $('bpDelete').onclick = async () => {
         if (

@@ -159,8 +159,10 @@ export function initDevTest(c) {
             /* nothing remembered */
         }
         await testRefresh(false);
+        // Closed while it loaded: no poll. Each poll touches the claim (the review service counts it as the holder at work), so
+        // one left running kept the team's dev server claimed for as long as the page was open.
         clearInterval(testPoll);
-        testPoll = setInterval(() => testRefresh(true), 10000);
+        if ($('testDialog').open) testPoll = setInterval(() => testRefresh(true), 10000);
     };
     $('testDialog').addEventListener('close', () => clearInterval(testPoll));
     $('testFind').oninput = () => {

@@ -35,7 +35,7 @@ function areaRequest() {
         `&shadow=${ctx.area().shadow}` +
         `&entrances=${encodeURIComponent(JSON.stringify(ctx.area().entrances))}` +
         (ctx.area().enclosed()
-            ? `&kind=${ctx.area().kind}&roof=${ctx.area().roof}${ctx.area().clearance > 0 ? `&clearance=${ctx.area().clearance}` : ''}`
+            ? `&kind=${ctx.area().kind}&roof=${encodeURIComponent(ctx.area().roof)}${ctx.area().clearance > 0 ? `&clearance=${encodeURIComponent(ctx.area().clearance)}` : ''}`
             : '') +
         `&module=${encodeURIComponent(ctx.area().module || ctx.area().name)}`;
     return { query, body };

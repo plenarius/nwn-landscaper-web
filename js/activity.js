@@ -6,8 +6,13 @@
 import { api } from './api.js';
 import { $ } from './dom.js';
 
+// How many times the list has been asked for: only the latest answer fills it (a filter changed or Refresh pressed while one
+// loaded appended both answers, mixing two filters).
+let asked = 0;
+
 // What happened, for admins on a team server (searches, imports, exports, refusals...).
 async function showActivity() {
+    const mine = ++asked;
     $('activityDialog').showModal();
     const rows = $('actRows');
     rows.textContent = '';
@@ -18,6 +23,7 @@ async function showActivity() {
     } catch {
         /* none */
     }
+    if (mine !== asked) return;
     for (const e of events) {
         const tr = document.createElement('tr');
         const cell = (text, cls) => {

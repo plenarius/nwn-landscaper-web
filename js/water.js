@@ -27,19 +27,27 @@ export function waterDown(e, p) {
         saveSoon();
         return null;
     }
-    ctx.area().beginStroke();
     let b = body;
     if (!b) {
+        ctx.area().beginStroke();
         b = { i, j, level: ctx.area().heights[j * ctx.area().nx + i] + 0.3 };
         ctx.area().water.push(b);
         waterChanged();
     }
-    return { body: b, startY: e.clientY, startLevel: b.level, ground: ctx.area().heights[b.j * ctx.area().nx + b.i] };
+    // A body that was there takes its undo step with its first change of level: a click that only takes it changes nothing,
+    // and must not empty Redo.
+    return { body: b, startY: e.clientY, startLevel: b.level, ground: ctx.area().heights[b.j * ctx.area().nx + b.i], stepped: !body };
 }
 
 /** Dragging up or down sets the body's level. `w` is what waterDown() gave. */
 export function waterDrag(e, w) {
-    w.body.level = Math.max(w.ground + 0.05, w.startLevel + (w.startY - e.clientY) * LEVEL_PER_PIXEL);
+    const level = Math.max(w.ground + 0.05, w.startLevel + (w.startY - e.clientY) * LEVEL_PER_PIXEL);
+    if (!w.stepped) {
+        if (level === w.body.level) return;
+        ctx.area().beginStroke();
+        w.stepped = true;
+    }
+    w.body.level = level;
     waterChanged();
     $('statusMsg').textContent =
         `Water level ${w.body.level.toFixed(2)} m (${(w.body.level - w.ground).toFixed(1)} m deep where you clicked)`;

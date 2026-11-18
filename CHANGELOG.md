@@ -56,6 +56,21 @@ What changed for builders since the review of the private builds (#61 to #73):
   another area put no markers on it.
 - **Per user on a shared browser:** the area to open at the start and the dev server's way in. Area settings ask the engine for
   the music and load-screen names again after a failed load, instead of showing numbers until the page reloads.
+- **Room, Descent and Entrance work in an area with 255 textures.** They stopped halfway with an error, and a Descent then
+  kept every tool key from working. Now the room or the descent is cut and the entrance made, with the floor or the rock left
+  unpainted, and the status line says so.
+- **Undo takes back Sky & fog.** A preset, a colour, the fog, the view distance or the shadows' strength is one step each; a
+  drag of a slider is one step.
+- **The Entrance panel follows undo, redo and opening another area.** A "leads to" choice made after an undo is kept and saved.
+- **A click on water that leaves its level as it was takes no undo step**, so Redo still works after it.
+- **Dialogs show and change the item opened last.** A blueprint, script or conversation dialog closed while it loaded and
+  opened on another shows the second one and acts on it. Closing the dev server dialog while it loads stops its checks, which
+  kept your claim on the dev server alive while the page was open. The Activity dialog shows the filter chosen last.
+- **Script and conversation suggestions are for what you typed last.** The script button (Write, View or Edit) shows for
+  admins, read from `/api/me`, instead of from a search for a made-up name.
+- **A conversation you can't change no longer offers "+ Another way for the NPC to start"**, whose line was never saved.
+- Values from an area file (a thing's kind, a cave's roof height) go into request URLs encoded, and a picture name from the
+  review service is used only when it is the 64 hexadecimal digits the service gives.
 
 In this release too:
 

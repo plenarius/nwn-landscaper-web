@@ -47,8 +47,14 @@ export async function showEntrances() {
             select,
         );
         select.onchange = ev => {
+            // The area's own entrance of this id: `e` may be a copy it no longer holds (an undo, redo or another area since).
+            const now = ctx.area().entrances.find(x => x.id === e.id);
+            if (!now) {
+                showEntrances();
+                return;
+            }
             ctx.area().beginStroke();
-            e.link = ev.target.value || undefined;
+            now.link = ev.target.value || undefined;
             saveSoon();
         };
         box.appendChild(row);
@@ -133,7 +139,8 @@ export function entranceDown(e, p) {
         bj = Math.min(ctx.area().ny - 1, Math.max(0, Math.round(by / SPACING)));
     const ground = ctx.area().palette[ctx.area().materials[bj * ctx.area().nx + bi]];
     ent.rock = rockFor(ctx.library.byId.get(ground)?.category, ground, id => ctx.library.byId.has(id));
-    const rock = ent.rock ? ctx.area().materialIndex(ent.rock) : undefined;
+    // (unpainted when the area has 255 textures without it: materialIndex() would throw with the entrance half made)
+    const rock = ent.rock && ctx.area().canPaint(ent.rock) ? ctx.area().materialIndex(ent.rock) : undefined;
     ctx.view.markDirty(carve(ctx.area(), ent, rock));
     ctx.view.syncPalette();
     if (ctx.area().water.length) waterChanged();
@@ -142,7 +149,8 @@ export function entranceDown(e, p) {
     showEntrances();
     $('statusMsg').textContent =
         `Entrance ${ent.id}: its door will be tagged ${ctx.area().doorTag(ent)}` +
-        (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '');
+        (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '') +
+        (ent.rock && rock === undefined ? `. Its rock isn't painted: this area has 255 textures, the most it can.` : '');
     saveSoon();
 }
 
