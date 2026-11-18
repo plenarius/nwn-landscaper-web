@@ -9,8 +9,9 @@ import { ask } from './ask.js';
 import { api, engine, NEEDS_ENGINE } from './api.js';
 import { $, el } from './dom.js';
 import { showError } from './report.js';
+import { flushSave } from './save.js';
 
-/** What app.js gives this file (initImport): `readOnly()` and `openArea(a)`. */
+/** What app.js gives this file (initImport): `readOnly()` and `openArea(a, settle)` (see app.js). */
 let ctx = null;
 
 // What a list shows for an area: the name the game shows for it (when the server knows it), else its tag.
@@ -108,13 +109,16 @@ export async function reimport(a, button) {
     button.textContent = 'Importing…';
     button.classList.add('busy');
     try {
+        // The area's waiting save goes first: after the import it would write the old area back over the new one.
+        await flushSave();
         const res = await api(`/api/reimport?name=${encodeURIComponent(a.name)}`, { method: 'POST' });
         const r = await res.json();
         if (!res.ok) throw new Error(r.error || res.statusText);
         reimporting = false;
         for (const b of $('openDialog').querySelectorAll('button')) b.disabled = false;
         $('openDialog').close();
-        await ctx.openArea({ name: a.name });
+        // (a copy of it still in this browser stays there: the next start asks about it)
+        await ctx.openArea({ name: a.name }, false);
         $('statusMsg').textContent =
             `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
     } catch (err) {

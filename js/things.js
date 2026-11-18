@@ -149,6 +149,11 @@ export class ThingsTool {
         const a = this.area();
         this.originals = [];
         this.selectedKey = null;
+        // (another area: nothing of the last one's is being worked on, so no change can carry it into this one)
+        this.workOrig = null;
+        this.draft = null;
+        this.redrawing = null;
+        this.drag = null;
         if (!a) return;
         const name = a.name;
         let list = [];
@@ -792,12 +797,16 @@ export class ThingsTool {
         this.renderOriginals();
         this.ctx.$('thingFinish').hidden = !this.draft;
         this.syncInspector();
-        // A read-only session (someone else's workspace) can look but not change.
-        if (this.ctx.readOnly?.())
-            for (const el of document.querySelectorAll(
-                '#thingProps input, #thingProps select, #thingProps button, #thingOrigs button, #thingFinish, #thingDelete',
-            ))
-                el.disabled = true;
+        this.lockReadOnly();
+    }
+
+    /** A read-only session (someone else's workspace) can look but not change: the tool's controls are turned off. */
+    lockReadOnly() {
+        if (!this.ctx.readOnly?.()) return;
+        for (const el of document.querySelectorAll(
+            '#thingProps input, #thingProps select, #thingProps textarea, #thingProps button, #thingOrigs button, #thingMake button, #thingFinish, #thingDelete',
+        ))
+            el.disabled = true;
     }
 }
 

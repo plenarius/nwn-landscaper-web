@@ -226,7 +226,8 @@ ThingsTool.prototype.bpFinder = function () {
     const box = $('thingMake');
     if (!box) return;
     const k = this.armed;
-    box.hidden = !(k?.kind in EXT);
+    // (not in someone else's workspace, read-only: their blueprints are theirs, and a new one would be made in your own)
+    box.hidden = !(k?.kind in EXT) || !!this.ctx.readOnly?.();
     if (box.hidden) return;
     box.textContent = '';
     const sel = this.blueprint;

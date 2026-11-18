@@ -19,7 +19,7 @@ import './newbp.js'; // (adds the builder's own blueprints to ThingsTool)
 import { ask } from './ask.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
-import { api, engine, failure, json, NEEDS_ENGINE } from './api.js';
+import { api, engine, json, NEEDS_ENGINE, viewing } from './api.js';
 import { $, el, session, store } from './dom.js';
 import { initImport, reimport } from './import.js';
 import { initSky, showAreaSky } from './sky.js';
@@ -33,8 +33,21 @@ import { initPlace, selectObject, removeObject, changeSelected, transformer, sho
 import { initScatter, showScatterables } from './scatter.js';
 import { initWater } from './water.js';
 import { initEntranceTool, showEntrances } from './entrancetool.js';
-import { initStrokes, currentStroke } from './strokes.js';
-import { initSave, saveSoon, flushSave, moveBrowserAreas, browserCopy, browserCopies, noteSaved } from './save.js';
+import { initStrokes, currentStroke, endStroke } from './strokes.js';
+import {
+    initSave,
+    saveSoon,
+    flushSave,
+    moveBrowserAreas,
+    browserCopy,
+    browserCopies,
+    noteSaved,
+    loadArea,
+    openCopy,
+    noteOpen,
+    lastOpen,
+    unsaved,
+} from './save.js';
 import { initLive, showLive, checkSoon } from './live.js';
 import { initExport } from './export.js';
 
@@ -271,8 +284,8 @@ $('btnOpen').onclick = async () => {
         who.append('Workspace', pick);
     }
     noteSaved(areas);
-    // Areas only saved here (never exported) too.
-    for (const name of browserCopies()) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
+    // Areas only saved here (never exported) too: yours, so not while looking at someone else's workspace.
+    if (!readOnly) for (const name of browserCopies()) if (!areas.some(a => a.name === name)) areas.push({ name, local: true });
     list.textContent = '';
     for (const a of areas) {
         const row = document.createElement('div');
@@ -308,24 +321,23 @@ $('btnOpen').onclick = async () => {
 // How many times Open has been asked: each opening's answer counts only if no later one was asked meanwhile.
 let opening = 0;
 
-/** Opens area `a`: from landscaper (its saved copy, else its last export),
- *  or from this browser if it only lives here (a save that failed). */
-async function openArea(a) {
-    const local = browserCopy(a.name);
+/** Opens area `a` (an entry of Open's list): from landscaper (its saved copy, else its last export), after the saves before
+ *  it and its copy in this browser (loadArea); or from this browser if it only lives here (a save that failed). It isn't
+ *  saved again: nothing has changed. `settle` false leaves the copy in this browser as it is (see loadArea). */
+async function openArea(a, settle = true) {
     try {
         // (an area opened after this one, whose answer came first, stays open)
         const mine = ++opening;
-        if (local && a.local) {
-            setArea(Area.fromJSON(JSON.parse(local)));
-        } else {
-            const res = await api(`/api/area?name=${encodeURIComponent(a.name)}`);
-            if (!res.ok) throw new Error(await failure(res));
-            const opened = Area.fromJSON(await res.json());
-            if (mine !== opening) return;
-            setArea(opened);
+        const opened = a.local ? openCopy(a.name) : await loadArea(a.name, settle);
+        if (mine !== opening) return;
+        // Reopened while it was still being changed here (during the load): what is open is newer than the answer.
+        if (opened.name === area.name && unsaved(area)) {
+            $('statusMsg').textContent = `${area.name} has changes the engine hasn't saved yet: kept as it is.`;
+            return;
         }
+        setArea(opened);
+        noteOpen(area.name);
         $('statusMsg').textContent = `Opened ${area.name} (module ${area.module}).`;
-        saveSoon();
     } catch (err) {
         showError(`Couldn't open ${a.name}: ${err.message}`, 'Open failed');
     }
@@ -410,6 +422,9 @@ initStrokes({
 }
 
 function setArea(a) {
+    // A stroke under way ends on the area it began on: it never carries on into this one (with that area's textures, and its
+    // undo step left behind).
+    if (currentStroke()) endStroke();
     // The area open until now: its last change is saved before it goes (not 800 ms later, or never).
     flushSave();
     area = a;
@@ -439,6 +454,7 @@ async function loadMe() {
         }
     } else engine.up = false; // no engine: stopped (503 from api()), or a plain file server (404)
     readOnly = !!me.viewing;
+    viewing.user = me.viewing || null;
     showWho();
     showEngine();
 }
@@ -497,7 +513,7 @@ initPublish(editor);
 initDevTest(editor);
 
 // Save a version, and autosave (save.js).
-initSave(editor);
+initSave({ ...editor, open: name => openArea({ name }, false) });
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
 async function viewAs(user) {
@@ -526,10 +542,11 @@ let areaLists = null;
 $('btnSettings').onclick = async () => {
     if (!area || readOnly) return;
     const meta = await thingsTool.loadMeta();
+    // (a failed answer isn't kept: the next time asks again, and the settings show plain numbers meanwhile)
     areaLists ??= await api('/api/area-lists')
-        .then(r => r.json())
-        .catch(() => ({}));
-    openSettings(area, meta.template, areaLists, () => {
+        .then(r => (r.ok ? r.json() : null))
+        .catch(() => null);
+    openSettings(area, meta.template, areaLists ?? {}, () => {
         saveSoon();
         $('statusMsg').textContent = 'Area settings kept.';
     });
@@ -701,10 +718,12 @@ let reviewArea = null;
 }
 if (!readOnly) await moveBrowserAreas();
 {
-    const current = reviewArea ?? store.get('landscaper.current');
+    const current = reviewArea ?? (readOnly ? null : lastOpen());
     const local = !reviewArea && current && browserCopy(current);
     let opened = null;
-    if (current && (!local || reviewArea)) {
+    // The engine's copy when it has one: a copy still in this browser is one the builder didn't decide on (moveBrowserAreas
+    // asks again at the next start), or the engine isn't there.
+    if (current) {
         try {
             const res = await api(`/api/area?name=${encodeURIComponent(current)}`);
             if (res.ok) opened = Area.fromJSON(await res.json());
@@ -713,7 +732,7 @@ if (!readOnly) await moveBrowserAreas();
         }
     }
     try {
-        opened ??= local ? Area.fromJSON(JSON.parse(local)) : null;
+        opened ??= local ? openCopy(current) : null;
     } catch {
         opened = null;
     }

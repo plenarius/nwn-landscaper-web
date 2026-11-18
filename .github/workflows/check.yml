@@ -53,6 +53,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: scripts/shared-files.sh --online
+      - name: Tests
+        run: node --test 'tests/*.test.js'
       - name: scripts/check.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

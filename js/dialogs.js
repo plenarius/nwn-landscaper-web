@@ -7,7 +7,7 @@
 
 import { scriptPicker } from './scripts.js';
 import { ask } from './ask.js';
-import { api, json } from './api.js';
+import { api, json, viewing } from './api.js';
 import { $, el } from './dom.js';
 
 const excerpt = (t, n = 48) => (t || '(empty)').replace(/\s+/g, ' ').slice(0, n) + ((t || '').length > n ? '…' : '');
@@ -30,14 +30,17 @@ async function openConversation(resref, onMade = null) {
         tree.textContent = m.error || res.statusText;
         return;
     }
-    // One that isn't yours (the module's or the game's) is shown to read, with a button to start your own from it.
-    const readOnly = !m.mine;
+    // One that isn't yours (the module's or the game's) is shown to read, with a button to start your own from it. In someone
+    // else's workspace (read-only) every conversation is shown to read: theirs too, with no copy to make.
+    const readOnly = !m.mine || !!viewing.user;
     tree.classList.toggle('ro', readOnly);
-    $('dlgCopy').hidden = !readOnly;
+    $('dlgCopy').hidden = !readOnly || !!viewing.user;
     $('dlgTitle').textContent = readOnly ? `Conversation ${resref} (read only)` : `Conversation ${resref}`;
-    $('dlgNote').textContent = readOnly
-        ? `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`
-        : 'Your own conversation. Changes are saved as you make them and go to review with what uses it.';
+    $('dlgNote').textContent = viewing.user
+        ? `You are looking at ${viewing.user}'s workspace: its conversations are shown to read.`
+        : readOnly
+          ? `This is the module's (or the game's), so it can't be changed here. Make your own copy to change it.`
+          : 'Your own conversation. Changes are saved as you make them and go to review with what uses it.';
     $('dlgCopy').onclick = async () => {
         let made = null;
         const ok = await ask({
@@ -281,7 +284,10 @@ export function conversationPicker(input, suggest = '') {
     const b = el('button', { type: 'button', className: 'small' });
     const mine = async () => (await mineList()).includes(input.value.trim().toLowerCase());
     const sync = async () => {
-        b.textContent = (await mine()) ? 'Edit conversation' : input.value.trim() ? 'View conversation' : 'Write a conversation';
+        // (in someone else's workspace, read-only: a conversation to look at, never one to write)
+        b.hidden = !input.value.trim() && !!viewing.user;
+        b.textContent =
+            !viewing.user && (await mine()) ? 'Edit conversation' : input.value.trim() ? 'View conversation' : 'Write a conversation';
     };
     sync();
     input.addEventListener('change', sync);

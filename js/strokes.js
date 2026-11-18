@@ -76,7 +76,9 @@ const descentOptions = () => ({
     drop: +$('descentDrop').value,
     flip: $('descentFlip').checked,
 });
-const endStroke = () => {
+/** Ends the stroke under way: a room, ramp or descent is cut, the shadows and water follow the ground, and the area is saved
+ *  a moment later. Also before another area opens, so a stroke never carries on into it. */
+export const endStroke = () => {
     placePointer = null;
     if (ctx.thingsTool.drag) {
         ctx.thingsTool.up();

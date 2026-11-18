@@ -238,11 +238,18 @@ ThingsTool.prototype.blueprintFields = function (t) {
 
 /** The game's lists a setting is picked from (the traps), once. */
 ThingsTool.prototype.loadLists = async function () {
+    // (`{}` while it loads, so it is asked once; after a failure the setting is a plain number, and a form drawn 10 s later
+    // asks again)
     this.lists = {};
     try {
-        this.lists = await (await api('/api/area-lists')).json();
+        const res = await api('/api/area-lists');
+        if (!res.ok) throw new Error(res.statusText);
+        this.lists = await res.json();
     } catch {
-        /* the setting is a plain number then */
+        setTimeout(() => {
+            this.lists = null;
+        }, 10000);
+        return;
     }
     if (this.active) this.renderProps();
 };
@@ -470,7 +477,15 @@ ThingsTool.prototype.propsForm = function (box, t, k, original) {
     renderVars(box, t.vars, { before: () => this.area().beginStroke(), after: () => this.changed(), keep: String(t.id) });
 };
 
+/** Draws the properties panel again for what is selected; in someone else's workspace (read-only) with every control off,
+ *  however often it is drawn (its lists and the blueprint's values arrive later and draw it again). */
 ThingsTool.prototype.renderProps = function () {
+    this.drawProps();
+    this.lockReadOnly();
+};
+
+/** The properties panel: of the selected thing, or of the selected original (an imported area's own object). */
+ThingsTool.prototype.drawProps = function () {
     const { $ } = this.ctx,
         box = $('thingProps'),
         t = this.active ? this.selected() : null;
@@ -530,7 +545,11 @@ ThingsTool.prototype.renderProps = function () {
     }
     box.hidden = !t;
     $('thingDelete').hidden = !t;
-    if (!t) return;
+    // (nothing selected: no original's form is being worked on either, so a change can't write one into another area)
+    if (!t) {
+        this.workOrig = null;
+        return;
+    }
     // Typing in a field must not be torn down by the redraw its own change causes.
     if (box.contains(document.activeElement) && document.activeElement.dataset.keep === String(t.id)) return;
     box.textContent = '';

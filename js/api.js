@@ -16,6 +16,17 @@ const NO_ANSWER = 'The Landscaper engine did not answer: is `landscaper serve` s
  */
 export const engine = { up: true };
 
+/**
+ * Whose workspace the page shows: `user` is the builder an admin is looking at (read-only), null for one's own. The engine
+ * reads that workspace for GETs only and does everything else in the admin's own, so while it is set api() sends no request
+ * that could change something (anything but a GET, apart from CHANGE_NOTHING) and answers it as a refusal instead. app.js
+ * sets it from /api/me.
+ */
+export const viewing = { user: null };
+
+/** The requests other than GETs that change nothing in a workspace: going back to one's own, and checking paths. */
+const CHANGE_NOTHING = new Set(['/api/view-as', '/api/check']);
+
 /** What a tool that needs the engine says when it isn't there. */
 export const NEEDS_ENGINE = 'This needs the Landscaper engine (landscaper serve), which is not running: sculpting works without it.';
 
@@ -39,12 +50,15 @@ const ASK_AGAIN_MS = 5000;
 /**
  * fetch() for the engine: same-origin URLs only, with the `X-Landscaper` header. When the request can't reach the engine
  * at all, it resolves to a 503 answer whose JSON body is `{ error }`, so callers handle it like any refusal from the engine.
- * While the engine is down it sends nothing to `/api/` but /api/me (which finds out whether it is back), and answers the same way.
+ * While the engine is down it sends nothing to `/api/` but /api/me (which finds out whether it is back), and answers the same way;
+ * so too a request that could change something while the page shows someone else's workspace (`viewing`).
  */
 export async function api(url, opts = {}) {
     const where = new URL(url, location.href);
     if (where.origin !== location.origin) throw new Error(`api(): ${url} is not on this server`);
     const engineRoute = where.pathname.startsWith('/api/');
+    const reads = (opts.method ?? 'GET').toUpperCase() === 'GET' || CHANGE_NOTHING.has(where.pathname);
+    if (viewing.user && engineRoute && !reads) return refusal(`${viewing.user}'s workspace is read-only here: nothing was changed.`);
     if (!engine.up && engineRoute && where.pathname !== '/api/me' && !(await isBack())) return refusal(NEEDS_ENGINE);
     const headers = new Headers(opts.headers);
     headers.set('X-Landscaper', '1');
