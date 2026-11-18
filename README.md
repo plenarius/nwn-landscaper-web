@@ -92,7 +92,8 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   (another tab, a minimised window, the tab closed or reloaded).
   A copy the engine didn't get (no engine, a failed save, a tab closed before its save finished) stays in the browser, per
   user on a team server, and goes to the engine at the next start. When the engine's copy was saved after it (another tab or
-  computer), the page asks which copy to keep.
+  computer), the page asks which copy to keep. So does a tab whose area another tab or computer saved since it opened it: the
+  engine refuses the older tab's save, which stays in the browser until you choose.
 
 ## Development
 

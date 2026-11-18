@@ -47,10 +47,15 @@ What changed for builders since the review of the private builds (#61 to #73):
 - **A tab can't save over an area made again elsewhere.** Each new area carries an id (`created`) that the engine of the same
   release checks: when another tab or computer has made a new area of that name since, the page keeps your copy in the browser
   and asks whether to replace that area or open it.
+- **Two tabs on one area no longer save over each other.** Each save sends the version of the area it started from, and the
+  engine of the same release refuses it when another tab or computer has saved the area since (areas from before `created` ids
+  too). The page keeps that tab's copy in the browser and asks: keep this tab's (the engine keeps the other as
+  `<name>.json.replaced-<time>`), or open the other one. A tab's own autosaves, however fast, never refuse each other.
 - **An admin's read-only view of another builder's workspace changes nothing.** Opening that builder's script no longer saves
   it over your own of the same name, their blueprints offer no Change, Delete or Make my own (which acted on yours), their
-  conversations aren't saved on close, and the Things form stays locked after it redraws. The page sends no request that
-  changes something while you look.
+  conversations aren't saved on close, and the Things form stays locked after it redraws. A blueprint's dialog shows every
+  field disabled, however it was opened. The page sends no request that changes something while you look, and the engine of
+  the same release refuses one too.
 - **Another area opening ends what was under way in the last one.** A stroke ends on the area it began on, an imported object's
   form no longer writes into the next area's object of the same key, and Export or Check paths that finish after you opened
   another area put no markers on it.
