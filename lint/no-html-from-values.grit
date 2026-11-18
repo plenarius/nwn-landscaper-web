@@ -5,7 +5,8 @@
 // is refused: area data and the engine's answers went in this way and could run script. Build the elements
 // with el() from js/dom.js, textContent or new Option(text, value) instead. The sinks: assigning innerHTML, outerHTML or srcdoc
 // (also as `e['innerHTML']`, and as an object's key, which el() and Object.assign copy onto an element), insertAdjacentHTML,
-// createContextualFragment, setHTMLUnsafe, parseHTMLUnsafe, DOMParser's parseFromString and document.write.
+// createContextualFragment, setHTMLUnsafe, parseHTMLUnsafe, DOMParser's parseFromString, document.write, and setAttribute or
+// setAttributeNS with `srcdoc`. tests/lint.test.js checks this against lint/fixtures/html.js.
 language js
 
 or {
@@ -22,6 +23,8 @@ or {
     `$obj.setHTMLUnsafe($value)`,
     `$obj.parseHTMLUnsafe($value)`,
     `$obj.parseFromString($value, $type)`,
+    `$obj.setAttribute($name, $value)` where { $name <: r"^['\"`](?i:srcdoc)['\"`]$" },
+    `$obj.setAttributeNS($ns, $name, $value)` where { $name <: r"^['\"`](?i:srcdoc)['\"`]$" },
     `document.write($value)`,
     `document.writeln($value)`
 } as $sink where {

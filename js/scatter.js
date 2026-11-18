@@ -4,7 +4,6 @@
 // The Scatter tool: a mix of placeables, picked in its panel, strewn under the brush at a density and a range of sizes (Shift
 // clears them). The stroke itself is strokes.js's; this file stamps it.
 
-import { SPACING } from './area.js';
 import { $ } from './dom.js';
 import { QUICK, modelResults, searchSoon, appearanceOf, groundUnder } from './place.js';
 
@@ -56,8 +55,7 @@ export function scatterStamp(p, radius, s) {
             y = p.y + Math.sin(a) * d;
         if (x < 0.5 || y < 0.5 || x > ctx.area().sizeX - 0.5 || y > ctx.area().sizeY - 0.5) continue;
         if (ctx.area().objects.some(o => Math.hypot(o.x - x, o.y - y) < spacing)) continue;
-        const i = Math.min(ctx.area().nx - 1, Math.round(x / SPACING)),
-            j = Math.min(ctx.area().ny - 1, Math.round(y / SPACING));
+        const { i, j } = ctx.area().sampleAt(x, y);
         if ($('scatterSteep').checked && (!ctx.area().walkable(i, j) || ctx.area().depth(i, j) > 0)) continue;
         const [model, flat] = mix[Math.floor(Math.random() * mix.length)];
         const o = {

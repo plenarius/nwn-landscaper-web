@@ -122,9 +122,7 @@ export class Transformer {
         if (!this.group) return null;
         const view = this.view;
         this.group.updateMatrixWorld(true); // (the last frame may predate the last move)
-        const r = view.renderer.domElement.getBoundingClientRect();
-        const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
-        view.raycaster.setFromCamera(ndc, view.camera);
+        view.aim(clientX, clientY);
         const hits = view.raycaster.intersectObject(this.group, true);
         return hits[0]?.object.userData.handle ?? null;
     }

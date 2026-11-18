@@ -7,7 +7,7 @@
 import { ModelLibrary } from './models.js';
 import { Transformer } from './transform.js';
 import { engine, NEEDS_ENGINE } from './api.js';
-import { $, el } from './dom.js';
+import { $, el, say } from './dom.js';
 import { saveSoon } from './save.js';
 
 /** What app.js gives this file (initPlace): `area()`, `tool()` and `view`. */
@@ -114,10 +114,11 @@ export function selectObject(o) {
         showScale();
         showPlaceMode(o.baked !== false);
         $('placeSolid').checked = o.solid !== false;
-        $('statusMsg').textContent =
-            `${o.model} (${o.baked === false ? `placeable, tag ${ctx.area().name}_p${o.id}` : 'baked'}): drag to move · G move · R turn · S size (or the handles) · Q/E turn 15° · Delete removes · Esc deselects`;
+        say(
+            `${o.model} (${o.baked === false ? `placeable, tag ${ctx.area().name}_p${o.id}` : 'baked'}): drag to move · G move · R turn · S size (or the handles) · Q/E turn 15° · Delete removes · Esc deselects`,
+        );
     } else {
-        $('statusMsg').textContent = '';
+        say('');
     }
 }
 
@@ -149,14 +150,14 @@ export async function placeDown(e, p) {
         return null;
     }
     if (!placeModel) {
-        $('statusMsg').textContent = 'Pick a placeable in the panel first.';
+        say('Pick a placeable in the panel first.');
         return null;
     }
     let flat;
     try {
         flat = await models.flat(placeModel);
     } catch {
-        $('statusMsg').textContent = `${placeModel} can't be read.`;
+        say(`${placeModel} can't be read.`);
         return null;
     }
     const o = {
@@ -237,9 +238,7 @@ export function initPlace(c) {
         area: () => ctx.area(),
         flat: o => models.flat(o.model),
         settle: (o, flat) => settle(o, flat),
-        say: msg => {
-            $('statusMsg').textContent = msg;
-        },
+        say,
         changed: (o, final) => {
             showObjectPanel(o);
             if (final) {

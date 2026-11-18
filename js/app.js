@@ -8,7 +8,7 @@
 // water (water.js), entrances (entrancetool.js), activity, publish and the dev server (activity.js, publish.js, devtest.js),
 // autosave (save.js), the live path check (live.js), New area (newarea.js), and Export and Check paths (export.js).
 
-import { Area, DEFAULT_TEXTURE, SPACING } from './area.js';
+import { Area, DEFAULT_TEXTURE } from './area.js';
 import { View } from './view.js';
 import { TOOLS } from './tools.js';
 import { ICONS } from './icons.js';
@@ -20,7 +20,7 @@ import { ask } from './ask.js';
 import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
 import { api, engine, json, NEEDS_ENGINE, viewing } from './api.js';
-import { $, el, session, store } from './dom.js';
+import { $, el, session, store, say } from './dom.js';
 import { initImport, reimport } from './import.js';
 import { initSky, showAreaSky, refreshSky } from './sky.js';
 import { initMenus } from './menus.js';
@@ -115,7 +115,7 @@ function updatePanels() {
     if (tool === 'entrance' && !skyOpen) showEntrances();
     $('scatterPanel').hidden = skyOpen || tool !== 'scatter';
     if (tool === 'scatter' && !skyOpen) showScatterables();
-    if (tool !== 'place' && view.selected && typeof selectObject === 'function') selectObject(null);
+    if (tool !== 'place' && view.selected) selectObject(null);
     if (tool === 'place' && !skyOpen) showPlaceables();
     $('thingsPanel').hidden = skyOpen || tool !== 'things';
     if (tool === 'things' && !skyOpen) thingsTool.show();
@@ -129,9 +129,7 @@ const thingsTool = new ThingsTool({
     view,
     readOnly: () => readOnly,
     saveSoon: () => saveSoon(),
-    say: m => {
-        $('statusMsg').textContent = m;
-    },
+    say,
 });
 selectTool('raise');
 
@@ -204,17 +202,12 @@ function setPicking(on) {
     picking = on;
     $('btnPick').classList.toggle('active', on);
     canvas.style.cursor = on ? 'crosshair' : '';
-    if (on) $('statusMsg').textContent = 'Click the ground to pick up its texture.';
+    if (on) say('Click the ground to pick up its texture.');
 }
 $('btnPick').onclick = () => setPicking(!picking);
 
 async function pickTexture(p) {
-    const say = m => {
-        $('statusMsg').textContent = m;
-    };
-    const i = Math.min(Math.max(Math.round(p.x / SPACING), 0), area.nx - 1);
-    const j = Math.min(Math.max(Math.round(p.y / SPACING), 0), area.ny - 1);
-    const ground = area.palette[area.materials[j * area.nx + i]];
+    const ground = area.textureAt(p.x, p.y);
     if (!ground) return;
     if (!ground.startsWith('@import:')) {
         selectTexture(ground);
@@ -333,12 +326,12 @@ async function openArea(a, settle = true) {
         if (mine !== opening) return;
         // Reopened while it was still being changed here (during the load): what is open is newer than the answer.
         if (opened.name === area.name && unsaved(area)) {
-            $('statusMsg').textContent = `${area.name} has changes the engine hasn't saved yet: kept as it is.`;
+            say(`${area.name} has changes the engine hasn't saved yet: kept as it is.`);
             return;
         }
         setArea(opened);
         noteOpen(area.name);
-        $('statusMsg').textContent = `Opened ${area.name} (module ${area.module}).`;
+        say(`Opened ${area.name} (module ${area.module}).`);
     } catch (err) {
         showError(`Couldn't open ${a.name}: ${err.message}`, 'Open failed');
     }
@@ -558,7 +551,7 @@ $('btnSettings').onclick = async () => {
         .catch(() => null);
     openSettings(area, meta.template, areaLists ?? {}, () => {
         saveSoon();
-        $('statusMsg').textContent = 'Area settings kept.';
+        say('Area settings kept.');
     });
 };
 $('menuArea')
@@ -579,7 +572,7 @@ $('btnCeiling').onclick = async () => {
     area.clearance = text === '' ? null : +text;
     view.markDirty(view.everything(), false);
     saveSoon();
-    $('statusMsg').textContent = area.clearance ? `The ceiling stays ${area.clearance} m over the floor.` : 'One flat roof.';
+    say(area.clearance ? `The ceiling stays ${area.clearance} m over the floor.` : 'One flat roof.');
 };
 $('btnUndo').onclick = () => {
     if (area?.undo()) refreshAll();

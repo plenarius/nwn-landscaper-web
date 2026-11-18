@@ -32,6 +32,12 @@ export function at(e, u, v) {
     return [e.x + c * u - s * v, e.y + s * u + c * v];
 }
 
+/** The texture id painted on `area`'s ground 2 m behind entrance `e`'s back wall: the hill it is cut into, which picks its rock
+ *  and covers its top. */
+export function groundBehind(area, e) {
+    return area.textureAt(...at(e, e.depth + 2, 0));
+}
+
 /** The opposite of at(): area point (`x`, `y`) in metres as `[u, v]`, along entrance `e`'s direction and across it. */
 export function local(e, x, y) {
     const c = Math.cos(e.dir),

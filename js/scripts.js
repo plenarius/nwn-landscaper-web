@@ -60,7 +60,7 @@ async function openScript(resref, onMade = null) {
     dlg.showModal();
     // CodeMirror (512 KB of the page's 3 MB of JavaScript) loads the first time the editor opens, not with the page.
     const [{ EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, oneDark }, res] = await Promise.all([
-        import('../vendor/codemirror/codemirror.js'),
+        import('codemirror'),
         api(`/api/script?resref=${encodeURIComponent(resref)}&any=1`),
     ]);
     const d = await json(res);

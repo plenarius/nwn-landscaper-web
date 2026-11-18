@@ -15,7 +15,7 @@ export const SPACING = 0.625;
 const SAMPLES_PER_TILE = TILE / SPACING;
 // landscaper's slope limit: a sample is walkable if no neighbour rises more
 // than this over one spacing (normal z >= 0.64, about 50 degrees).
-const WALKABLE_NZ = 0.64;
+export const WALKABLE_NZ = 0.64;
 export const MAX_RISE = (SPACING * Math.sqrt(1 - WALKABLE_NZ * WALKABLE_NZ)) / WALKABLE_NZ;
 // Water deeper than this can't be walked (landscaper's SHALLOW).
 export const SHALLOW = 0.5;
@@ -128,27 +128,33 @@ export class Area {
         } else {
             // Rolling or rough hills from the upstream fBm noise, scaled to metres.
             const rough = start === 'rough';
-            const n = Math.max(nx, ny);
             const noise = generateHeightMap({
                 seed: Math.floor(Math.random() * 100000),
-                mapSize: n,
+                width: nx,
+                height: ny,
                 octaves: rough ? 6 : 4,
                 persistence: rough ? 0.5 : 0.4,
                 lacunarity: 2.1,
                 scale: (rough ? 70 : 140) / SPACING,
-                panX: 0,
-                panY: 0,
-                blackLevel: 0,
-                whiteLevel: 1,
             });
             const amplitude = rough ? 14 : 6;
-            for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) area.heights[j * nx + i] = base + noise[j * n + i] * amplitude;
+            for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) area.heights[j * nx + i] = base + noise[j * nx + i] * amplitude;
         }
         return area;
     }
 
-    index(i, j) {
-        return j * this.nx + i;
+    /** The sample nearest to area metres `x`, `y`: `{ i, j }`, clamped to the area. */
+    sampleAt(x, y) {
+        return {
+            i: Math.min(Math.max(Math.round(x / SPACING), 0), this.nx - 1),
+            j: Math.min(Math.max(Math.round(y / SPACING), 0), this.ny - 1),
+        };
+    }
+
+    /** The texture id painted at the sample nearest to area metres `x`, `y`. */
+    textureAt(x, y) {
+        const { i, j } = this.sampleAt(x, y);
+        return this.palette[this.materials[j * this.nx + i]];
     }
 
     /** Height at area metres (bilinear, clamped). */
@@ -325,7 +331,6 @@ export class Area {
         this.floodWater();
     }
 
-    /** One undo step: the area as it is now, or `before` (a snapshot() taken earlier, for a change confirmed later). */
     /**
      * Gives the entrances their ids when they have none (an area saved before ids): each its place in the list plus one, the
      * number its door's tag already had, so no tag changes. `next`: the counter saved with the area; it is raised past
@@ -354,6 +359,7 @@ export class Area {
         return `${this.name}_ent${e.id}`;
     }
 
+    /** One undo step: the area as it is now, or `before` (a snapshot() taken earlier, for a change confirmed later). */
     beginStroke(before = this.snapshot()) {
         this.undoStack.push(before);
         if (this.undoStack.length > 40) this.undoStack.shift();

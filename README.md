@@ -102,7 +102,7 @@ html-validate, spelling, writing, Markdown, links, licences, secrets); [STYLE.md
 
 `node --test 'tests/*.test.js'` (Node 24) runs the tests, without a browser: `tests/browser.js` gives the page's modules a
 stand-in for the page, the browser's storage and the engine, and swaps the modules that draw or ask for the stubs in
-`tests/stubs/`.
+`tests/stubs/`; `tests/importmap.js` resolves the vendored packages through `index.html`'s import map, as the browser does.
 
 Two rules of this repository's own, as Biome plugins in `lint/`:
 
@@ -111,6 +111,9 @@ Two rules of this repository's own, as Biome plugins in `lint/`:
   text that builders typed, and an admin opens builders' areas.
 - Every request to the engine goes through `api()` in `js/api.js`, which sends the `X-Landscaper: 1` header the engine
   checks. Another site's page can't send that header, so the engine can refuse requests that don't carry it.
+
+`tests/lint.test.js` runs each plugin on its fixture in `lint/fixtures/` (with `biome` on the PATH): the lines marked
+`// flagged` must be found and no others, so a pattern that stops matching after a Biome upgrade fails the tests.
 
 `index.html` carries a Content-Security-Policy: only the page's own files run, the import map is allowed by its SHA-256, and
 requests go to the page's own server. A change to the import map changes that hash; Chrome's console then names the hash
