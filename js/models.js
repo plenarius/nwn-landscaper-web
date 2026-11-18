@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { api, json } from './api.js';
+import { thumbnail } from './thumbnail.js';
 
 /** The game's placeable models from the engine: the list to search, each model's outline (`flat`), its 3D group, its textures
  *  and a thumbnail, each loaded once and kept. */
@@ -139,9 +140,7 @@ export class ModelLibrary {
 
     async render(model) {
         const g = await this.group(model);
-        if (!this.thumbRenderer) {
-            this.thumbRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
-            this.thumbRenderer.setSize(96, 96);
+        if (!this.thumbScene) {
             this.thumbScene = new THREE.Scene();
             this.thumbScene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.2));
             const sun = new THREE.DirectionalLight(0xffffff, 1.6);
@@ -154,12 +153,25 @@ export class ModelLibrary {
         const box = new THREE.Box3().setFromObject(g);
         const centre = box.getCenter(new THREE.Vector3()),
             size = box.getSize(new THREE.Vector3()).length() || 1;
-        this.thumbScene.add(g);
+        // Drawn as a copy that shares the model's arrays and pictures, freed from the thumbnail renderer afterwards: the model
+        // stays in the view's renderer, and the thumbnail renderer keeps nothing.
+        const copy = new THREE.Group(),
+            made = [];
+        for (const m of g.children) {
+            const geo = new THREE.BufferGeometry();
+            for (const [name, attribute] of Object.entries(m.geometry.attributes)) geo.setAttribute(name, attribute);
+            geo.setIndex(m.geometry.index);
+            const material = m.material.clone();
+            if (material.map) material.map = material.map.clone();
+            copy.add(new THREE.Mesh(geo, material));
+            made.push(geo, material, material.map);
+        }
+        this.thumbScene.add(copy);
         this.thumbCamera.position.copy(centre).add(new THREE.Vector3(-0.6, 0.55, 0.75).normalize().multiplyScalar(size * 1.45));
         this.thumbCamera.lookAt(centre);
-        this.thumbRenderer.render(this.thumbScene, this.thumbCamera);
-        const url = this.thumbRenderer.domElement.toDataURL('image/png');
-        this.thumbScene.remove(g);
+        const url = thumbnail(this.thumbScene, this.thumbCamera, 96);
+        this.thumbScene.remove(copy);
+        for (const x of made) x?.dispose();
         return url;
     }
 }

@@ -422,7 +422,9 @@ initStrokes({
     label();
 }
 
-function setArea(a) {
+/** Shows area `a`. `blank`: the area made when none was open, which the engine has never seen: nothing to look up or check
+ *  until it is changed (saveSoon checks it then). */
+function setArea(a, blank = false) {
     // A stroke under way ends on the area it began on: it never carries on into this one (with that area's textures, and its
     // undo step left behind).
     if (currentStroke()) endStroke();
@@ -431,13 +433,13 @@ function setArea(a) {
     area = a;
     view.setArea(a);
     thingsTool.selectedId = null;
-    thingsTool.loadOriginals();
+    if (!blank) thingsTool.loadOriginals();
     thingsTool.refresh();
     $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
     $('report').hidden = true;
     showAreaSky(a);
     if (tool === 'entrance' && !skyOpen) showEntrances();
-    checkSoon();
+    if (!blank) checkSoon();
 }
 
 // Who is signed in (on a team server) and whose workspace is shown: your own,
@@ -530,12 +532,14 @@ initLive({ ...editor, stroke: currentStroke, showEngine });
 /** Redraws the area after undo or redo: the ground and its shadows only where they changed (area.lastChange). */
 function refreshAll() {
     if (view.selected && !area.objects.includes(view.selected)) selectObject(null);
-    const change = area.lastChange ?? { rect: view.everything(), entrances: true };
+    const change = area.lastChange ?? { rect: view.everything(), heights: view.everything(), entrances: [], shadow: true };
     area.lastChange = null;
-    view.markDirty(change.rect);
+    view.markDirty(change.rect, false);
+    view.markDirty(change.heights);
+    for (const e of change.entrances) view.markEntrance(e);
     view.updateEntrances();
-    view.updateObjects();
-    view.updateShade(change.entrances || change.shadow);
+    view.syncObjects();
+    view.updateShade(change.shadow);
     view.updateWater();
     view.syncPalette();
     thingsTool.refreshAll();
@@ -573,7 +577,7 @@ $('btnCeiling').onclick = async () => {
     });
     if (text === null) return;
     area.clearance = text === '' ? null : +text;
-    view.markDirty(view.everything());
+    view.markDirty(view.everything(), false);
     saveSoon();
     $('statusMsg').textContent = area.clearance ? `The ceiling stays ${area.clearance} m over the floor.` : 'One flat roof.';
 };
@@ -703,8 +707,8 @@ window.addEventListener('keydown', e => {
 });
 
 // The area last open: from landscaper, or this browser if it couldn't take it.
+// (loadMe loads the texture library when the engine answers: showEngine)
 await loadMe();
-loadLibrary();
 // A reviewer's link (?review=<builder>/<area>, in a pull request): an admin looks at that builder's area, read-only.
 let reviewArea = null;
 {
@@ -742,5 +746,5 @@ if (!readOnly) await moveBrowserAreas();
     } catch {
         opened = null;
     }
-    setArea(opened ?? Area.create('untitled', 8, 'hills'));
+    setArea(opened ?? Area.create('untitled', 8, 'hills'), !opened);
 }

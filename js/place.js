@@ -91,7 +91,7 @@ export function removeObject(o) {
     ctx.area().beginStroke();
     ctx.area().objects = ctx.area().objects.filter(x => x !== o);
     if (ctx.view.selected === o) selectObject(null);
-    ctx.view.updateObjects();
+    ctx.view.removeObjects(new Set([o]));
     saveSoon();
 }
 
@@ -177,7 +177,7 @@ export async function placeDown(e, p) {
     // Not selected: the panel's settings are for the next one (selecting it
     // made changing them change this one instead). Click it to edit it.
     selectObject(null);
-    ctx.view.updateObjects();
+    ctx.view.addObject(o);
     saveSoon();
     return { object: o, flat, from: p };
 }

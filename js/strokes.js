@@ -512,6 +512,7 @@ export function initStrokes(c) {
             stroke.last = now;
             ctx.view.markDirty(
                 stamp(ctx.area(), stroke.tool, p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
+                stroke.tool !== 'paint',
             );
             dbg.stamps++;
             if (dbg.stamps % 10 === 0) showDebug();
