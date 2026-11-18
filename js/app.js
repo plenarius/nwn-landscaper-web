@@ -415,6 +415,11 @@ initStrokes({
     label();
 }
 
+/** Shows a new blank area: the one the page starts with when no area was open, or after the open one was deleted. */
+function showBlank() {
+    setArea(Area.create('untitled', 8, 'hills'), true);
+}
+
 /** Shows area `a`. `blank`: the area made when none was open, which the engine has never seen: nothing to look up or check
  *  until it is changed (saveSoon checks it then). */
 function setArea(a, blank = false) {
@@ -471,7 +476,7 @@ $('noEngineClose').onclick = () => {
 
 /** Which of the file menu's buttons show, and which are off while looking at someone else's workspace. */
 function showButtons() {
-    for (const id of ['btnExport', 'btnCheck', 'btnImport']) if ($(id)) $(id).disabled = readOnly;
+    for (const id of ['btnExport', 'btnCheck', 'btnImport', 'btnDelete']) if ($(id)) $(id).disabled = readOnly;
     $('btnActivity').hidden = !(me.team && me.admin);
     $('sepFile').hidden = $('btnActivity').hidden;
     $('btnVersion').hidden = !(me.team && me.versions);
@@ -510,8 +515,8 @@ initPublish(editor);
 initDevTest(editor);
 initScripts(editor);
 
-// Save a version, and autosave (save.js).
-initSave({ ...editor, open: name => openArea({ name }, false) });
+// Save a version, Delete area, and autosave (save.js).
+initSave({ ...editor, open: name => openArea({ name }, false), blank: showBlank });
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
 async function viewAs(user) {
@@ -739,5 +744,6 @@ if (!readOnly) await moveBrowserAreas();
     } catch {
         opened = null;
     }
-    setArea(opened ?? Area.create('untitled', 8, 'hills'), !opened);
+    if (opened) setArea(opened);
+    else showBlank();
 }

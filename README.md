@@ -94,6 +94,10 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   user on a team server, and goes to the engine at the next start. When the engine's copy was saved after it (another tab or
   computer), the page asks which copy to keep. So does a tab whose area another tab or computer saved since it opened it: the
   engine refuses the older tab's save, which stays in the browser until you choose.
+- **File, Delete area** deletes the area open, after asking: it leaves your areas with its export, and the page opens your
+  newest other area. The engine keeps its last copy (landscaper's
+  [TEAM-SERVER.md](https://github.com/plenarius/landscaper/blob/master/docs/TEAM-SERVER.md#deleted-areas), "Deleted areas", says
+  how to bring it back); the module it was exported into and its hak stay.
 
 ## Development
 

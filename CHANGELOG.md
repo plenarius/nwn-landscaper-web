@@ -94,6 +94,13 @@ What changed for builders since the review of the private builds (#61 to #73):
 - **A new area with hills that isn't square gets hills of their full height.** Its hills were cut from a square as wide as its
   longer side, so they could stand lower than the hills asked for: on an 8 × 2 tile area with Hills (6 m), 1.1 m lower in half
   the areas and up to 3.2 m. Square areas get the same hills as before (#79).
+- **File, Delete area.** It asks, naming the area open, then deletes it: it leaves your areas with its export, its name is free
+  again, and the page opens your newest other area, or a blank one. Its copy in this browser goes too. The engine keeps its last
+  copy for an admin (or you, on your own machine) to bring back; the module it was exported into and its hak stay. An area
+  another tab or computer saved since this tab opened it is not deleted, nor one whose import your other areas use: the status
+  line says which. Off in an admin's read-only view. It needs the engine of the same release (#80).
+- **Export and Check paths send the area's palette, water, entrances and atmosphere in the request's body**, not its address,
+  which keeps only the name and simple settings. It needs the engine of the same release, which refuses the old form (#80).
 
 In this release too:
 
@@ -104,7 +111,7 @@ In this release too:
   `tests/lint.test.js` checks both (#79).
 - README: the publishing note at the top is gone; autosave, Publish, the New area size (3 to 32 tiles each way) and the
   Content-Security-Policy are described as they work now.
-- Tests: `node --test 'tests/*.test.js'` runs the area's undo, JSON and entrance ids, the save queue and the read-only guard
-  without a browser; CI runs them (#75).
+- Tests: `node --test 'tests/*.test.js'` runs the area's undo, JSON and entrance ids, the save queue, Delete area, what an export
+  sends and the read-only guard without a browser; CI runs them (#75, #80).
 - `STYLE.md` is nwn-bake 0.5.2's again (measured layout data is CC0-1.0), and `scripts/shared-files.sh` checks the shared files
   against nwn-bake's in CI.

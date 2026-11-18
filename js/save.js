@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // Autosave (each change, a moment later, to the engine's disk, or this browser when that fails), areas left in this browser
-// moved to disk at start or when opened, opening an area in turn with the saves, and Save a version (into the team's history).
+// moved to disk at start or when opened, opening an area in turn with the saves, Save a version (into the team's history), and
+// Delete area.
 
 import { Area } from './area.js';
 import { api, engine, failure, json } from './api.js';
@@ -10,8 +11,8 @@ import { ask } from './ask.js';
 import { $, store, say } from './dom.js';
 import { checkSoon } from './live.js';
 
-/** What app.js gives this file (initSave): `area()`, `me()`, `readOnly()`, and `open(name)`, which opens area `name` from
- *  the engine as Open does. */
+/** What app.js gives this file (initSave): `area()`, `me()`, `readOnly()`, `open(name)`, which opens area `name` from the
+ *  engine as Open does, and `blank()`, which shows a new blank area (the one the page starts with when none was open). */
 let ctx = null;
 
 let saveTimer = null;
@@ -393,11 +394,84 @@ function canonical(v) {
     );
 }
 
-/** Sets up the Save a version button, and keeping a waiting autosave when the page goes away. */
+/**
+ * Deletes area `a` on the engine, in turn after the saves before it; a change of `a` still waiting for its moment is dropped, not
+ * sent. The engine sets its working copy and import aside (an admin can bring them back) and removes its export. With it go its
+ * copy in this browser and what this page knew of it. Throws, deleting nothing, when the engine refuses: the error has the
+ * answer's `status`, and for a 409 `moved` (the area was saved from another tab or computer since this one opened or saved it)
+ * or `usedBy` (the areas that use its import). An area the engine hasn't got (404) was only in this browser: its copy goes.
+ */
+export async function deleteArea(a) {
+    if (ctx.readOnly()) throw new Error('this workspace is read-only here');
+    if (pending === a) {
+        clearTimeout(saveTimer);
+        pending = null;
+    }
+    // (The version is read when its turn comes: a save of it before then changes it.)
+    const res = await inTurn(() =>
+        api(`/api/area?name=${encodeURIComponent(a.name)}&base=${encodeURIComponent(engineVersion.get(a.name) ?? 'none')}`, {
+            method: 'DELETE',
+        }),
+    );
+    if (!res.ok && !(res.status === 404 && engine.up)) {
+        const body = await json(res.clone());
+        throw Object.assign(new Error(await failure(res)), { status: res.status, moved: !!body.moved, usedBy: body.used_by });
+    }
+    dropCopy(a.name);
+    engineVersion.delete(a.name);
+    engineSaved.delete(a.name);
+    if (lastOpen() === a.name) store.remove(currentKey());
+}
+
+/** Delete area: asks, naming the area open, deletes it (deleteArea), then opens the newest other area, or a blank one when
+ *  there is none. */
+async function deleteOpenArea() {
+    const a = ctx.area();
+    if (ctx.readOnly() || !a) return;
+    const kept = ctx.me().team
+        ? 'The server keeps its last copy, which an admin can bring back.'
+        : "Its last copy is kept in the Landscaper's data folder (deleted/), from where you can bring it back.";
+    const yes = await ask({
+        title: `Delete ${a.name}?`,
+        text: `${a.name} leaves your areas, with its export, and its name is free again. ${kept}\n\nThe module it was exported into, and its hak, stay as they are.`,
+        ok: `Delete ${a.name}`,
+        danger: true,
+    });
+    if (yes !== true) return;
+    say(`Deleting ${a.name}…`);
+    try {
+        await deleteArea(a);
+    } catch (err) {
+        say(
+            err.moved
+                ? `${a.name} wasn't deleted: another tab or computer saved it after this tab opened it. Open it again to see that copy first.`
+                : `Couldn't delete ${a.name}: ${err.message}`,
+        );
+        return;
+    }
+    // (another area opened meanwhile stays open)
+    if (ctx.area() !== a) {
+        say(`Deleted ${a.name}.`);
+        return;
+    }
+    let next = null;
+    try {
+        const res = await api('/api/areas');
+        if (res.ok) next = ((await json(res)).areas ?? []).find(x => x.name !== a.name) ?? null;
+    } catch {
+        /* none */
+    }
+    if (next) await ctx.open(next.name);
+    else ctx.blank();
+    say(`Deleted ${a.name}${next ? `; opened ${next.name}` : ''}.`);
+}
+
+/** Sets up the Save a version and Delete area buttons, and keeping a waiting autosave when the page goes away. */
 export function initSave(c) {
     ctx = c;
     addEventListener('pagehide', leaving);
     document.addEventListener('visibilitychange', leaving);
+    $('btnDelete').onclick = deleteOpenArea;
     // Keeps this version of the area in the team's history (a commit in the team server's history repository).
     $('btnVersion').onclick = async () => {
         if (ctx.readOnly() || !ctx.area()) return;

@@ -106,13 +106,17 @@ export const status = () => document.getElementById('statusMsg').textContent;
  * The engine: its saved areas (`areas`, name to JSON text), each request it was sent (`log`: method, path and query), and
  * how it answers saves: `failSaves` answers 500, `saveDelay` (ms) holds each save that long. Saves are refused with 409 as
  * the engine refuses them: a new area over an existing one, an area whose `created` differs from the saved copy's, or a save
- * whose `base` isn't the saved copy's version (`version`, the copy's text here; `none` without one), unless `replace=1`.
- * `blueprints`: the answers to `/api/new-blueprint` (a builder's blueprint), by resref.
+ * whose `base` isn't the saved copy's version (`version`, the copy's text here; `none` without one), unless `replace=1`. A
+ * delete (`DELETE /api/area`) is refused the same way when its `base` isn't the version, and with `used_by` when an area's name
+ * is in `usedBy` (other areas use its import). `exports`: each export or check sent (its query and body). `blueprints`: the
+ * answers to `/api/new-blueprint` (a builder's blueprint), by resref.
  */
 export const engine = {
     areas: new Map(),
     saved: new Map(),
     blueprints: new Map(),
+    usedBy: new Map(),
+    exports: [],
     log: [],
     failSaves: false,
     saveDelay: 0,
@@ -121,6 +125,8 @@ export const engine = {
         this.areas.clear();
         this.saved.clear();
         this.blueprints.clear();
+        this.usedBy.clear();
+        this.exports = [];
         this.log = [];
         this.failSaves = false;
         this.saveDelay = 0;
@@ -139,6 +145,23 @@ async function handle(url, opts = {}) {
     engine.log.push(`${method} ${u.pathname}${u.search}`);
     if (u.pathname === '/api/areas')
         return answer({ areas: [...engine.areas.keys()].map(n => ({ name: n, tiles: 3, module: n, saved: engine.saved.get(n) })) });
+    if (u.pathname === '/api/area' && method === 'DELETE') {
+        if (!engine.areas.has(name)) return answer({ error: `there is no area called ${name}` }, 404);
+        if (u.searchParams.get('base') !== engine.version(name))
+            return answer(
+                { error: `${name} was saved from another tab or computer`, exists: name, moved: true, saved: engine.saved.get(name) },
+                409,
+            );
+        if (engine.usedBy.has(name))
+            return answer({ error: `${name} is imported and others use it`, used_by: engine.usedBy.get(name) }, 409);
+        engine.areas.delete(name);
+        engine.saved.delete(name);
+        return answer({ deleted: name });
+    }
+    if (u.pathname === '/api/export' || u.pathname === '/api/check') {
+        engine.exports.push({ path: u.pathname, query: u.searchParams, body: opts.body });
+        return answer({ routes: { ok: 0 }, warnings: [] });
+    }
     if (u.pathname === '/api/area')
         return engine.areas.has(name)
             ? new Response(engine.areas.get(name), {
