@@ -48,6 +48,11 @@ jobs:
           done
           npm install -g --prefix "$HOME/.local" html-validate@11.21.0 markdownlint-cli2@0.24.0
           pipx install reuse==6.3.0
+      # Online on every run: it checks that the pinned SHA-256s are nwn-bake's, so a change to the list can't pass on its own.
+      - name: scripts/shared-files.sh (the shared files are nwn-bake's)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/shared-files.sh --online
       - name: scripts/check.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

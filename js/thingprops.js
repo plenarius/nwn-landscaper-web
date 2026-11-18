@@ -202,6 +202,40 @@ ThingsTool.prototype.renderOriginals = function () {
     }
 };
 
+/** The first choice of an on/off setting on a thing made from a blueprint: what the blueprint has, when `fields` (its own
+ *  values, from blueprintFields) is known; a setting the blueprint doesn't have is off in the game. */
+const blueprintsChoice = (fields, f) => (fields ? `The blueprint's (${fields[f] ? 'on' : 'off'})` : "The blueprint's");
+
+/** A blueprint's own values for the settings a thing made from it can change (`GET /api/blueprint-fields`: `{label: value}`),
+ *  asked once per blueprint. Null while it is asked, false when the engine has none to give (an engine from before that call,
+ *  or a blueprint it doesn't know): the form then says only "The blueprint's". When the answer comes, the open form's
+ *  choices are relabelled in place, so a choice the builder has open stays as it is. */
+ThingsTool.prototype.blueprintFields = function (t) {
+    const key = `${t.kind}:${t.blueprint}`;
+    // (A change to one of the builder's own blueprints drops the whole cache, so an answer still under way lands in the old one.)
+    this.fieldsCache ??= new Map();
+    const cache = this.fieldsCache;
+    if (!cache.has(key)) {
+        cache.set(key, null);
+        api(`/api/blueprint-fields?kind=${t.kind}&resref=${encodeURIComponent(t.blueprint)}`)
+            .then(async res => {
+                const v = res.ok ? await json(res) : null;
+                if (v?.fields && typeof v.fields === 'object') cache.set(key, v.fields);
+                // No engine (stopped, or the page is on a plain file server): asked again when the form is next drawn.
+                else if (res.status === 503) cache.delete(key);
+                else cache.set(key, false);
+            })
+            .catch(() => cache.delete(key))
+            .finally(() => {
+                const fields = cache.get(key);
+                if (!fields || cache !== this.fieldsCache) return;
+                for (const o of this.ctx.$('thingProps').querySelectorAll('option[data-bp-field]'))
+                    if (o.dataset.bpKey === key) o.text = blueprintsChoice(fields, o.dataset.bpField);
+            });
+    }
+    return cache.get(key);
+};
+
 /** The game's lists a setting is picked from (the traps), once. */
 ThingsTool.prototype.loadLists = async function () {
     this.lists = {};
@@ -372,7 +406,13 @@ ThingsTool.prototype.propsForm = function (box, t, k, original) {
                 // turn a setting on, since unticking dropped the change and the blueprint's value came back.
                 const sel = document.createElement('select');
                 sel.dataset.keep = String(t.id);
-                if (!original) sel.add(new Option(t.blueprint ? "The blueprint's" : 'Not set', ''));
+                if (!original && t.blueprint) {
+                    // Its text says the blueprint's own value once the engine has said it.
+                    const own = new Option(blueprintsChoice(this.blueprintFields(t), f.label), '');
+                    own.dataset.bpKey = `${t.kind}:${t.blueprint}`;
+                    own.dataset.bpField = f.label;
+                    sel.add(own);
+                } else if (!original) sel.add(new Option('Not set', ''));
                 sel.add(new Option('On', '1'));
                 sel.add(new Option('Off', '0'));
                 const v = t.fields[f.label];

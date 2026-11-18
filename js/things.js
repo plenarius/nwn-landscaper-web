@@ -58,8 +58,8 @@ const SHOW_DEFAULT = ['creature', 'waypoint', 'trigger', 'sound', 'encounter', '
  * The Things tool: its panel, its markers on the map, and the forms of the thing selected.
  *
  * Two files add methods to this class when app.js imports them, so that neither this file nor they grow too long:
- * - thingprops.js, the properties panel: `linkTargets`, `renderOriginals`, `loadLists`, `propsForm`, `renderProps`,
- *   `contentsSection`, `equipmentSection` and `destinationPicker`;
+ * - thingprops.js, the properties panel: `linkTargets`, `renderOriginals`, `blueprintFields`, `loadLists`, `propsForm`,
+ *   `renderProps`, `contentsSection`, `equipmentSection` and `destinationPicker`;
  * - newbp.js, the builder's own blueprints (many methods, and only that feature uses them): `bpFinder`, `bpCreateForm`, `bpEdit`,
  *   `bpConversationRow`, `bpProperties`, `bpGear`, `bpAppearance` and `bpDoorLook`.
  * Every other method is here.

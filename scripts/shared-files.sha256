@@ -1,0 +1,17 @@
+# nwn-bake's copies of the files STYLE.md shares, at the release below, as scripts/shared-files.sh --pin wrote them.
+# Change them only with that command (see the top of scripts/shared-files.sh).
+tag v0.5.2
+43b36f88295d52e012ae8801f5cff5ffe41fe56092452845f4015ea56b17bb8d  STYLE.md
+c03277390ef9c24b5a3549ccc9c02f8af2ce04816f82c1f7868d98f3c12717a3  scripts/check.sh
+372bed1779efc3517beccae19ba8597f8613ae6119958a569dbe46460a2478db  .editorconfig
+0cfc838de758f333008d72a906f52e8fa074c3059885a2fe91710a2d5150c438  _typos.toml
+c64192e439d9639c5c2257bcf766911120f33d6115249e409300ca352f8b0b12  .vale.ini
+a7289e7adba7d2d4854ab58630f4d6d2100b3fbd194c7668f354d20a3ac0982e  .markdownlint.jsonc
+218d3152f1cb8967479ca3f0c1afe6bbfc771b56a95b2c0e56237e244acc5c7f  lychee.toml
+2af7e702fbdde0d1440c9e00ca59bacb301ca1b9477cf9840b063fd5ad4f2276  .vale/styles/Plain/EmDash.yml
+92db4c9f0663d3bdd6ae61f757dcd67044260953ea7e1db5317cb630827b3566  .vale/styles/Plain/Filler.yml
+514d53eeb946ff18ce4016ffe3bd3af3467e8c0b93980652f3996cac9954ae0d  .vale/styles/Plain/Passive.yml
+be9302ac8f54d05aabf910c7c9cc6545370208eac460b7768b8737314bbad386  .vale/styles/Plain/SentenceLength.yml
+b49eca52d1b6b9c2af0f50675edf9c3519fbf051728a71ee23534cc4e539c987  .vale/styles/Plain/Terms.yml
+59394ac8dd48fe6f6bf0d6ecf9e0870dee8cd39c4ebc5129299d6d3c00d107b9  .vale/styles/Plain/Vague.yml
+713ad7030663f836c190591a51444f1b6ea81cc66b76482d14fe974cb5078c2b  .vale/styles/Plain/Wordy.yml
