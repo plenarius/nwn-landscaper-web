@@ -70,7 +70,8 @@ test('saves go one at a time, in the order asked, and one waiting is the same sa
     b.atmosphere.preset = 'night';
     save.saveSoon();
     await save.flushSave();
-    const puts = engine.log.filter(l => l.startsWith('PUT'));
+    // (each with the version its area started from, but a new area's first)
+    const puts = engine.log.filter(l => l.startsWith('PUT')).map(l => l.replace(/&base=[^&]*/, ''));
     assert.deepEqual(puts, ['PUT /api/save?name=aa&new=1', 'PUT /api/save?name=aa', 'PUT /api/save?name=bb']);
     assert.equal(engineSky('bb'), 'night');
 });
@@ -204,4 +205,87 @@ test("someone else's workspace (read-only) is never saved, and its area isn't no
     await save.flushSave();
     assert.deepEqual(engine.log, []);
     assert.equal(save.lastOpen(), null);
+});
+
+test('two tabs on one area: the tab whose copy is older is asked, and its change stays in this browser', async () => {
+    // An area saved before areas had a `created` id: the version, not the id, tells the two tabs' copies apart.
+    const old = Area.create('aa', 3, 'flat').toJSON();
+    delete old.created;
+    engine.areas.set('aa', JSON.stringify(old));
+    engine.saved.set('aa', 1);
+    const a = await save.loadArea('aa');
+    open = a;
+    // The other tab, which opened it too, saves first.
+    const b = Area.fromJSON(old);
+    b.atmosphere.preset = 'night';
+    await otherTab(b);
+    // This tab's change: refused, kept here, and the builder opens the other tab's.
+    questions.answers = [false];
+    a.atmosphere.preset = 'golden';
+    save.saveSoon();
+    await save.flushSave();
+    assert.deepEqual(questions.asked, ['aa was saved elsewhere']);
+    assert.equal(engineSky('aa'), 'night');
+    assert.equal(JSON.parse(save.browserCopy('aa')).atmosphere.preset, 'golden');
+    assert.deepEqual(opened, ['aa']);
+});
+
+test("two tabs on one area: the builder keeps this tab's", async () => {
+    const a = await made('aa');
+    const b = Area.fromJSON(a.toJSON());
+    b.atmosphere.preset = 'night';
+    await otherTab(b);
+    questions.answers = [true];
+    a.atmosphere.preset = 'golden';
+    save.saveSoon();
+    await save.flushSave();
+    assert.deepEqual(questions.asked, ['aa was saved elsewhere']);
+    assert.equal(engineSky('aa'), 'golden');
+    assert.equal(save.browserCopy('aa'), null);
+    // Its later saves go as before.
+    a.atmosphere.preset = 'clear';
+    save.saveSoon();
+    await save.flushSave();
+    assert.equal(engineSky('aa'), 'clear');
+    assert.equal(questions.asked.length, 1);
+});
+
+test('fast autosaves of one tab never refuse each other', async () => {
+    const a = await made('aa');
+    engine.saveDelay = 5;
+    const presets = ['night', 'golden', 'clear', 'storm'];
+    for (let k = 0; k < 20; k++) {
+        a.atmosphere.preset = presets[k % presets.length];
+        save.saveSoon();
+        // (each sent at once, while the one before may still be on its way)
+        save.flushSave();
+        await new Promise(r => setTimeout(r, 3));
+    }
+    await save.flushSave();
+    assert.deepEqual(questions.asked, []);
+    assert.equal(engineSky('aa'), presets[19 % presets.length]);
+    assert.equal(save.browserCopy('aa'), null);
+    assert.ok(engine.log.filter(l => l.startsWith('PUT /api/save?name=aa&base=')).length >= 10, engine.log.join('\n'));
+});
+
+test('a copy kept in this browser goes back with the version it started from', async () => {
+    const a = await made('aa');
+    open = a;
+    engine.failSaves = true;
+    a.atmosphere.preset = 'golden';
+    save.saveSoon();
+    await save.flushSave();
+    assert.ok(save.browserCopy('aa'));
+    // Another tab saves in the meantime (the engine's time didn't move on: the same second).
+    engine.failSaves = false;
+    const b = Area.fromJSON(a.toJSON());
+    b.atmosphere.preset = 'night';
+    const at = engine.saved.get('aa');
+    await otherTab(b);
+    engine.saved.set('aa', at);
+    // The copy's move is refused, so the builder is asked instead of the other tab's save being lost.
+    questions.answers = [null];
+    await save.moveBrowserAreas();
+    assert.deepEqual(questions.asked, ['Two copies of aa']);
+    assert.equal(engineSky('aa'), 'night');
 });

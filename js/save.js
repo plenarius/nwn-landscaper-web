@@ -28,6 +28,11 @@ let sending = null;
 // When the engine last saved each area, as it says (Unix seconds): its answer to a save, and its list of areas. A copy kept in
 // this browser records the one it was based on, so the next start can tell whether the engine's has changed since.
 const engineSaved = new Map();
+// The version of each area's working copy this page last read or saved, as the engine says (its `X-Landscaper-Version` on
+// open, its answer to a save). Each save sends it as `base`, and the engine refuses one (409, `moved`) when the area was saved
+// from another tab or computer since: two tabs on one area no longer save over each other. A copy kept in this browser keeps
+// the version it was based on too (`landscaper.version.<name>`).
+const engineVersion = new Map();
 // The area (the object) each copy kept in this browser holds a state of, by name: kept by its failed save, or opened from the
 // copy. Only a later save of that area replaces the copy; another area of the same name (the engine's, opened since) never
 // drops it.
@@ -76,6 +81,8 @@ export async function loadArea(name, settle = true) {
     if (settle && browserCopy(name) && !ctx.readOnly()) await settleCopy(name, { saved: engineSaved.get(name) ?? 0 });
     const res = await inTurn(() => api(`/api/area?name=${encodeURIComponent(name)}`));
     if (!res.ok) throw new Error(await failure(res));
+    const version = res.headers.get('X-Landscaper-Version');
+    if (version) engineVersion.set(name, version);
     return Area.fromJSON(await res.json());
 }
 
@@ -85,6 +92,9 @@ export function openCopy(name) {
     if (!text) throw new Error('this browser no longer has it');
     const a = Area.fromJSON(JSON.parse(text));
     keptFrom.set(name, a);
+    // (its saves start from the engine's copy this one was based on, when the browser knows it)
+    const version = store.get(key('version', name));
+    if (version) engineVersion.set(name, version);
     return a;
 }
 
@@ -126,8 +136,9 @@ function leaving(e) {
     if (e.type === 'visibilitychange') flushSave();
 }
 
-// An area's copy in this browser: `landscaper.area.<name>` (its JSON) and `landscaper.base.<name>` (when the engine had saved
-// the copy it started from, Unix seconds; 0 when not known). On a team server the name is `<user>:<name>`, so one builder's
+// An area's copy in this browser: `landscaper.area.<name>` (its JSON), `landscaper.base.<name>` (when the engine had saved
+// the copy it started from, Unix seconds; 0 when not known) and `landscaper.version.<name>` (that copy's version, see
+// engineVersion; none when not known). On a team server the name is `<user>:<name>`, so one builder's
 // copy never goes into another's workspace on a shared browser.
 const key = (what, name) => `landscaper.${what}.${ctx.me().team ? `${ctx.me().user}:` : ''}${name}`;
 
@@ -160,6 +171,8 @@ function keepInBrowser(a, json) {
     store.set(currentKey(), a.name);
     keptFrom.set(a.name, a);
     const base = engineSaved.get(a.name) ?? +(store.get(key('base', a.name)) ?? 0);
+    const version = engineVersion.get(a.name) ?? store.get(key('version', a.name));
+    if (version) store.set(key('version', a.name), version);
     return store.set(key('area', a.name), json) && store.set(key('base', a.name), String(base));
 }
 
@@ -168,6 +181,7 @@ function dropCopy(name) {
     keptFrom.delete(name);
     store.remove(key('area', name));
     store.remove(key('base', name));
+    store.remove(key('version', name));
     store.remove(`landscaper.saved.${name}`);
 }
 
@@ -203,7 +217,7 @@ async function writeArea(a, also = '') {
         }
     } catch (err) {
         if (err.status === 409 && also) throw err;
-        if (err.status === 409) return replaced(a, json);
+        if (err.status === 409) return replaced(a, json, err.moved);
         if (keepInBrowser(a, json))
             $('statusMsg').textContent = engine.up
                 ? `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`
@@ -218,20 +232,33 @@ async function writeArea(a, also = '') {
 }
 
 /**
- * The engine refused an autosave of `a` (409): its `created` differs from the saved copy's, so another tab or computer made a
- * new area of that name since this one was opened. `a` is kept in this browser, and the builder picks: replace that area with
- * this one, or open that one (this one stays in this browser, and the next start asks again). Closing the question keeps `a`
- * here without asking again at each change.
+ * The engine refused an autosave of `a` (409). Either its `created` differs from the saved copy's (another tab or computer made a
+ * new area of that name since this one was opened), or `moved` (the engine's `{ moved, saved }`): the same area was saved from
+ * another tab or computer since this tab opened or last saved it. `a` is kept in this browser, and the builder picks: replace
+ * the engine's copy with this one, or open that one (this one stays in this browser, and the next start asks again). Closing
+ * the question keeps `a` here without asking again at each change.
  */
-async function replaced(a, json) {
+async function replaced(a, json, moved) {
     const kept = keepInBrowser(a, json);
     if (refused.has(a)) return;
-    const answer = await ask({
-        title: `Another ${a.name}`,
-        text: `Another tab or computer made a new area called ${a.name} since you opened this one, so this one no longer saves over it.${kept ? ' Your changes are kept in this browser for now.' : ''}\n\nReplace that area with this one, or open that one${kept ? ' (this one stays in this browser, and the next start asks again)' : ' (your changes here are then lost)'}.`,
-        ok: 'Replace it with this one',
-        cancel: 'Open that one',
-    });
+    const when = moved?.saved ? ` at ${new Date(moved.saved * 1000).toLocaleTimeString()}` : '';
+    const keptNote = kept ? ' Your changes are kept in this browser for now.' : '';
+    const then = kept ? ' (this one stays in this browser, and the next start asks again)' : ' (your changes here are then lost)';
+    const answer = await ask(
+        moved
+            ? {
+                  title: `${a.name} was saved elsewhere`,
+                  text: `Another tab or computer saved ${a.name}${when}, after this tab opened it, so this tab no longer saves over it.${keptNote}\n\nKeep this tab's (it replaces that copy, which the engine keeps as ${a.name}.json.replaced-<time>), or open that one${then}.`,
+                  ok: "Keep this tab's",
+                  cancel: 'Open that one',
+              }
+            : {
+                  title: `Another ${a.name}`,
+                  text: `Another tab or computer made a new area called ${a.name} since you opened this one, so this one no longer saves over it.${keptNote}\n\nReplace that area with this one, or open that one${then}.`,
+                  ok: 'Replace it with this one',
+                  cancel: 'Open that one',
+              },
+    );
     if (answer === true) {
         try {
             await putArea(a.name, JSON.stringify(a.toJSON()), '&replace=1');
@@ -244,22 +271,34 @@ async function replaced(a, json) {
     }
     refused.add(a);
     $('statusMsg').dataset.saveFailed = '1';
+    const why = moved ? 'it was saved from another tab or computer since' : 'another area of that name was made since';
     $('statusMsg').textContent = kept
-        ? `${a.name} is kept in this browser only: another area of that name was made since.`
-        : `Couldn't keep ${a.name} anywhere: another area of that name was made since. Export it, or your changes may be lost.`;
+        ? `${a.name} is kept in this browser only: ${why}.`
+        : `Couldn't keep ${a.name} anywhere: ${why}. Export it, or your changes may be lost.`;
     // (not awaited: opening waits for the saves before it, this one among them)
     if (answer === false) ctx.open(a.name);
 }
 
-async function putArea(name, text, also = '') {
-    const res = await api(`/api/save?name=${encodeURIComponent(name)}${also}`, {
+/**
+ * Sends area `name` (its JSON `text`) to the engine; throws when it isn't saved, with the answer's `status` and, for a 409
+ * because the area was saved elsewhere since, `moved` (`{ saved }`, when, in Unix seconds). `also`: more of the query. `base`:
+ * the version the area started from (engineVersion's, by default); not sent with a new area's first save, which the engine
+ * checks by name.
+ */
+async function putArea(name, text, also = '', base = engineVersion.get(name)) {
+    const since = base && !also.includes('new=1') ? `&base=${encodeURIComponent(base)}` : '';
+    const res = await api(`/api/save?name=${encodeURIComponent(name)}${also}${since}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: text,
     });
-    if (!res.ok) throw Object.assign(new Error(await failure(res)), { status: res.status });
-    const at = (await json(res)).saved;
-    if (at) engineSaved.set(name, at);
+    if (!res.ok) {
+        const body = await json(res.clone());
+        throw Object.assign(new Error(await failure(res)), { status: res.status, moved: body.moved ? { saved: body.saved } : undefined });
+    }
+    const answer = await json(res);
+    if (answer.saved) engineSaved.set(name, answer.saved);
+    if (answer.version) engineVersion.set(name, answer.version);
 }
 
 /** Areas kept in this browser (before landscaper saved to disk, or when a save failed) go to landscaper, then leave the
@@ -299,7 +338,9 @@ async function settleCopy(name, there) {
     const base = +(store.get(key('base', name)) ?? 0);
     if (!there || (base > 0 && (there.saved ?? 0) <= base)) {
         try {
-            await inTurn(() => putArea(name, browserCopy(name)));
+            // (With the version the copy started from, when it knows it: a save since from elsewhere is then asked about,
+            // even within the same second.)
+            await inTurn(() => putArea(name, browserCopy(name), '', store.get(key('version', name)) ?? engineVersion.get(name)));
             dropCopy(name);
             return true;
         } catch (err) {

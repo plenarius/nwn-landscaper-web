@@ -299,7 +299,10 @@ ThingsTool.prototype.bpCreateForm = function (box, from) {
 // opened on another blueprint, the dialog showed the first and its Delete deleted the second).
 let bpOpening = 0;
 
-/** The dialog that changes one of the builder's blueprints. Each setting is saved as it is changed. */
+/**
+ * The dialog that changes one of the builder's blueprints. Each setting is saved as it is changed. In someone else's workspace
+ * (read-only) it only shows the blueprint, however it was opened: each part is a disabled `<fieldset>` (see `bpReadOnly`).
+ */
 ThingsTool.prototype.bpEdit = async function (ext, resref) {
     const turn = ++bpOpening;
     const dlg = $('bpDialog');
@@ -334,6 +337,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
         if (g !== group) {
             group = g;
             section = document.createElement('fieldset');
+            section.disabled = this.bpReadOnly();
             const lg = document.createElement('legend');
             lg.textContent = g;
             section.appendChild(lg);
@@ -375,7 +379,8 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     if (ext === 'uti') await this.bpProperties(resref, body);
     if (ext === 'utc' || ext === 'utm' || (ext === 'utp' && byLabel.get('HasInventory'))) await this.bpGear(resref, body, ext);
     if (stale()) return;
-    $('bpDelete').hidden = false;
+    $('bpDelete').hidden = this.bpReadOnly();
+    if (this.bpReadOnly()) status.textContent = 'Shown to read: this is not your workspace.';
     $('bpDelete').onclick = async () => {
         if (
             !(await ask({
@@ -401,6 +406,14 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
     };
 };
 
+/**
+ * Whether the blueprint dialog only shows (someone else's workspace). Its parts are `<fieldset>`s disabled then, which
+ * disables every control in them, the ones drawn later too (a property list redrawn, a search's answers).
+ */
+ThingsTool.prototype.bpReadOnly = function () {
+    return !!this.ctx.readOnly?.();
+};
+
 /** Beside a creature's Conversation: pick, view, write or change one (the same picker the properties panel has). */
 ThingsTool.prototype.bpConversationRow = function (_ext, resref, input, section) {
     section.appendChild(conversationPicker(input, resref.slice(0, 16)));
@@ -415,7 +428,7 @@ function el(tag, props = {}, ...kids) {
 /** An item's properties: the list (each can be taken off), its value, and a form to add one (type, then what the type offers). */
 ThingsTool.prototype.bpProperties = async function (resref, body) {
     const q = `resref=${encodeURIComponent(resref)}`;
-    const box = el('fieldset', {}, el('legend', { textContent: 'Properties' }));
+    const box = el('fieldset', { disabled: this.bpReadOnly() }, el('legend', { textContent: 'Properties' }));
     body.appendChild(box);
     const list = el('div', { className: 'stock' });
     const cost = el('p', { className: 'note' });
@@ -521,7 +534,7 @@ ThingsTool.prototype.bpGear = async function (resref, body, ext = 'utc') {
     const placeable = ext !== 'utc';
     const store = ext === 'utm';
     const title = store ? 'Stock' : placeable ? 'Holds' : 'Carries and wears';
-    const box = el('fieldset', {}, el('legend', { textContent: title }));
+    const box = el('fieldset', { disabled: this.bpReadOnly() }, el('legend', { textContent: title }));
     body.appendChild(box);
     const url = `/api/new-blueprint-gear?resref=${encodeURIComponent(resref)}${placeable ? `&ext=${ext}` : ''}`;
     const kind = store ? 'store' : placeable ? 'placeable' : 'creature';
