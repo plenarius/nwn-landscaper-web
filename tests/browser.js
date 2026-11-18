@@ -46,8 +46,13 @@ function element(id, tag = 'div') {
         append(...kids) {
             for (const k of kids) if (typeof k === 'object') this.children.push(k);
         },
-        showModal() {},
-        close() {},
+        open: false,
+        showModal() {
+            this.open = true;
+        },
+        close() {
+            this.open = false;
+        },
         focus() {},
     };
 }
