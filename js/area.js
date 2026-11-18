@@ -95,6 +95,12 @@ export class Area {
         return k;
     }
 
+    /** Whether texture `id` can be painted here: the area has it already, or room for one more (255 at most, as materials
+     *  are bytes). materialIndex() throws otherwise. */
+    canPaint(id) {
+        return this.palette.includes(id) || this.palette.length < 255;
+    }
+
     /** A new area; its ground (or a cave's floor) at `base` metres: start
      *  high to dig valleys and canyons down into it. */
     static create(name, tiles, start, base = 5, tilesY = tiles) {
@@ -291,6 +297,8 @@ export class Area {
             s: structuredClone(this.settings),
             r: structuredClone(this.originals),
             c: this.clearance,
+            a: structuredClone(this.atmosphere),
+            sh: this.shadow,
         };
     }
     restore(s) {
@@ -305,6 +313,8 @@ export class Area {
         this.originals = structuredClone(s.r ?? { removed: [], moved: {}, edited: {} });
         // (the Descent tool sets the ceiling height with its floors)
         if ('c' in s) this.clearance = s.c;
+        if (s.a) this.atmosphere = structuredClone(s.a);
+        if ('sh' in s) this.shadow = s.sh;
         this.floodWater();
     }
 
@@ -360,7 +370,8 @@ export class Area {
     /**
      * What going back to snapshot `s` changes, in `lastChange`, for the view to redraw only that: `rect`, the samples whose
      * height or paint differ (i0..i1, j0..j1; null when none do, the whole area when the ceiling height differs), and
-     * `entrances`, whether they differ (their dark mouths are in the shadows). Returns `s`.
+     * `entrances`, whether they differ (their dark mouths are in the shadows), and `shadow`, whether the shadows' strength
+     * differs. Returns `s`.
      */
     noteChange(s) {
         const { nx, heights: h, materials: m } = this;
@@ -379,7 +390,11 @@ export class Area {
         }
         let rect = i1 < 0 ? null : { i0, i1, j0, j1 };
         if ('c' in s && s.c !== this.clearance) rect = { i0: 0, i1: nx - 1, j0: 0, j1: this.ny - 1 };
-        this.lastChange = { rect, entrances: JSON.stringify(s.e) !== JSON.stringify(this.entrances) };
+        this.lastChange = {
+            rect,
+            entrances: JSON.stringify(s.e) !== JSON.stringify(this.entrances),
+            shadow: 'sh' in s && s.sh !== this.shadow,
+        };
         return s;
     }
 

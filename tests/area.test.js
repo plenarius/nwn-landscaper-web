@@ -51,6 +51,34 @@ test('the ceiling height comes back with an undo, and the whole area is redrawn'
     assert.deepEqual(a.lastChange.rect, { i0: 0, i1: a.nx - 1, j0: 0, j1: a.ny - 1 });
 });
 
+test("Sky & fog and the shadows' strength come back with an undo, and a change of strength redraws every shadow", () => {
+    const a = Area.create('ss', 3, 'flat');
+    const sky = structuredClone(a.atmosphere);
+    a.beginStroke();
+    a.atmosphere.preset = 'custom';
+    a.atmosphere.sun.fog = '#ff0000';
+    a.undo();
+    assert.deepEqual(a.atmosphere, sky);
+    assert.equal(a.lastChange.shadow, false);
+    a.beginStroke();
+    a.shadow = 0.2;
+    a.undo();
+    assert.equal(a.shadow, 0.6);
+    assert.equal(a.lastChange.shadow, true);
+    a.redo();
+    assert.equal(a.shadow, 0.2);
+});
+
+test('a texture can be painted when the area has it or room for one more', () => {
+    const a = Area.create('pp', 3, 'flat');
+    a.palette = [a.palette[0], ...Array.from({ length: 254 }, (_, k) => `filler${k}`)];
+    assert.equal(a.canPaint('filler3'), true);
+    assert.equal(a.canPaint('rock'), false);
+    assert.throws(() => a.materialIndex('rock'));
+    a.palette.pop();
+    assert.equal(a.canPaint('rock'), true);
+});
+
 test('an area read back from its JSON is the same area', () => {
     const a = Area.create('aa', 4, 'hills', 5, 3);
     a.materials[17] = a.materialIndex('rock');

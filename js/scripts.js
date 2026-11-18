@@ -7,19 +7,21 @@
 import { EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, oneDark } from '../vendor/codemirror/codemirror.js';
 
 import { ask } from './ask.js';
-import { api, failure, json, viewing } from './api.js';
-import { $, el } from './dom.js';
+import { api, engine, failure, json, viewing } from './api.js';
+import { $ } from './dom.js';
+import { namePicker } from './picker.js';
 
-// The question is asked once: several boxes ask at the same time while a panel opens. When the engine doesn't answer, it is
-// asked again next time.
-let canWrite = null;
-function scriptsWritable() {
-    canWrite ??= api('/api/scripts?q=zzzz').then(async res => {
-        if (!res.ok) canWrite = null;
-        return !!(await json(res)).canWrite;
-    });
-    return canWrite;
+/** What app.js gives this file (initScripts): `me()`, who is signed in (/api/me's answer). */
+let ctx = null;
+
+/** Gives the script pickers who is signed in. */
+export function initScripts(c) {
+    ctx = c;
 }
+
+/** Whether the script pickers offer the editor: the engine opens, writes and compiles scripts for admins only (its script
+ *  routes check the same `admin` that /api/me reports; on your own machine you are one), and only while it is there. */
+const scriptsWritable = () => engine.up && !!ctx?.me().admin;
 
 // Whether a script is the builder's own, asked once per name: every redraw of a properties panel or a conversation built
 // each box's button again, and each asked the engine (about 150 requests for one edit of a 50-line conversation). Forgotten
@@ -38,8 +40,13 @@ function isMine(name) {
     return ownScripts.get(name);
 }
 
+// How many times the script dialog has been opened: an answer for an earlier opening is dropped (closed while it loaded and
+// opened on another script, the dialog showed one script and deleted or saved the other).
+let opening = 0;
+
 /** The script editor for one of your own scripts, in its dialog. Saved (and checked) as you type. */
 async function openScript(resref, onMade = null) {
+    const turn = ++opening;
     const dlg = $('scriptDialog');
     const host = $('scriptHost');
     const status = $('scriptStatus');
@@ -55,6 +62,7 @@ async function openScript(resref, onMade = null) {
     dlg.showModal();
     const res = await api(`/api/script?resref=${encodeURIComponent(resref)}&any=1`);
     const d = await json(res);
+    if (turn !== opening || !dlg.open) return;
     if (!res.ok) {
         host.textContent = d.error || res.statusText;
         return;
@@ -177,74 +185,41 @@ async function openScript(resref, onMade = null) {
     });
 }
 
-let listId = 0;
+/** Asks for a new script's name and makes it, of `kind` ('condition' or 'action'). Its name, or null when cancelled. */
+async function newScript(kind) {
+    let created = null;
+    const ok = await ask({
+        title: 'Write a script',
+        text: `A new script of yours (${kind === 'condition' ? 'a condition, which answers yes or no' : 'an action, which does something'}). Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
+        ok: 'Start writing',
+        input: { label: 'Name', placeholder: 'e.g. my_spawn' },
+        submit: async pick => {
+            const res = await api(`/api/script?resref=${encodeURIComponent(pick.toLowerCase())}&from=&kind=${kind}`, {
+                method: 'POST',
+            });
+            const r = await json(res);
+            if (!res.ok) return r.error || res.statusText;
+            created = r.resref;
+        },
+    });
+    if (!ok || !created) return null;
+    ownScripts.clear();
+    return created;
+}
 
 /** Makes a script-name box a picker (the module's and your own scripts, found as you type) and, for admins, adds a button to
  *  write or change the script it names. `kind`: 'condition' (a StartingConditional) or 'action' (a main). Returns the button
  *  row to place beside the box. */
 export function scriptPicker(input, kind = 'action') {
-    const list = el('datalist', { id: `scripts${++listId}` });
-    input.setAttribute('list', list.id);
-    let timer = null;
-    input.addEventListener('input', () => {
-        clearTimeout(timer);
-        timer = setTimeout(async () => {
-            const q = input.value.trim();
-            if (q.length < 2) return;
-            const r = await json(await api(`/api/scripts?q=${encodeURIComponent(q)}`));
-            list.textContent = '';
-            for (const s of r.scripts ?? [])
-                list.appendChild(
-                    new Option(s.source === 'mine' ? `${s.resref} (yours)` : s.folder ? `${s.resref} · ${s.folder}` : s.resref, s.resref),
-                );
-        }, 250);
+    return namePicker(input, {
+        noun: 'script',
+        search: async q =>
+            ((await json(await api(`/api/scripts?q=${encodeURIComponent(q)}`))).scripts ?? []).map(
+                s => new Option(s.source === 'mine' ? `${s.resref} (yours)` : s.folder ? `${s.resref} · ${s.folder}` : s.resref, s.resref),
+            ),
+        isMine,
+        open: openScript,
+        create: () => newScript(kind),
+        button: scriptsWritable(),
     });
-    const row = el('span', { className: 'scriptbtns' }, list);
-    scriptsWritable().then(ok => {
-        if (!ok) return;
-        const b = el('button', { type: 'button', className: 'small' });
-        const sync = async () => {
-            const name = input.value.trim().toLowerCase();
-            // (in someone else's workspace, read-only: a script to look at, never one to write)
-            b.hidden = !name && !!viewing.user;
-            b.textContent = !viewing.user && (await isMine(name)) ? 'Edit script' : name ? 'View script' : 'Write a script';
-        };
-        sync();
-        input.addEventListener('change', sync);
-        b.onclick = async () => {
-            const name = input.value.trim().toLowerCase();
-            const made = r => {
-                input.value = r;
-                input.dispatchEvent(new Event('change'));
-            };
-            if (name) {
-                await openScript(name, made);
-                sync();
-                return;
-            }
-            let created = null;
-            const ok = await ask({
-                title: 'Write a script',
-                text: `A new script of yours (${kind === 'condition' ? 'a condition, which answers yes or no' : 'an action, which does something'}). Its name is what the game calls it: up to 16 lower case letters, digits or _.`,
-                ok: 'Start writing',
-                input: { label: 'Name', placeholder: 'e.g. my_spawn' },
-                submit: async pick => {
-                    const res = await api(`/api/script?resref=${encodeURIComponent(pick.toLowerCase())}&from=&kind=${kind}`, {
-                        method: 'POST',
-                    });
-                    const r = await json(res);
-                    if (!res.ok) return r.error || res.statusText;
-                    created = r.resref;
-                },
-            });
-            if (!ok || !created) return;
-            ownScripts.clear();
-            input.value = created;
-            input.dispatchEvent(new Event('change'));
-            await openScript(created);
-            sync();
-        };
-        row.appendChild(b);
-    });
-    return row;
 }

@@ -9,10 +9,16 @@ import { scriptPicker } from './scripts.js';
 import { ask } from './ask.js';
 import { api, json, viewing } from './api.js';
 import { $, el } from './dom.js';
+import { namePicker } from './picker.js';
 
 const excerpt = (t, n = 48) => (t || '(empty)').replace(/\s+/g, ' ').slice(0, n) + ((t || '').length > n ? '…' : '');
 
+// How many times the conversation dialog has been opened: an answer for an earlier opening is dropped (closed while it loaded
+// and opened on another, the dialog showed the first, and its close saved the first again).
+let opening = 0;
+
 async function openConversation(resref, onMade = null) {
+    const turn = ++opening;
     const dlg = $('dlgDialog');
     const tree = $('dlgTree');
     const status = $('dlgStatus');
@@ -26,6 +32,7 @@ async function openConversation(resref, onMade = null) {
     dlg.showModal();
     const res = await api(`/api/dialog?resref=${encodeURIComponent(resref)}&any=1`);
     const m = await json(res);
+    if (turn !== opening || !dlg.open) return;
     if (!res.ok) {
         tree.textContent = m.error || res.statusText;
         return;
@@ -218,13 +225,16 @@ async function openConversation(resref, onMade = null) {
         tree.textContent = '';
         const seen = new Set();
         for (const s of m.starts) tree.appendChild(node(0, s.index, s, seen, m.starts));
-        const add = el('button', { type: 'button', textContent: '+ Another way for the NPC to start' });
-        add.onclick = () => {
-            m.entries.push({ text: '', speaker: '', script: '', comment: '', links: [] });
-            m.starts.push({ index: m.entries.length - 1, active: '' });
-            redraw();
-        };
-        tree.appendChild(add);
+        // (not in one to read: the line it added was never saved)
+        if (!readOnly) {
+            const add = el('button', { type: 'button', textContent: '+ Another way for the NPC to start' });
+            add.onclick = () => {
+                m.entries.push({ text: '', speaker: '', script: '', comment: '', links: [] });
+                m.starts.push({ index: m.entries.length - 1, active: '' });
+                redraw();
+            };
+            tree.appendChild(add);
+        }
         const end = el('details', { className: 'dlgmore' }, el('summary', { textContent: 'When it ends' }));
         for (const [label, key] of [
             ['Script when it ends', 'end'],
@@ -251,8 +261,6 @@ async function openConversation(resref, onMade = null) {
     });
 }
 
-let listId = 0;
-
 // The builder's own conversations, asked once for every picker: each redraw of a properties panel built its button again,
 // and each asked the engine. Forgotten when one is made or copied.
 let myDialogs = null;
@@ -264,63 +272,37 @@ function mineList() {
     return myDialogs;
 }
 
+/** Asks for a new conversation's name (`suggest` offered) and makes it. Its name, or null when cancelled. */
+async function newConversation(suggest) {
+    let made = null;
+    const ok = await ask({
+        title: 'Write a conversation',
+        text: 'A new conversation of yours, with a first line for the NPC to say. Its name is what the game calls it: up to 16 lower case letters, digits or _.',
+        ok: 'Start writing',
+        input: { label: 'Name', value: suggest, placeholder: 'e.g. my_innkeeper' },
+        submit: async pick => {
+            const res = await api(`/api/dialog?resref=${encodeURIComponent(pick.toLowerCase())}&from=`, { method: 'POST' });
+            const out = await json(res);
+            if (!res.ok) return out.error || res.statusText;
+            made = out.resref;
+        },
+    });
+    if (!ok || !made) return null;
+    myDialogs = null;
+    return made;
+}
+
 /** Beside a creature's (or door's, placeable's) Conversation box: conversations found by name as you type, and a button to
  *  write one (new, named by `suggest`), look at the module's (read only, with a copy button) or change one of yours. */
 export function conversationPicker(input, suggest = '') {
-    const list = el('datalist', { id: `convs${++listId}` });
-    input.setAttribute('list', list.id);
-    let timer = null;
-    input.addEventListener('input', () => {
-        clearTimeout(timer);
-        timer = setTimeout(async () => {
-            const q = input.value.trim();
-            if (q.length < 2) return;
-            list.textContent = '';
-            for (const d of (await json(await api(`/api/dialogs?q=${encodeURIComponent(q)}`))).found ?? [])
-                list.appendChild(new Option(d.source === 'mine' ? `${d.resref} (yours)` : d.resref, d.resref));
-        }, 250);
+    return namePicker(input, {
+        noun: 'conversation',
+        search: async q =>
+            ((await json(await api(`/api/dialogs?q=${encodeURIComponent(q)}`))).found ?? []).map(
+                d => new Option(d.source === 'mine' ? `${d.resref} (yours)` : d.resref, d.resref),
+            ),
+        isMine: async name => (await mineList()).includes(name),
+        open: openConversation,
+        create: () => newConversation(suggest),
     });
-    const row = el('span', { className: 'scriptbtns' }, list);
-    const b = el('button', { type: 'button', className: 'small' });
-    const mine = async () => (await mineList()).includes(input.value.trim().toLowerCase());
-    const sync = async () => {
-        // (in someone else's workspace, read-only: a conversation to look at, never one to write)
-        b.hidden = !input.value.trim() && !!viewing.user;
-        b.textContent =
-            !viewing.user && (await mine()) ? 'Edit conversation' : input.value.trim() ? 'View conversation' : 'Write a conversation';
-    };
-    sync();
-    input.addEventListener('change', sync);
-    const made = r => {
-        input.value = r;
-        input.dispatchEvent(new Event('change'));
-    };
-    b.onclick = async () => {
-        const name = input.value.trim().toLowerCase();
-        if (name) {
-            await openConversation(name, made);
-            sync();
-            return;
-        }
-        let r = null;
-        const ok = await ask({
-            title: 'Write a conversation',
-            text: 'A new conversation of yours, with a first line for the NPC to say. Its name is what the game calls it: up to 16 lower case letters, digits or _.',
-            ok: 'Start writing',
-            input: { label: 'Name', value: suggest, placeholder: 'e.g. my_innkeeper' },
-            submit: async pick => {
-                const res = await api(`/api/dialog?resref=${encodeURIComponent(pick.toLowerCase())}&from=`, { method: 'POST' });
-                const out = await json(res);
-                if (!res.ok) return out.error || res.statusText;
-                r = out;
-            },
-        });
-        if (!ok || !r) return;
-        myDialogs = null;
-        made(r.resref);
-        await openConversation(r.resref, made);
-        sync();
-    };
-    row.appendChild(b);
-    return row;
 }

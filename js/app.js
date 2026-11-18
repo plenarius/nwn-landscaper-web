@@ -22,11 +22,12 @@ import { openSettings } from './settings.js';
 import { api, engine, json, NEEDS_ENGINE, viewing } from './api.js';
 import { $, el, session, store } from './dom.js';
 import { initImport, reimport } from './import.js';
-import { initSky, showAreaSky } from './sky.js';
+import { initSky, showAreaSky, refreshSky } from './sky.js';
 import { initMenus } from './menus.js';
 import { initActivity } from './activity.js';
 import { initPublish } from './publish.js';
 import { initDevTest } from './devtest.js';
+import { initScripts } from './scripts.js';
 import { initReport, showError } from './report.js';
 import { initNewArea } from './newarea.js';
 import { initPlace, selectObject, removeObject, changeSelected, transformer, showPlaceables } from './place.js';
@@ -435,6 +436,7 @@ function setArea(a) {
     $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
     $('report').hidden = true;
     showAreaSky(a);
+    if (tool === 'entrance' && !skyOpen) showEntrances();
     checkSoon();
 }
 
@@ -511,6 +513,7 @@ function showWho() {
 initActivity();
 initPublish(editor);
 initDevTest(editor);
+initScripts(editor);
 
 // Save a version, and autosave (save.js).
 initSave({ ...editor, open: name => openArea({ name }, false) });
@@ -532,10 +535,13 @@ function refreshAll() {
     view.markDirty(change.rect);
     view.updateEntrances();
     view.updateObjects();
-    view.updateShade(change.entrances);
+    view.updateShade(change.entrances || change.shadow);
     view.updateWater();
     view.syncPalette();
     thingsTool.refreshAll();
+    // (its rows hold the entrances they were drawn for, which undo and redo replace with copies)
+    if (tool === 'entrance' && !skyOpen) showEntrances();
+    refreshSky();
     saveSoon();
 }
 let areaLists = null;
