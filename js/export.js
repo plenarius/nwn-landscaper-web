@@ -12,33 +12,36 @@ import { showReport, showError } from './report.js';
 /** What app.js gives this file (initExport): `area()`, `readOnly()` and `view`. */
 let ctx = null;
 
-/** The area as landscaper serve takes it: heights (f32 a sample), each
- *  sample's palette index (u8), then JSON too long for the query (the
- *  objects); the rest in the query. */
-function areaRequest() {
+/** The area open, as landscaper serve takes it: the query string has its name and simple settings (tiles, shadow, kind, roof,
+ *  clearance, module); the body is its heights (f32 a sample), each sample's palette index (u8), then JSON with its lists and
+ *  objects (palette, water, entrances, atmosphere, objects, things, settings, originals). */
+export function areaRequest() {
+    const a = ctx.area();
     const extra = new TextEncoder().encode(
         JSON.stringify({
-            objects: ctx.area().objects,
-            things: thingsForExport(ctx.area().things),
-            settings: ctx.area().settings,
-            originals: ctx.area().originals,
+            palette: a.palette,
+            water: a.water,
+            entrances: a.entrances,
+            atmosphere: a.atmosphere,
+            objects: a.objects,
+            things: thingsForExport(a.things),
+            settings: a.settings,
+            originals: a.originals,
         }),
     );
-    const body = new Uint8Array(ctx.area().heights.byteLength + ctx.area().materials.byteLength + extra.byteLength);
-    body.set(new Uint8Array(ctx.area().heights.buffer, ctx.area().heights.byteOffset, ctx.area().heights.byteLength));
-    body.set(ctx.area().materials, ctx.area().heights.byteLength);
-    body.set(extra, ctx.area().heights.byteLength + ctx.area().materials.byteLength);
-    const query =
-        `name=${encodeURIComponent(ctx.area().name)}&tiles=${ctx.area().tiles}&tilesY=${ctx.area().tilesY}&palette=${encodeURIComponent(ctx.area().palette.join(','))}` +
-        `&atmosphere=${encodeURIComponent(JSON.stringify(ctx.area().atmosphere))}` +
-        `&water=${encodeURIComponent(JSON.stringify(ctx.area().water))}` +
-        `&shadow=${ctx.area().shadow}` +
-        `&entrances=${encodeURIComponent(JSON.stringify(ctx.area().entrances))}` +
-        (ctx.area().enclosed()
-            ? `&kind=${ctx.area().kind}&roof=${encodeURIComponent(ctx.area().roof)}${ctx.area().clearance > 0 ? `&clearance=${encodeURIComponent(ctx.area().clearance)}` : ''}`
-            : '') +
-        `&module=${encodeURIComponent(ctx.area().module || ctx.area().name)}`;
-    return { query, body };
+    const heights = new Uint8Array(a.heights.buffer, a.heights.byteOffset, a.heights.byteLength);
+    const body = new Uint8Array(heights.byteLength + a.materials.byteLength + extra.byteLength);
+    body.set(heights);
+    body.set(a.materials, heights.byteLength);
+    body.set(extra, heights.byteLength + a.materials.byteLength);
+    const query = new URLSearchParams({ name: a.name, tiles: a.tiles, tilesY: a.tilesY, shadow: a.shadow });
+    if (a.enclosed()) {
+        query.set('kind', a.kind);
+        query.set('roof', a.roof);
+        if (a.clearance > 0) query.set('clearance', a.clearance);
+    }
+    query.set('module', a.module || a.name);
+    return { query: query.toString(), body };
 }
 
 /** Sends the area to `what` (export or check); its report, or throws. */

@@ -95,11 +95,12 @@ function nearestWall(p) {
 /** The Entrance tool's press on the ground at `p` (metres): adds a cave entrance there, or with Shift removes the nearest.
  *  `e` is the pointer event. */
 export function entranceDown(e, p) {
+    const a = ctx.area();
     if (e.shiftKey) {
-        const hit = nearestEntrance(ctx.area().entrances, p.x, p.y);
+        const hit = nearestEntrance(a.entrances, p.x, p.y);
         if (!hit) return;
-        ctx.area().beginStroke();
-        ctx.area().entrances = ctx.area().entrances.filter(x => x !== hit);
+        a.beginStroke();
+        a.entrances = a.entrances.filter(x => x !== hit);
         ctx.view.updateEntrances();
         showEntrances();
         ctx.view.markEntrance(hit);
@@ -108,45 +109,45 @@ export function entranceDown(e, p) {
         return;
     }
     // In a cave: on the floor beside a wall, not on the rock (the void).
-    const c = ctx.area().sampleAt(p.x, p.y);
-    if (ctx.area().void(c.i, c.j)) {
+    const c = a.sampleAt(p.x, p.y);
+    if (a.void(c.i, c.j)) {
         say('In a cave, click the floor right beside a wall: the entrance is carved into that wall.');
         return;
     }
-    const gx = ctx.area().heightAt(p.x + 1, p.y) - ctx.area().heightAt(p.x - 1, p.y);
-    const gy = ctx.area().heightAt(p.x, p.y + 1) - ctx.area().heightAt(p.x, p.y - 1);
+    const gx = a.heightAt(p.x + 1, p.y) - a.heightAt(p.x - 1, p.y);
+    const gy = a.heightAt(p.x, p.y + 1) - a.heightAt(p.x, p.y - 1);
     let dir;
-    const wall = ctx.area().enclosed() ? nearestWall(p) : null;
+    const wall = a.enclosed() ? nearestWall(p) : null;
     if (wall !== null) {
         dir = wall;
     } else if (Math.hypot(gx, gy) > 0.1) {
         dir = Math.atan2(gy, gx);
     } else {
         const c = ctx.view.camera.position;
-        dir = Math.atan2(ctx.area().sizeY - c.z - p.y, c.x - p.x) + Math.PI;
+        dir = Math.atan2(a.sizeY - c.z - p.y, c.x - p.x) + Math.PI;
     }
     const ent = { x: p.x, y: p.y, dir, width: Math.min(8, Math.max(2.5, +ctx.sizeIn.value)), depth: 4, floor: 0 };
     // Inside one tile, for the game's pathfinding; the floor where it lands.
-    const moved = fitInTile(ent, TILE, ctx.area().sizeX, ctx.area().sizeY);
-    ent.floor = ctx.area().heightAt(ent.x, ent.y);
-    ctx.area().beginStroke();
+    const moved = fitInTile(ent, TILE, a.sizeX, a.sizeY);
+    ent.floor = a.heightAt(ent.x, ent.y);
+    a.beginStroke();
     // Its id comes after the snapshot: undoing this entrance leaves the counter past it, so the id is never given again.
-    ent.id = ctx.area().newEntranceId();
-    ctx.area().entrances.push(ent);
+    ent.id = a.newEntranceId();
+    a.entrances.push(ent);
     // Rock that suits the slope: what's painted right behind the mouth.
-    const ground = groundBehind(ctx.area(), ent);
+    const ground = groundBehind(a, ent);
     ent.rock = rockFor(ctx.library.byId.get(ground)?.category, ground, id => ctx.library.byId.has(id));
     // (unpainted when the area has 255 textures without it: materialIndex() would throw with the entrance half made)
-    const rock = ent.rock && ctx.area().canPaint(ent.rock) ? ctx.area().materialIndex(ent.rock) : undefined;
-    ctx.view.markDirty(carve(ctx.area(), ent, rock));
+    const rock = ent.rock && a.canPaint(ent.rock) ? a.materialIndex(ent.rock) : undefined;
+    ctx.view.markDirty(carve(a, ent, rock));
     ctx.view.syncPalette();
-    if (ctx.area().water.length) waterChanged();
+    if (a.water.length) waterChanged();
     ctx.view.updateEntrances();
     ctx.view.markEntrance(ent);
     ctx.view.updateShade();
     showEntrances();
     say(
-        `Entrance ${ent.id}: its door will be tagged ${ctx.area().doorTag(ent)}` +
+        `Entrance ${ent.id}: its door will be tagged ${a.doorTag(ent)}` +
             (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '') +
             (ent.rock && rock === undefined ? `. Its rock isn't painted: this area has 255 textures, the most it can.` : ''),
     );
