@@ -153,3 +153,83 @@ test('undo puts an entrance back with its id, and its id is never given again', 
     assert.equal(a.entrances[0].id, 1);
     assert.equal(a.newEntranceId(), 2);
 });
+
+test('an undo says apart which samples changed height, and which entrances it added or took out', () => {
+    const a = Area.create('aa', 3, 'flat', 5);
+    a.beginStroke();
+    a.materials[a.nx * 4 + 3] = a.materialIndex('rock');
+    a.beginStroke();
+    a.heights[a.nx * 2 + 7] = 9;
+    a.entrances.push({ id: a.newEntranceId(), x: 10, y: 10, width: 4, depth: 4 });
+    a.undo();
+    assert.deepEqual(a.lastChange.heights, { i0: 7, i1: 7, j0: 2, j1: 2 });
+    assert.deepEqual(
+        a.lastChange.entrances.map(e => e.id),
+        [1],
+    );
+    // Paint only: nothing for the shadows to follow.
+    a.undo();
+    assert.deepEqual(a.lastChange.rect, { i0: 3, i1: 3, j0: 4, j1: 4 });
+    assert.equal(a.lastChange.heights, null);
+    assert.deepEqual(a.lastChange.entrances, []);
+});
+
+/** The ceiling fit as it was first written (one breadth-first search with a list of neighbours per sample), to hold the
+ *  faster one to the same answer: which open sample gives the rock its ceiling depends on the order of the search. */
+function ceilingFitAsWritten(area) {
+    const { nx, ny, heights: h, roof } = area,
+        n = nx * ny;
+    const from = new Int32Array(n).fill(-1),
+        queue = new Int32Array(n);
+    let head = 0,
+        tail = 0;
+    for (let k = 0; k < n; k++)
+        if (h[k] < roof - 0.3) {
+            from[k] = k;
+            queue[tail++] = k;
+        }
+    while (head < tail) {
+        const k = queue[head++],
+            i = k % nx,
+            j = (k - i) / nx;
+        for (const [a, b] of [
+            [i + 1, j],
+            [i - 1, j],
+            [i, j + 1],
+            [i, j - 1],
+        ]) {
+            if (a < 0 || b < 0 || a >= nx || b >= ny) continue;
+            const m = b * nx + a;
+            if (from[m] < 0) {
+                from[m] = from[k];
+                queue[tail++] = m;
+            }
+        }
+    }
+    const ceiling = new Float32Array(n),
+        shown = new Float32Array(h);
+    for (let k = 0; k < n; k++) {
+        ceiling[k] = from[k] < 0 ? roof : h[from[k]] + area.clearance;
+        if (h[k] >= roof - 0.3) shown[k] = Math.min(ceiling[k], h[k]);
+    }
+    return { ceiling, shown };
+}
+
+test('a ceiling height fits the roof as the first search did, tie for tie', () => {
+    const a = Area.create('cc', 4, 'cave', 5, 3);
+    // Open floor in patches at different heights, so rock samples have open ground at the same distance on several sides.
+    for (let j = 0; j < a.ny; j++)
+        for (let i = 0; i < a.nx; i++)
+            if ((Math.floor(i / 7) + Math.floor(j / 5)) % 3 === 0) a.heights[j * a.nx + i] = 4 + ((i * 7 + j * 13) % 11) / 10;
+    a.clearance = 3;
+    for (let k = 0; k < 2; k++) {
+        const fit = a.ceilingFit(),
+            was = ceilingFitAsWritten(a);
+        assert.deepEqual(fit.ceiling, was.ceiling);
+        assert.deepEqual(fit.shown, was.shown);
+        // (the second time with the work arrays kept from the first)
+        a.heights[40] = 2;
+    }
+    a.clearance = null;
+    assert.equal(a.ceilingFit(), null);
+});

@@ -53,11 +53,30 @@ export function waterDrag(e, w) {
         `Water level ${w.body.level.toFixed(2)} m (${(w.body.level - w.ground).toFixed(1)} m deep where you clicked)`;
 }
 
-/** Floods the water again after a change and redraws it. */
+/** Floods the water again after a change and redraws it: the ground only where a sample got wetter or drier (a drag redrew
+ *  the whole ground on every pointer move, 49 ms a move on a 32×32 area). */
 export function waterChanged() {
-    ctx.area().floodWater();
+    const area = ctx.area(),
+        was = area.waterLevel.slice();
+    area.floodWater();
     ctx.view.updateWater();
-    ctx.view.markDirty(ctx.view.everything());
+    const now = area.waterLevel,
+        nx = area.nx;
+    let r = null;
+    for (let k = 0; k < now.length; k++) {
+        // (NaN is dry, and never equal to itself)
+        if (now[k] === was[k] || (Number.isNaN(now[k]) && Number.isNaN(was[k]))) continue;
+        const i = k % nx,
+            j = (k - i) / nx;
+        if (!r) r = { i0: i, i1: i, j0: j, j1: j };
+        else {
+            if (i < r.i0) r.i0 = i;
+            if (i > r.i1) r.i1 = i;
+            if (j < r.j0) r.j0 = j;
+            r.j1 = j;
+        }
+    }
+    ctx.view.markDirty(r, false);
 }
 
 /** Gives the Water tool the editor. */

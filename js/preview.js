@@ -2,24 +2,22 @@
 // SPDX-License-Identifier: MIT
 
 // Thumbnails of what a blueprint looks like: a creature is baked by the server (nwn-bake, through the review service)
-// into a scene of meshes and textures, which one hidden WebGL renderer draws from the front into a small picture.
+// into a scene of meshes and textures, which the thumbnail renderer (thumbnail.js) draws from the front into a small picture.
 // One at a time (the server bakes one at a time too), each kept for the page's life; a creature it can't show
 // resolves to null and its entry has no picture.
 
 import * as THREE from 'three';
 import { api } from './api.js';
+import { thumbnail } from './thumbnail.js';
 
 const SIZE = 112;
 const cache = new Map();
-let renderer = null;
 let chain = Promise.resolve();
 
-const json = r => (r.ok ? r.json() : Promise.reject(new Error(r.statusText)));
+// (unlike api.js's json, which reads a failed answer as {}: here a failure means no picture)
+const okJson = r => (r.ok ? r.json() : Promise.reject(new Error(r.statusText)));
 
 function draw(scene, textures) {
-    renderer ??= new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-    renderer.setPixelRatio(1);
-    renderer.setSize(SIZE, SIZE, false);
     const three = new THREE.Scene();
     three.add(new THREE.HemisphereLight(0xffffff, 0x555560, 1.7));
     const sun = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -68,20 +66,19 @@ function draw(scene, textures) {
     // A creature faces north (-z here): the camera stands in front of it, a little above.
     camera.position.set(c.x, c.y + size.y * 0.08, box.min.z - dist);
     camera.lookAt(c);
-    renderer.render(three, camera);
-    const url = renderer.domElement.toDataURL('image/png');
+    const url = thumbnail(three, camera, SIZE);
     for (const g of geometries) g.dispose();
     for (const m of materials) m.dispose();
     return url;
 }
 
 async function make(resref) {
-    const { key } = await api(`/api/preview/creature?resref=${encodeURIComponent(resref)}`).then(json);
+    const { key } = await api(`/api/preview/creature?resref=${encodeURIComponent(resref)}`).then(okJson);
     // The review service's name for the picture: 64 hexadecimal digits (anything else, `../` or a `?`, would make these
     // requests to other paths of the engine).
     if (!/^[0-9a-f]{64}$/.test(key ?? '')) throw new Error('no picture');
     const base = `/api/preview-file/${key}`;
-    const scene = await api(`${base}/scene.json`).then(json);
+    const scene = await api(`${base}/scene.json`).then(okJson);
     const loader = new THREE.TextureLoader();
     const textures = new Map();
     await Promise.all(
@@ -118,7 +115,7 @@ export function creaturePreview(resref) {
  *  same small picture the Place tool's list has). `models` is the view's ModelCache. Null if it names none. */
 export async function modelPreview(models, kind, resref) {
     try {
-        const { model } = await api(`/api/blueprint-model?kind=${kind}&resref=${encodeURIComponent(resref)}`).then(json);
+        const { model } = await api(`/api/blueprint-model?kind=${kind}&resref=${encodeURIComponent(resref)}`).then(okJson);
         return model ? (await models.thumbnail(model)) || null : null;
     } catch {
         return null;
@@ -134,7 +131,7 @@ export function itemPreview(resref) {
         icons.set(
             resref,
             api(`/api/preview/item?resref=${encodeURIComponent(resref)}`)
-                .then(json)
+                .then(okJson)
                 .then(({ key }) => (key ? `/api/preview-icon/${encodeURIComponent(key)}.png` : null))
                 .catch(() => null),
         );

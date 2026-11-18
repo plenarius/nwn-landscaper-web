@@ -230,8 +230,10 @@ export class Area {
         const { nx, ny, heights: h } = this,
             n = nx * ny,
             roof = this.roof;
-        const from = new Int32Array(n).fill(-1),
-            queue = new Int32Array(n);
+        // (the two work arrays are kept between calls: the view fits the ceiling again on every frame of a stroke)
+        if (this.fitWork?.from.length !== n) this.fitWork = { from: new Int32Array(n), queue: new Int32Array(n) };
+        const { from, queue } = this.fitWork;
+        from.fill(-1);
         let head = 0,
             tail = 0;
         for (let k = 0; k < n; k++)
@@ -239,22 +241,27 @@ export class Area {
                 from[k] = k;
                 queue[tail++] = k;
             }
+        // Breadth first from all the open ground at once, the neighbours east, west, north, south in turn: this order decides
+        // which of two open samples at the same distance gives the rock its ceiling, so it stays the same.
         while (head < tail) {
             const k = queue[head++],
                 i = k % nx,
-                j = (k - i) / nx;
-            for (const [a, b] of [
-                [i + 1, j],
-                [i - 1, j],
-                [i, j + 1],
-                [i, j - 1],
-            ]) {
-                if (a < 0 || b < 0 || a >= nx || b >= ny) continue;
-                const m = b * nx + a;
-                if (from[m] < 0) {
-                    from[m] = from[k];
-                    queue[tail++] = m;
-                }
+                f = from[k];
+            if (i + 1 < nx && from[k + 1] < 0) {
+                from[k + 1] = f;
+                queue[tail++] = k + 1;
+            }
+            if (i > 0 && from[k - 1] < 0) {
+                from[k - 1] = f;
+                queue[tail++] = k - 1;
+            }
+            if (k + nx < n && from[k + nx] < 0) {
+                from[k + nx] = f;
+                queue[tail++] = k + nx;
+            }
+            if (k >= nx && from[k - nx] < 0) {
+                from[k - nx] = f;
+                queue[tail++] = k - nx;
             }
         }
         const ceiling = new Float32Array(n),
@@ -369,32 +376,35 @@ export class Area {
 
     /**
      * What going back to snapshot `s` changes, in `lastChange`, for the view to redraw only that: `rect`, the samples whose
-     * height or paint differ (i0..i1, j0..j1; null when none do, the whole area when the ceiling height differs), and
-     * `entrances`, whether they differ (their dark mouths are in the shadows), and `shadow`, whether the shadows' strength
-     * differs. Returns `s`.
+     * height or paint differ (i0..i1, j0..j1; null when none do, the whole area when the ceiling height differs); `heights`,
+     * those whose height differs (the shadows follow the heights, not the paint); `entrances`, the ones added, taken out or
+     * changed (their dark mouths are in the shadows); and `shadow`, whether the shadows' strength differs. Returns `s`.
      */
     noteChange(s) {
         const { nx, heights: h, materials: m } = this;
-        let i0 = Infinity,
-            i1 = -1,
-            j0 = Infinity,
-            j1 = -1;
+        const grow = (r, i, j) => {
+            if (!r) return { i0: i, i1: i, j0: j, j1: j };
+            if (i < r.i0) r.i0 = i;
+            if (i > r.i1) r.i1 = i;
+            if (j < r.j0) r.j0 = j;
+            r.j1 = j;
+            return r;
+        };
+        let rect = null,
+            heights = null;
         for (let k = 0; k < h.length; k++) {
             if (h[k] === s.h[k] && m[k] === s.m[k]) continue;
             const i = k % nx,
                 j = (k - i) / nx;
-            if (i < i0) i0 = i;
-            if (i > i1) i1 = i;
-            if (j < j0) j0 = j;
-            j1 = j;
+            rect = grow(rect, i, j);
+            if (h[k] !== s.h[k]) heights = grow(heights, i, j);
         }
-        let rect = i1 < 0 ? null : { i0, i1, j0, j1 };
         if ('c' in s && s.c !== this.clearance) rect = { i0: 0, i1: nx - 1, j0: 0, j1: this.ny - 1 };
-        this.lastChange = {
-            rect,
-            entrances: JSON.stringify(s.e) !== JSON.stringify(this.entrances),
-            shadow: 'sh' in s && s.sh !== this.shadow,
-        };
+        const key = e => JSON.stringify(e),
+            was = new Set(s.e.map(key)),
+            now = new Set(this.entrances.map(key));
+        const entrances = [...s.e.filter(e => !now.has(key(e))), ...this.entrances.filter(e => !was.has(key(e)))];
+        this.lastChange = { rect, heights, entrances, shadow: 'sh' in s && s.sh !== this.shadow };
         return s;
     }
 

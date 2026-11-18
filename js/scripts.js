@@ -4,8 +4,6 @@
 // Scripts: a picker beside every script-name box, and (for admins, who may write them) an editor with the compiler's errors
 // underlined as you type. The compiler is Moonglow's built-in one, the same the game and Aurora use; it stops at the first error.
 
-import { EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, oneDark } from '../vendor/codemirror/codemirror.js';
-
 import { ask } from './ask.js';
 import { api, engine, failure, json, viewing } from './api.js';
 import { $ } from './dom.js';
@@ -60,7 +58,11 @@ async function openScript(resref, onMade = null) {
         $(id).onclick = null;
     }
     dlg.showModal();
-    const res = await api(`/api/script?resref=${encodeURIComponent(resref)}&any=1`);
+    // CodeMirror (512 KB of the page's 3 MB of JavaScript) loads the first time the editor opens, not with the page.
+    const [{ EditorView, EditorState, basicSetup, cpp, setDiagnostics, lintGutter, oneDark }, res] = await Promise.all([
+        import('../vendor/codemirror/codemirror.js'),
+        api(`/api/script?resref=${encodeURIComponent(resref)}&any=1`),
+    ]);
     const d = await json(res);
     if (turn !== opening || !dlg.open) return;
     if (!res.ok) {

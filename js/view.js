@@ -87,6 +87,40 @@ const SPLAT_FRAGMENT = `
         diffuseColor.rgb *= splat.rgb;
     }`;
 
+// The things' markers (View.setThings): each kind's parts, made at MARKER_SIZE (a selected one is drawn a quarter bigger),
+// standing `y` marker sizes up (`fixed`: metres), turned by `rot`. A trigger's and an encounter's are the same.
+const MARKER_SIZE = 1.35;
+const FLAG = [
+    { geo: k => new THREE.CylinderGeometry(0.12 * k, 0.12 * k, 1.6 * k, 6), y: 0.8 },
+    { geo: k => new THREE.OctahedronGeometry(0.3 * k), y: 1.8 },
+];
+const MARKER_PARTS = {
+    creature: [
+        { geo: k => new THREE.ConeGeometry(0.32 * k, 1.5 * k, 10), y: 0.75 },
+        { geo: k => new THREE.SphereGeometry(0.27 * k, 10, 8), y: 1.75 },
+    ],
+    waypoint: [
+        { geo: k => new THREE.CylinderGeometry(0.05 * k, 0.05 * k, 2 * k, 6), y: 1 },
+        { geo: k => new THREE.OctahedronGeometry(0.35 * k), y: 2.2 },
+    ],
+    trigger: FLAG,
+    encounter: FLAG,
+    sound: [
+        { geo: k => new THREE.TorusGeometry(0.7 * k, 0.07 * k, 6, 20), y: 1.2, rot: [Math.PI / 2, 0, 0] },
+        { geo: k => new THREE.SphereGeometry(0.22 * k, 8, 6), y: 1.2 },
+    ],
+    store: [
+        { geo: k => new THREE.BoxGeometry(0.9 * k, 0.9 * k, 0.9 * k), y: 0.45 },
+        { geo: k => new THREE.ConeGeometry(0.55 * k, 0.5 * k, 4), y: 1.15 },
+    ],
+    item: [{ geo: k => new THREE.OctahedronGeometry(0.28 * k), y: 0.45 }],
+    door: [{ geo: k => new THREE.BoxGeometry(0.15 * k, 2 * k, 1.1 * k), y: 1 }],
+    placeable: [{ geo: k => new THREE.BoxGeometry(0.55 * k, 0.55 * k, 0.55 * k), y: 0.28 }],
+};
+const OTHER_MARKER = [{ geo: k => new THREE.SphereGeometry(0.3 * k, 8, 6), y: 0.5, fixed: true }];
+// A corner post of an outline (a selected one's are 1.8 times as thick and 1.5 times as tall).
+const POST = () => new THREE.CylinderGeometry(0.1, 0.1, 0.8, 6);
+
 /** The 3D view in `container`: the ground, objects, water, things and markers of the area, the camera, and picking with the
  *  pointer. */
 export class View {
@@ -148,6 +182,9 @@ export class View {
         this.uniforms.uTex.value.needsUpdate = true;
         this.raycaster = new THREE.Raycaster();
         this.dirty = null;
+        // Counts the ground's changes and redraws, so a kept pick (lastPick) or outline (setThings) knows the ground moved.
+        this.groundVersion = 0;
+        this.lastPick = null;
         new ResizeObserver(() => this.resize()).observe(container);
         const loop = () => {
             requestAnimationFrame(loop);
@@ -228,6 +265,8 @@ export class View {
         }
         this.markers = null;
         this.water = null;
+        this.lastPick = null;
+        this.fit = null;
         const { nx, ny, sizeX, sizeY } = area;
         const geo = new THREE.PlaneGeometry(sizeX, sizeY, nx - 1, ny - 1);
         geo.rotateX(-Math.PI / 2);
@@ -256,7 +295,8 @@ export class View {
         this.grid.frustumCulled = false;
         this.scene.add(this.grid);
         this.paletteKey = null;
-        this.markDirty(this.everything());
+        // (the shadows were baked whole above)
+        this.markDirty(this.everything(), false);
         this.flush();
         this.updateWater();
         this.updateEntrances();
@@ -358,7 +398,7 @@ export class View {
         if (!this.textured) {
             this.textured = true;
             this.uniforms.uTextured.value = true;
-            this.markDirty(this.everything());
+            this.markDirty(this.everything(), false);
         }
     }
 
@@ -421,15 +461,36 @@ export class View {
         return { i0: 0, i1: this.area.nx - 1, j0: 0, j1: this.area.ny - 1 };
     }
 
-    /** Samples `r` (i0..i1, j0..j1) changed: redrawn at the next frame (flush), and their shadows at the next updateShade. */
-    markDirty(r) {
+    /** Samples `r` (i0..i1, j0..j1) changed: redrawn at the next frame (flush), and their shadows at the next updateShade.
+     *  `moved` false: only their colour changed (paint, water, walkability), which the shadows don't depend on; a later
+     *  stroke's bake then covers its own change only (after one press of W it covered the whole area, 430 ms against 63). */
+    markDirty(r, moved = true) {
         if (!r) return;
         const join = d =>
             d
                 ? { i0: Math.min(d.i0, r.i0), i1: Math.max(d.i1, r.i1), j0: Math.min(d.j0, r.j0), j1: Math.max(d.j1, r.j1) }
                 : { i0: r.i0, i1: r.i1, j0: r.j0, j1: r.j1 };
         this.dirty = join(this.dirty);
+        if (!moved) return;
         this.shadeDirty = join(this.shadeDirty);
+        this.groundVersion++;
+    }
+
+    /** Entrance `e`'s mouth darkens the shadows round it (entrance.js, darkness): the samples it reaches, as a change of the
+     *  ground there, baked at the next updateShade. */
+    markEntrance(e) {
+        const reach = Math.hypot(e.depth + 1.5, e.width / 2 + 1.5) + SHADE_STEP,
+            { nx, ny } = this.area;
+        const r = {
+            i0: Math.max(0, Math.floor((e.x - reach) / SPACING)),
+            i1: Math.min(nx - 1, Math.ceil((e.x + reach) / SPACING)),
+            j0: Math.max(0, Math.floor((e.y - reach) / SPACING)),
+            j1: Math.min(ny - 1, Math.ceil((e.y + reach) / SPACING)),
+        };
+        const d = this.shadeDirty;
+        this.shadeDirty = d
+            ? { i0: Math.min(d.i0, r.i0), i1: Math.max(d.i1, r.i1), j0: Math.min(d.j0, r.j0), j1: Math.max(d.j1, r.j1) }
+            : r;
     }
 
     /** Vertex index of sample (i, j): plane rows run north to south. */
@@ -438,20 +499,26 @@ export class View {
     }
 
     flush() {
+        this.groundVersion++;
         const area = this.area,
             n = area.nx,
             d = this.dirty;
         this.dirty = null;
         const pos = this.mesh.geometry.attributes.position;
         const col = this.mesh.geometry.attributes.color;
-        // Heights of the changed rows and a margin (walkability uses neighbours).
-        // (A roof that follows the floor moves with any edit: everything is redone. A flat roof doesn't.)
+        // A roof that follows the floor (a ceiling height) can move far from an edit: fitted again whole, then redrawn where
+        // the fit changed as well (a whole redraw took 86 ms a Dig frame on a 32×32 cave).
         const fit = area.ceilingFit(),
-            all = !!fit;
-        const i0 = all ? 0 : Math.max(0, d.i0 - 1),
-            i1 = all ? n - 1 : Math.min(n - 1, d.i1 + 1),
-            j0 = all ? 0 : Math.max(0, d.j0 - 1),
-            j1 = all ? area.ny - 1 : Math.min(area.ny - 1, d.j1 + 1);
+            moved = fit && this.fitChanged(this.fit, fit);
+        this.fit = fit;
+        const r = moved
+            ? { i0: Math.min(d.i0, moved.i0), i1: Math.max(d.i1, moved.i1), j0: Math.min(d.j0, moved.j0), j1: Math.max(d.j1, moved.j1) }
+            : d;
+        // Heights of the changed rows and a margin (walkability uses neighbours).
+        const i0 = Math.max(0, r.i0 - 1),
+            i1 = Math.min(n - 1, r.i1 + 1),
+            j0 = Math.max(0, r.j0 - 1),
+            j1 = Math.min(area.ny - 1, r.j1 + 1);
         const gap = this.mesh.geometry.attributes.aGap,
             shownHeights = fit ? fit.shown : area.heights;
         // The colour range of the untextured ground (with the library's textures it isn't used).
@@ -493,7 +560,29 @@ export class View {
         this.updateNormals(i0 - 1, i1 + 1, j0 - 1, j1 + 1);
         this.updateBounds(i0, i1, j0, j1);
         this.updateGrid({ i0, i1, j0, j1 });
-        this.updateSkirt();
+        // (the edge scenery carries the outer rows and columns out: a fifth of a stroke's redraw, for a stroke far from them)
+        if (i0 === 0 || j0 === 0 || i1 === n - 1 || j1 === area.ny - 1) this.updateSkirt();
+    }
+
+    /** The samples whose ceiling or drawn height differ between ceiling fits `was` and `now` (i0..i1, j0..j1), null when none
+     *  do; the whole area when there was no fit before. */
+    fitChanged(was, now) {
+        const { nx } = this.area;
+        if (!was || was.shown.length !== now.shown.length) return this.everything();
+        let i0 = Infinity,
+            i1 = -1,
+            j0 = Infinity,
+            j1 = -1;
+        for (let k = 0; k < now.shown.length; k++) {
+            if (was.shown[k] === now.shown[k] && was.ceiling[k] === now.ceiling[k]) continue;
+            const i = k % nx,
+                j = (k - i) / nx;
+            if (i < i0) i0 = i;
+            if (i > i1) i1 = i;
+            if (j < j0) j0 = j;
+            j1 = j;
+        }
+        return i1 < 0 ? null : { i0, i1, j0, j1 };
     }
 
     /** The ground's normals at samples i0..i1, j0..j1 (clamped to the area), from its drawn heights: each sample's slope
@@ -611,7 +700,8 @@ export class View {
         this.scene.add(group);
         if (!this.models) return;
         const size = this.area.sizeY;
-        // All at once, each drawn as its model arrives.
+        // All at once, each drawn as its model arrives. (syncObjects waits for this to end before matching what is drawn.)
+        this.objectsLoading = group;
         await Promise.all(
             this.area.objects.map(async o => {
                 let model;
@@ -631,6 +721,39 @@ export class View {
                 if (o === this.selected) this.showSelection(inst);
             }),
         );
+        if (this.objectsLoading === group) this.objectsLoading = null;
+    }
+
+    /** Draws the area's objects again after undo or redo, which gives the area new copies of them all: each one drawn is
+     *  matched to its copy by id and moved if it moved, and only those added, taken out or given another model are drawn
+     *  again or taken away (updateObjects cloned all 300 of an area's rocks again, 226 ms). */
+    syncObjects() {
+        const group = this.objectGroup,
+            objects = this.area.objects,
+            byId = new Map(objects.map(o => [o.id, o]));
+        // (ids missing or given twice, or models still arriving for the objects drawn: all of them again)
+        if (!group || !this.models || this.objectsLoading || byId.size !== objects.length || byId.has(undefined)) {
+            this.updateObjects();
+            return;
+        }
+        const gone = new Set(),
+            moved = new Set(),
+            drawn = new Set();
+        for (const c of group.children) {
+            const was = c.userData.object,
+                now = byId.get(was.id);
+            if (!now || now.model !== was.model) {
+                gone.add(was);
+                continue;
+            }
+            c.userData.object = now;
+            if (!c.userData.decal) drawn.add(now);
+            // (a ground patch follows the ground, which undo may have moved: drawn again with its object)
+            if (c.userData.decal || ['x', 'y', 'z', 'bearing', 'scale'].some(k => now[k] !== was[k])) moved.add(now);
+        }
+        this.removeObjects(gone);
+        for (const o of moved) if (drawn.has(o)) this.moveObject(o);
+        for (const o of objects) if (!drawn.has(o)) this.addObject(o);
     }
 
     /** Draws object `o` where it now is (moved, turned or sized), its model and its ground patch, without rebuilding the
@@ -770,17 +893,30 @@ export class View {
      * to look at only, nothing can be picked.
      */
     setThings(things, selectedId = null, draft = null, ghosts = [], selectedKey = null, inert = false) {
+        // An outline's fill and ribbon are kept while its shape, colour, selection and the ground stay the same: a drag
+        // makes only the dragged one again (500 triggers took 72 ms a frame).
+        const free = c => {
+            // (the markers' shapes are kept for the next time; a batch frees its copies' places and colours)
+            if (!c.userData.sharedGeometry) c.geometry?.dispose();
+            if (c.isInstancedMesh) c.dispose();
+            c.material?.dispose?.();
+        };
+        const before = this.thingOutlines ?? new Map(),
+            keep = new Set([...before.values()].flat());
+        this.thingOutlines = new Map();
         if (this.thingGroup) {
             this.scene.remove(this.thingGroup);
             this.thingGroup.traverse(c => {
-                c.geometry?.dispose();
-                c.material?.dispose?.();
+                if (!keep.has(c)) free(c);
             });
         }
         const group = new THREE.Group();
         this.thingGroup = group;
         this.scene.add(group);
-        if (!this.area) return;
+        if (!this.area) {
+            for (const m of keep) free(m);
+            return;
+        }
         const area = this.area,
             size = area.sizeY;
         const at = (x, y, lift = 0) => new THREE.Vector3(x, area.heightAt(x, y) + lift, size - y);
@@ -791,7 +927,6 @@ export class View {
             const c = new THREE.Color(THING_COLOURS[kind] ?? 0xffffff);
             return ghost ? c.lerp(GREY, 0.2) : c;
         };
-        const solid = (c, ghost) => new THREE.MeshBasicMaterial({ color: c, transparent: ghost, opacity: ghost ? 0.8 : 1 });
         // (Out of the Things tool the markers are only to look at: nothing to pick.)
         this.thingsInert = inert;
         const tag = (m, id) => {
@@ -907,50 +1042,36 @@ export class View {
             return mesh;
         };
 
+        // Markers, corner posts and facing lines go in batches: one draw for each shape, solid or see-through (the originals),
+        // each copy with its own place and colour. As a mesh and a material for every part, 500 things were 1,800 objects
+        // and 1,900 draws, all made again on every frame of a drag (54 ms).
+        const batches = new Map(),
+            lines = [
+                { pos: [], col: [] },
+                { pos: [], col: [] },
+            ];
+        const batch = (geo, ghost, matrix, c, id = null) => {
+            const key = `${geo.uuid}:${ghost}`;
+            if (!batches.has(key)) batches.set(key, { geo, ghost, items: [] });
+            batches.get(key).items.push({ matrix, c, id });
+        };
+        const shape = make => {
+            this.thingShapes ??= new Map();
+            if (!this.thingShapes.has(make)) this.thingShapes.set(make, make(MARKER_SIZE));
+            return this.thingShapes.get(make);
+        };
+
         /** A marker of the kind's own shape standing at `p`; every part picks as `id`. */
         const marker = (kind, p, c, sel, ghost, id) => {
-            const m = () => solid(c, ghost),
-                k = (sel ? 1.25 : 1) * 1.35;
-            const add = (geo, y, rot) => {
-                const mesh = tag(new THREE.Mesh(geo, m()), id);
-                mesh.position.set(p.x, p.y + y, p.z);
-                if (rot) mesh.rotation.set(...rot);
-                group.add(mesh);
-                return mesh;
-            };
-            switch (kind) {
-                case 'creature':
-                    add(new THREE.ConeGeometry(0.32 * k, 1.5 * k, 10), 0.75 * k);
-                    add(new THREE.SphereGeometry(0.27 * k, 10, 8), 1.75 * k);
-                    break;
-                case 'waypoint':
-                    add(new THREE.CylinderGeometry(0.05 * k, 0.05 * k, 2 * k, 6), k);
-                    add(new THREE.OctahedronGeometry(0.35 * k), 2.2 * k);
-                    break;
-                case 'trigger':
-                case 'encounter':
-                    add(new THREE.CylinderGeometry(0.12 * k, 0.12 * k, 1.6 * k, 6), 0.8 * k);
-                    add(new THREE.OctahedronGeometry(0.3 * k), 1.8 * k);
-                    break;
-                case 'sound':
-                    add(new THREE.TorusGeometry(0.7 * k, 0.07 * k, 6, 20), 1.2 * k, [Math.PI / 2, 0, 0]);
-                    add(new THREE.SphereGeometry(0.22 * k, 8, 6), 1.2 * k);
-                    break;
-                case 'store':
-                    add(new THREE.BoxGeometry(0.9 * k, 0.9 * k, 0.9 * k), 0.45 * k);
-                    add(new THREE.ConeGeometry(0.55 * k, 0.5 * k, 4), 1.15 * k);
-                    break;
-                case 'item':
-                    add(new THREE.OctahedronGeometry(0.28 * k), 0.45 * k);
-                    break;
-                case 'door':
-                    add(new THREE.BoxGeometry(0.15 * k, 2 * k, 1.1 * k), k);
-                    break;
-                case 'placeable':
-                    add(new THREE.BoxGeometry(0.55 * k, 0.55 * k, 0.55 * k), 0.28 * k);
-                    break;
-                default:
-                    add(new THREE.SphereGeometry(0.3 * k, 8, 6), 0.5);
+            const grow = sel ? 1.25 : 1,
+                k = grow * MARKER_SIZE;
+            for (const part of MARKER_PARTS[kind] ?? OTHER_MARKER) {
+                const matrix = new THREE.Matrix4().compose(
+                    new THREE.Vector3(p.x, p.y + (part.fixed ? part.y : part.y * k), p.z),
+                    new THREE.Quaternion().setFromEuler(new THREE.Euler(...(part.rot ?? [0, 0, 0]))),
+                    new THREE.Vector3(grow, grow, grow),
+                );
+                batch(shape(part.geo), ghost, matrix, c, id);
             }
         };
 
@@ -959,12 +1080,9 @@ export class View {
             const dir = new THREE.Vector3(Math.cos(bearing ?? 0), 0, -Math.sin(bearing ?? 0));
             const a = p.clone().add(new THREE.Vector3(0, 0.3, 0)),
                 b = a.clone().addScaledVector(dir, 1.6);
-            const l = new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints([a, b]),
-                new THREE.LineBasicMaterial({ color: c, depthTest: false, transparent: ghost, opacity: ghost ? 0.6 : 1 }),
-            );
-            l.renderOrder = 5;
-            group.add(l);
+            const l = lines[ghost ? 1 : 0];
+            l.pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+            l.col.push(c.r, c.g, c.b, c.r, c.g, c.b);
         };
 
         /** The whole of one thing, the editor's or an original's. */
@@ -974,9 +1092,16 @@ export class View {
             const p = hasOutline ? at(t.outline[0][0], t.outline[0][1]) : at(t.x, t.y);
             marker(t.kind, p, c, sel, ghost, id);
             if (hasOutline) {
-                const f = fill(t.outline, c, sel ? 0.42 : ghost ? 0.26 : 0.34);
-                if (f) group.add(f);
-                group.add(tag(ribbon(t.outline, sel ? 0.6 : 0.42, c, true, ghost), id));
+                const key = `${this.groundVersion}|${id}|${sel}|${ghost}|${c.getHexString()}|${t.outline.join(';')}`;
+                let meshes = before.get(key);
+                if (meshes) before.delete(key);
+                else
+                    meshes = [
+                        fill(t.outline, c, sel ? 0.42 : ghost ? 0.26 : 0.34),
+                        tag(ribbon(t.outline, sel ? 0.6 : 0.42, c, true, ghost), id),
+                    ].filter(Boolean);
+                this.thingOutlines.set(key, meshes);
+                group.add(...meshes);
                 // A post at every corner, so the shape reads from far away; the selected one's are the handles.
                 let corner = 0;
                 for (const [x, y] of t.outline) {
@@ -992,13 +1117,10 @@ export class View {
                         group.add(grab);
                     }
                     corner++;
-                    const post = new THREE.Mesh(
-                        new THREE.CylinderGeometry(sel ? 0.18 : 0.1, sel ? 0.18 : 0.1, sel ? 1.2 : 0.8, 6),
-                        solid(c, ghost),
-                    );
                     const q = at(x, y);
-                    post.position.set(q.x, q.y + (sel ? 0.6 : 0.4), q.z);
-                    group.add(post);
+                    const matrix = new THREE.Matrix4().makeScale(sel ? 1.8 : 1, sel ? 1.5 : 1, sel ? 1.8 : 1);
+                    matrix.setPosition(q.x, q.y + (sel ? 0.6 : 0.4), q.z);
+                    batch(shape(POST), ghost, matrix, c);
                 }
             } else if (['creature', 'door', 'placeable', 'waypoint', 'store'].includes(t.kind)) {
                 facing(p, t.bearing, c, ghost);
@@ -1006,6 +1128,36 @@ export class View {
         };
         for (const g of ghosts) draw(g, g.key, g.key === selectedKey, true);
         for (const t of things) draw(t, t.id, t.id === selectedId, false);
+        // (the outlines that changed or went: their old meshes)
+        for (const meshes of before.values()) for (const m of meshes) free(m);
+        for (const { geo, ghost, items } of batches.values()) {
+            const mesh = new THREE.InstancedMesh(
+                geo,
+                new THREE.MeshBasicMaterial({ transparent: ghost, opacity: ghost ? 0.8 : 1 }),
+                items.length,
+            );
+            items.forEach(({ matrix, c }, k) => {
+                mesh.setMatrixAt(k, matrix);
+                mesh.setColorAt(k, c);
+            });
+            mesh.computeBoundingSphere();
+            // (what each copy picks as; the posts pick as nothing)
+            if (items.some(it => it.id != null)) mesh.userData.things = items.map(it => it.id);
+            mesh.userData.sharedGeometry = true;
+            group.add(mesh);
+        }
+        lines.forEach(({ pos, col }, ghost) => {
+            if (!pos.length) return;
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+            const l = new THREE.LineSegments(
+                g,
+                new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: !!ghost, opacity: ghost ? 0.6 : 1 }),
+            );
+            l.renderOrder = 5;
+            group.add(l);
+        });
         if (draft?.length) {
             const white = new THREE.Color(0xffffff);
             if (draft.length >= 3) {
@@ -1033,9 +1185,11 @@ export class View {
         const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
         this.raycaster.setFromCamera(ndc, this.camera);
         this.raycaster.params.Line.threshold = 0.6;
-        const hit = this.raycaster.intersectObject(this.thingGroup, true).find(h => h.object.userData.thing != null);
+        // (a marker in a batch picks as its copy's thing)
+        const thing = h => h.object.userData.thing ?? h.object.userData.things?.[h.instanceId] ?? null;
+        const hit = this.raycaster.intersectObject(this.thingGroup, true).find(h => thing(h) != null);
         this.raycaster.params.Line.threshold = 1;
-        return hit?.object.userData.thing ?? null;
+        return hit ? thing(hit) : null;
     }
 
     /** The corner of the selected outline under the pointer: { id, index }, or null. */
@@ -1063,23 +1217,22 @@ export class View {
     /** Marks object `o` (or none) as selected: a box round it. */
     select(o) {
         this.selected = o;
-        if (this.selectionBox) {
-            this.scene.remove(this.selectionBox);
-            this.selectionBox.geometry.dispose();
-            this.selectionBox = null;
-        }
+        if (this.selectionBox) this.selectionBox.visible = false;
         const inst = this.objectGroup?.children.find(c => c.userData.object === o && !c.userData.decal);
         if (inst) this.showSelection(inst);
     }
 
+    /** The selection box round `inst`: one box, fitted again on each move of a drag (a new one each move kept its material). */
     showSelection(inst) {
-        if (this.selectionBox) {
-            this.scene.remove(this.selectionBox);
-            this.selectionBox.geometry.dispose();
+        if (!this.selectionBox) {
+            this.selectionBox = new THREE.BoxHelper(inst);
+            this.scene.add(this.selectionBox);
         }
+        const box = this.selectionBox;
+        box.setFromObject(inst);
         // Gold for scenery, blue for a real placeable.
-        this.selectionBox = new THREE.BoxHelper(inst, inst.userData.object?.baked === false ? 0x5aa0ff : 0xd8a24a);
-        this.scene.add(this.selectionBox);
+        box.material.color.set(inst.userData.object?.baked === false ? 0x5aa0ff : 0xd8a24a);
+        box.visible = true;
     }
 
     /** A library texture as a plain lit material (shared; `fallback` colour
@@ -1199,12 +1352,14 @@ export class View {
         }
         this.water = null;
         const pos = [];
+        // The higher of two levels, a dry one (NaN) counting as none.
+        const top = (a, b) => (Number.isNaN(b) || b < a ? a : b);
         for (let j = 0; j < rows - 1; j++) {
             for (let i = 0; i < n - 1; i++) {
-                // The wet corners' highest level.
-                let level = -Infinity;
-                for (const k of [j * n + i, j * n + i + 1, (j + 1) * n + i, (j + 1) * n + i + 1])
-                    if (!Number.isNaN(L[k])) level = Math.max(level, L[k]);
+                // The wet corners' highest level. (Without a list of the four for each cell: it was most of a water drag's
+                // redraw.)
+                const k = j * n + i,
+                    level = top(top(top(top(-Infinity, L[k]), L[k + 1]), L[k + n]), L[k + n + 1]);
                 if (level === -Infinity) continue;
                 const x0 = i * SPACING,
                     x1 = x0 + SPACING,
@@ -1265,7 +1420,7 @@ export class View {
 
     setShowWalkability(on) {
         this.showWalkability = on;
-        this.markDirty(this.everything());
+        this.markDirty(this.everything(), false);
     }
 
     /** The tile grid, draped 5 cm above the ground: the lines along the tile edges, one segment between each two samples,
@@ -1304,14 +1459,86 @@ export class View {
         attr.needsUpdate = true;
     }
 
-    /** Area point (NWN metres) under the mouse, or null. */
+    /** Area point (NWN metres) under the mouse, or null. The answer is kept while the pointer, the camera and the ground stay
+     *  as they are: the view asks every frame, and a drag asks again on each pointer move. */
     pick(clientX, clientY) {
         const r = this.renderer.domElement.getBoundingClientRect();
         const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
         this.raycaster.setFromCamera(ndc, this.camera);
-        const hit = this.raycaster.intersectObject(this.mesh)[0];
-        if (!hit) return null;
-        return { x: hit.point.x, y: this.area.sizeY - hit.point.z, z: hit.point.y };
+        const { origin, direction } = this.raycaster.ray,
+            last = this.lastPick;
+        if (!last || last.ground !== this.groundVersion || !last.origin.equals(origin) || !last.direction.equals(direction)) {
+            const hit = this.groundHit(origin, direction);
+            this.lastPick = {
+                ground: this.groundVersion,
+                origin: origin.clone(),
+                direction: direction.clone(),
+                point: hit && { x: hit.x, y: this.area.sizeY - hit.z, z: hit.y },
+            };
+        }
+        const p = this.lastPick.point;
+        return p && { ...p };
+    }
+
+    /** Where the ray from `o` along `d` first meets the ground as drawn, in three.js's frame (or null). It walks the cells the
+     *  ray crosses in order (a 2D DDA over the sample grid) and tests each cell's two triangles, as PlaneGeometry splits it:
+     *  three.js's raycast tests every triangle (524,288 on a 32×32 area, 41 ms a pick), this about as many cells as the ray
+     *  crosses. */
+    groundHit(o, d) {
+        const { nx, ny, sizeX, sizeY } = this.area,
+            y = this.mesh.geometry.attributes.position.array,
+            box = this.mesh.geometry.boundingBox;
+        // The part of the ray over the area, between the ground's lowest and highest point.
+        let t0 = 0,
+            t1 = Infinity;
+        for (const [oa, da, lo, hi] of [
+            [o.x, d.x, 0, sizeX],
+            [o.y, d.y, box.min.y - 1e-3, box.max.y + 1e-3],
+            [o.z, d.z, 0, sizeY],
+        ]) {
+            if (Math.abs(da) < 1e-12) {
+                if (oa < lo || oa > hi) return null;
+                continue;
+            }
+            const a = (lo - oa) / da,
+                b = (hi - oa) / da;
+            t0 = Math.max(t0, Math.min(a, b));
+            t1 = Math.min(t1, Math.max(a, b));
+        }
+        if (t0 > t1) return null;
+        // Cell (cx, cz) spans x from cx and z from cz spacings; its corner vertices are rows of nx, z = row × SPACING.
+        const ex = o.x + d.x * t0,
+            ez = o.z + d.z * t0;
+        let cx = Math.min(nx - 2, Math.max(0, Math.floor(ex / SPACING))),
+            cz = Math.min(ny - 2, Math.max(0, Math.floor(ez / SPACING)));
+        const sx = Math.sign(d.x),
+            sz = Math.sign(d.z),
+            stepX = sx ? SPACING / Math.abs(d.x) : Infinity,
+            stepZ = sz ? SPACING / Math.abs(d.z) : Infinity;
+        let nextX = sx ? ((cx + (sx > 0 ? 1 : 0)) * SPACING - o.x) / d.x : Infinity,
+            nextZ = sz ? ((cz + (sz > 0 ? 1 : 0)) * SPACING - o.z) / d.z : Infinity;
+        const corner = (i, k) => {
+            const v = (k * nx + i) * 3;
+            return [y[v], y[v + 1], y[v + 2]];
+        };
+        for (;;) {
+            const a = corner(cx, cz),
+                b = corner(cx, cz + 1),
+                c = corner(cx + 1, cz + 1),
+                e = corner(cx + 1, cz);
+            const t = Math.min(rayTriangle(o, d, a, b, e), rayTriangle(o, d, b, c, e));
+            if (t < Infinity) return new THREE.Vector3().copy(o).addScaledVector(d, t);
+            const across = nextX < nextZ;
+            if ((across ? nextX : nextZ) > t1) return null;
+            if (across) {
+                cx += sx;
+                nextX += stepX;
+            } else {
+                cz += sz;
+                nextZ += stepZ;
+            }
+            if (cx < 0 || cz < 0 || cx > nx - 2 || cz > ny - 2) return null;
+        }
     }
 
     /** The room being dragged out: its outline on the floor (or none). */
@@ -1471,6 +1698,34 @@ function makeLabel(text, color) {
     );
     sprite.scale.set((0.024 * canvas.width) / canvas.height, 0.024, 1);
     return sprite;
+}
+
+/** The distance along the ray from `o` along `d` to triangle (a, b, c), seen from either side (the ground's material is
+ *  double-sided), or Infinity when it misses: Möller and Trumbore's test, as three.js's Ray.intersectTriangle. */
+function rayTriangle(o, d, a, b, c) {
+    const e1x = b[0] - a[0],
+        e1y = b[1] - a[1],
+        e1z = b[2] - a[2],
+        e2x = c[0] - a[0],
+        e2y = c[1] - a[1],
+        e2z = c[2] - a[2];
+    const px = d.y * e2z - d.z * e2y,
+        py = d.z * e2x - d.x * e2z,
+        pz = d.x * e2y - d.y * e2x;
+    const det = e1x * px + e1y * py + e1z * pz;
+    if (Math.abs(det) < 1e-12) return Infinity;
+    const tx = o.x - a[0],
+        ty = o.y - a[1],
+        tz = o.z - a[2];
+    const u = (tx * px + ty * py + tz * pz) / det;
+    if (u < 0 || u > 1) return Infinity;
+    const qx = ty * e1z - tz * e1y,
+        qy = tz * e1x - tx * e1z,
+        qz = tx * e1y - ty * e1x;
+    const v = (d.x * qx + d.y * qy + d.z * qz) / det;
+    if (v < 0 || u + v > 1) return Infinity;
+    const t = (e2x * qx + e2y * qy + e2z * qz) / det;
+    return t >= 0 ? t : Infinity;
 }
 
 /** Frees a ground patch made by addDecal: its geometry and material are its own (its picture is the model library's, shared). */

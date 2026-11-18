@@ -102,7 +102,8 @@ export function entranceDown(e, p) {
         ctx.area().entrances = ctx.area().entrances.filter(x => x !== hit);
         ctx.view.updateEntrances();
         showEntrances();
-        ctx.view.updateShade(true);
+        ctx.view.markEntrance(hit);
+        ctx.view.updateShade();
         saveSoon();
         return;
     }
@@ -145,7 +146,8 @@ export function entranceDown(e, p) {
     ctx.view.syncPalette();
     if (ctx.area().water.length) waterChanged();
     ctx.view.updateEntrances();
-    ctx.view.updateShade(true);
+    ctx.view.markEntrance(ent);
+    ctx.view.updateShade();
     showEntrances();
     $('statusMsg').textContent =
         `Entrance ${ent.id}: its door will be tagged ${ctx.area().doorTag(ent)}` +

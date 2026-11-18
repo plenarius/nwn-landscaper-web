@@ -71,6 +71,21 @@ What changed for builders since the review of the private builds (#61 to #73):
 - **A conversation you can't change no longer offers "+ Another way for the NPC to start"**, whose line was never saved.
 - Values from an area file (a thing's kind, a cave's roof height) go into request URLs encoded, and a picture name from the
   review service is used only when it is the 64 hexadecimal digits the service gives.
+- **The pointer over the view costs next to nothing.** The ground under it is found by walking the cells its ray crosses, and
+  only again when the pointer, the camera or the ground moved: 0.08 ms instead of 27 ms on a 32×32 area, where a resting pointer
+  held the editor near 20 frames a second.
+- **Sculpting a cave with a ceiling height redraws only what changed**, not the whole area each frame: a Dig frame on a 32×32
+  cave takes 16 ms instead of 76.
+- **Shadows bake again only where the ground moved.** Painting, Walkable (W), water, the textures arriving and opening the area
+  no longer make the next stroke bake the whole area (317 ms against 40 on 32×32); undoing a Paint stroke bakes nothing, and an
+  entrance added or undone bakes its surroundings (70 ms instead of 344). A water drag redraws the samples it wets or dries
+  (4.5 ms a move instead of 49).
+- **Many placed objects or things stay quick.** Placing, removing and undoing redraw only the objects that changed (with 300
+  rocks: 1.2 ms to place or remove one instead of 240 and 221, 28 ms to undo instead of 550), and the things' markers are drawn
+  in batches: 500 things take 351 draws instead of 1,892, and a frame of a drag 3 to 8 ms instead of 24 to 70.
+- **The page starts lighter.** The texture library loads once instead of twice, the blank area shown when none was open isn't
+  checked or looked up on the engine, and the script editor (CodeMirror, 512 KB) loads when it first opens. Thumbnails share one
+  hidden renderer, which keeps nothing of what it drew.
 
 In this release too:
 
