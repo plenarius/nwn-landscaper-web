@@ -21,6 +21,8 @@ path = [
     ".vale/**",
     # Shared word for word with repositories under other licences, so it carries no header.
     "scripts/check.sh",
+    # nwn-bake's SHA-256s of those shared files (scripts/shared-files.sh).
+    "scripts/shared-files.sha256",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright (C) 2026 plenarius"

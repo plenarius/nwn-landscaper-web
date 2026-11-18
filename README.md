@@ -1,8 +1,5 @@
 # NWN Landscaper (web editor)
 
-> The engine, [plenarius/landscaper](https://github.com/plenarius/landscaper), is published at the same time as this page; until
-> then, only sculpting runs without it.
-
 Sculpt a Neverwinter Nights area in the browser and export it as an area with its own generated tileset (hak + module), checked
 against NWN's pathfinding. It is for builders of NWN:EE modules. This repository is the page (three.js, no build step); the engine
 that reads the game, builds the areas and serves this page is [landscaper](https://github.com/plenarius/landscaper), a separate
@@ -26,8 +23,8 @@ What it does (*team* marks what only a team server offers, see landscaper's
 - **Import** an NWN area from the module's source or from a `.mod` or `.erf` you upload.
 - **Check paths**: simulate NWN's pathfinding on random routes, after each edit or on demand, and show ground too steep to walk.
 - **Export to NWN**: the hak and module, ready to play.
-- **Publish**: on your own machine, a package (a zip) to unzip into your module's repository; on a team server, pull requests
-  opened by a review service (*team*).
+- **Publish**: a package (a zip) to unzip into your module's repository; with a review service, pull requests opened for review
+  (*team*).
 - **Test on the dev server**, **Save version** into the team's history, and an **Activity** log for admins (*team*).
 
 Pull requests, the dev server, and the pictures of items and creatures need a review service: one you run yourself that answers
@@ -37,6 +34,8 @@ the calls in landscaper's [REVIEW-SERVICE.md](https://github.com/plenarius/lands
 
 - The engine, [landscaper](https://github.com/plenarius/landscaper), and what it needs: your own copy of NWN:EE and
   `nwn_gff`. Its [SELF-HOSTING.md](https://github.com/plenarius/landscaper/blob/master/docs/SELF-HOSTING.md) lists them.
+  Releases of the two are tagged together: use the same `vX.Y.Z` of both. [CHANGELOG.md](CHANGELOG.md) lists what each
+  release of this page changed.
 - A browser with WebGL.
 
 ## Run
@@ -62,7 +61,7 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 
 ## Use
 
-- **New area**: name (1-9 of a-z 0-9 _, prefixes every resref), size in 10 m NWN tiles (up to 32 x 32), and a start. The
+- **New area**: name (1-9 of a-z 0-9 _, prefixes every resref), size in 10 m NWN tiles (3 to 32 each way), and a start. The
   starts are flat ground, gentle or rough hills, a cave or an interior (solid rock to cut rooms out of), or a sample descending
   crypt, dungeon or cave to change. A name that an area already has asks before replacing that area. The engine saves your
   work to disk as you go; when it can't (no engine, or a failed save), the browser keeps the area until the engine is back and
@@ -89,7 +88,8 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   to play), then simulates NWN's pathfinding on random routes. Red markers: a route stops short.
   Orange: a tile whose walkable ground is too winding for NWN's in-tile search; straighten or widen
   the passage.
-- **Autosave** writes each change to the engine a moment later, and at once before another area opens or the page reloads.
+- **Autosave** writes each change to the engine a moment later, and at once before another area opens or the page is hidden
+  (another tab, a minimised window, the tab closed or reloaded).
   A copy the engine didn't get (no engine, a failed save, a tab closed before its save finished) stays in the browser, per
   user on a team server, and goes to the engine at the next start. When the engine's copy was saved after it (another tab or
   computer), the page asks which copy to keep.
@@ -109,7 +109,8 @@ Two rules of this repository's own, as Biome plugins in `lint/`:
 
 `index.html` carries a Content-Security-Policy: only the page's own files run, the import map is allowed by its SHA-256, and
 requests go to the page's own server. A change to the import map changes that hash; Chrome's console then names the hash
-it expected, which goes into the policy.
+it expected, which goes into the policy. The engine reads this `<meta>` and sends the same policy as a header (adding
+`frame-ancestors 'none'`), so the `<meta>` is the one place to change it.
 
 ## Credits
 

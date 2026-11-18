@@ -350,6 +350,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
             status.className = r.ok ? 'note' : 'note err';
             status.textContent = r.ok ? 'Saved.' : out.error || r.statusText;
             if (r.ok) {
+                this.fieldsCache = null; // (the Things form asks for the blueprint's own values again)
                 $('bpTitle').textContent = `${out.name || out.resref} (${out.resref})`;
                 this.search();
             }
@@ -382,6 +383,7 @@ ThingsTool.prototype.bpEdit = async function (ext, resref) {
             return;
         }
         dlg.close();
+        this.fieldsCache = null;
         if (this.blueprint?.resref === resref) this.blueprint = null;
         this.search();
         this.bpFinder();
@@ -658,6 +660,7 @@ ThingsTool.prototype.bpDoorLook = async function (resref, byLabel, input, row, s
         const out = await json(r);
         status.className = r.ok ? 'note' : 'note err';
         status.textContent = r.ok ? 'Saved.' : out.error || r.statusText;
+        if (r.ok) this.fieldsCache = null;
         return r.ok ? out : null;
     };
     let appearance = Number(byLabel.get('Appearance')?.value ?? 0),
