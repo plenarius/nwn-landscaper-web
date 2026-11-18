@@ -7,7 +7,7 @@
 
 import { ask } from './ask.js';
 import { api, engine, NEEDS_ENGINE } from './api.js';
-import { $, el } from './dom.js';
+import { $, el, say } from './dom.js';
 import { showError } from './report.js';
 import { flushSave } from './save.js';
 
@@ -119,8 +119,9 @@ export async function reimport(a, button) {
         $('openDialog').close();
         // (a copy of it still in this browser stays there: the next start asks about it)
         await ctx.openArea({ name: a.name }, false);
-        $('statusMsg').textContent =
-            `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
+        say(
+            `Imported ${a.name} again: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`,
+        );
     } catch (err) {
         $('openDialog').close();
         showError(`Couldn't import ${a.name} again: ${err.message}`, 'Import failed');
@@ -215,8 +216,9 @@ export function initImport(c) {
             setImporting(false);
             $('importDialog').close();
             await ctx.openArea({ name });
-            $('statusMsg').textContent =
-                `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`;
+            say(
+                `Imported ${importChosen.tag || importChosen.area} as ${name}: ${r.standing} tiles with trees or buildings, ${r.objects} objects (placed on export).${r.notes.length ? ` Notes: ${r.notes.join('; ')}` : ''}`,
+            );
         } catch (err) {
             $('importStatus').textContent = `Couldn't import: ${err.message}`;
             setImporting(false);

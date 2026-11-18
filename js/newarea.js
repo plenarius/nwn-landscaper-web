@@ -5,7 +5,7 @@
 
 import { Area, TILE } from './area.js';
 import { descentPlan, cutDescent } from './tools.js';
-import { $, el } from './dom.js';
+import { $, el, say } from './dom.js';
 import { api, engine } from './api.js';
 import { ask } from './ask.js';
 import { browserCopy, saveNew } from './save.js';
@@ -63,7 +63,7 @@ function seedDescent(created, starter, floor) {
     const floors = Math.min(starter.floors, Math.floor(Math.min(created.tiles, created.tilesY) / 2));
     const plan = descentPlan(created, { x: 0, y: 0 }, { x: created.sizeX, y: created.sizeY }, { floors, drop: starter.drop });
     if (plan.error) {
-        $('statusMsg').textContent = `Too small for the sample descent (${plan.error}); started empty.`;
+        say(`Too small for the sample descent (${plan.error}); started empty.`);
         return;
     }
     cutDescent(created, plan, floor === undefined ? undefined : created.materialIndex(floor));

@@ -3,8 +3,7 @@
 
 // The Water tool: bodies of water, each filling the hollow around the point it was started at up to its level.
 
-import { SPACING } from './area.js';
-import { $ } from './dom.js';
+import { say } from './dom.js';
 import { saveSoon } from './save.js';
 
 /** What app.js gives this file (initWater): `area()` and `view`. */
@@ -16,8 +15,7 @@ const LEVEL_PER_PIXEL = 0.03;
 /** The Water tool's press at `p` (metres): starts a body there or takes the one clicked; Shift drains it. Returns what
  *  waterDrag() needs, or null. `e` is the pointer event. */
 export function waterDown(e, p) {
-    const i = Math.min(Math.max(Math.round(p.x / SPACING), 0), ctx.area().nx - 1);
-    const j = Math.min(Math.max(Math.round(p.y / SPACING), 0), ctx.area().ny - 1);
+    const { i, j } = ctx.area().sampleAt(p.x, p.y);
     const body = ctx.area().bodyAt(i, j);
     if (e.shiftKey) {
         if (!body) return null;
@@ -49,8 +47,7 @@ export function waterDrag(e, w) {
     }
     w.body.level = level;
     waterChanged();
-    $('statusMsg').textContent =
-        `Water level ${w.body.level.toFixed(2)} m (${(w.body.level - w.ground).toFixed(1)} m deep where you clicked)`;
+    say(`Water level ${w.body.level.toFixed(2)} m (${(w.body.level - w.ground).toFixed(1)} m deep where you clicked)`);
 }
 
 /** Floods the water again after a change and redraws it: the ground only where a sample got wetter or drier (a drag redrew

@@ -9,7 +9,7 @@
          changes the hash, and the browser then refuses it until the hash here is updated), no script from elsewhere, no
          requests to another site. It backs up the rule that data goes into the page as text (README, "Development"). The
          engine reads this tag and sends the same policy as a header, adding frame-ancestors 'none': change it here only. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-TCQjodja3ktH01cTB7LwVQgTmMjeLTzCsuSoGtZ5I3U='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-kGkDpilfc1u3Vrr22vTtgpEiH28fRD0yuSrJdcXBNDE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'">
     <title>NWN Landscaper</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/dialogs.css">
@@ -24,7 +24,9 @@
     {
         "imports": {
             "three": "./vendor/three/three.module.js",
-            "three/addons/": "./vendor/three/addons/"
+            "three/addons/": "./vendor/three/addons/",
+            "codemirror": "./vendor/codemirror/codemirror.js",
+            "simplex-noise": "./vendor/simplex-noise/simplex-noise.js"
         }
     }
     </script>

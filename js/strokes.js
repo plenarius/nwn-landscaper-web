@@ -8,7 +8,7 @@
 import { TILE, DEFAULT_TEXTURE, SHALLOW, CAVE_ROCK } from './area.js';
 import { stamp, roomRect, cutRoom, rampPlan, cutRamp, descentPlan, cutDescent, DIG_MIN } from './tools.js';
 import { ask } from './ask.js';
-import { $ } from './dom.js';
+import { $, say } from './dom.js';
 import { models, transformer, selectObject, placeDown, placeDrag } from './place.js';
 import { scatterMix, scatterStamp } from './scatter.js';
 import { waterDown, waterDrag, waterChanged } from './water.js';
@@ -26,8 +26,7 @@ const debug = new URLSearchParams(location.search).has('debug');
 const dbg = { last: '-', downs: 0, strokes: 0, stamps: 0, note: '' };
 function showDebug() {
     if (!debug) return;
-    $('statusMsg').textContent =
-        `[debug] last: ${dbg.last} · downs ${dbg.downs} · strokes ${dbg.strokes} · stamps ${dbg.stamps} ${dbg.note}`;
+    say(`[debug] last: ${dbg.last} · downs ${dbg.downs} · strokes ${dbg.strokes} · stamps ${dbg.stamps} ${dbg.note}`);
 }
 
 let canvas = null;
@@ -35,6 +34,17 @@ let stroke = null; // { flattenTo, last }
 let mouse = null; // last client position over the canvas
 let rmb = null; // where and when a right-click began, to tell a click from a drag that turns the view
 let placePointer = null; // the pointer whose Place press is waiting for its model
+
+/** Sends pointer `pointerId`'s moves to the canvas until it is released, even off the canvas. The browser refuses a pointer that
+ *  is no longer down; the stroke goes on without the capture, and ?debug shows the refusal. */
+function capture(pointerId) {
+    try {
+        canvas.setPointerCapture(pointerId);
+    } catch (err) {
+        dbg.note = `(capture failed: ${err.message})`;
+        showDebug();
+    }
+}
 
 /** The stroke under way (null between strokes). */
 export const currentStroke = () => stroke;
@@ -103,16 +113,17 @@ export const endStroke = () => {
         const rect = cutRamp(ctx.area(), plan, rampWidth(), $('rampStairs').checked ? +$('rampStep').value : null, $('rampCarve').checked);
         if (rect) ctx.view.markDirty(rect);
         ctx.view.setRampPreview(null);
-        $('statusMsg').textContent =
+        say(
             ctx.area().enclosed() && rect && rect.changed < 20
                 ? 'Nothing to lay it on there: dig or make a room first (or tick "Cut through rock").'
-                : '';
+                : '',
+        );
     }
     if (stroke.descent) {
         const plan = descentPlan(ctx.area(), stroke.descent.from, stroke.descent.to, descentOptions());
         ctx.view.setDescentPreview(null);
         if (plan.error) {
-            $('statusMsg').textContent = plan.error;
+            say(plan.error);
         } else {
             // The same headroom all the way down, or the walls grow as the floors drop.
             const headroom = +$('descentCeiling').value;
@@ -121,9 +132,10 @@ export const endStroke = () => {
             const rect = cutDescent(ctx.area(), plan, floor.index);
             ctx.view.markDirty(rect);
             ctx.view.syncPalette();
-            $('statusMsg').textContent =
+            say(
                 `A descent of ${plan.floors} floors, down to ${plan.bottom.toFixed(1)} m.` +
-                (floor.bare ? ` Its floors aren't painted: ${FULL_PALETTE}.` : '');
+                    (floor.bare ? ` Its floors aren't painted: ${FULL_PALETTE}.` : ''),
+            );
         }
     }
     if (stroke.room) {
@@ -131,13 +143,13 @@ export const endStroke = () => {
         ctx.view.markDirty(cutRoom(ctx.area(), r, stroke.room.floor, stroke.paintIndex));
         ctx.view.setRoomOutline(null);
         ctx.view.syncPalette();
-        $('statusMsg').textContent = stroke.bare ? `The room's floor isn't painted: ${FULL_PALETTE}.` : '';
+        say(stroke.bare ? `The room's floor isn't painted: ${FULL_PALETTE}.` : '');
     }
     // The ground moved: its shadows too.
     if (!stroke.water && !stroke.place && !stroke.scatter && stroke.tool !== 'paint') ctx.view.updateShade();
     // Sculpting may have flooded or drained hollows.
     if (!stroke.water && ctx.area().water.length && stroke.tool !== 'paint') waterChanged();
-    if (stroke.water) $('statusMsg').textContent = '';
+    if (stroke.water) say('');
     stroke = null;
     saveSoon();
 };
@@ -187,11 +199,7 @@ export function initStrokes(c) {
                 const p = ctx.view.pick(e.clientX, e.clientY);
                 transformer.last = { clientX: e.clientX, clientY: e.clientY };
                 if (transformer.begin(h.kind, h.axis, true, p ? { x: p.x, y: p.y } : null)) {
-                    try {
-                        canvas.setPointerCapture(e.pointerId);
-                    } catch {
-                        /* fine */
-                    }
+                    capture(e.pointerId);
                 }
                 return;
             }
@@ -227,17 +235,13 @@ export function initStrokes(c) {
         }
         if (ctx.tool() === 'things') {
             if (!ctx.readOnly() && ctx.thingsTool.down(e, p)) {
-                try {
-                    canvas.setPointerCapture(e.pointerId);
-                } catch {
-                    /* fine */
-                }
+                capture(e.pointerId);
             }
             return;
         }
         // Someone else's workspace, read-only: nothing can change (and nothing would be saved). Picking a texture up still works.
         if (ctx.readOnly() && !(ctx.tool() === 'paint' && (ctx.picking() || e.altKey))) {
-            $('statusMsg').textContent = "You are looking at someone else's area, read-only: it can't be changed here.";
+            say("You are looking at someone else's area, read-only: it can't be changed here.");
             return;
         }
         if (ctx.tool() === 'entrance') {
@@ -246,7 +250,7 @@ export function initStrokes(c) {
         }
         if (ctx.tool() === 'scatter') {
             if (!e.shiftKey && !scatterMix.size) {
-                $('statusMsg').textContent = 'Add models to the mix in the panel first.';
+                say('Add models to the mix in the panel first.');
                 return;
             }
             ctx.area().beginStroke();
@@ -262,11 +266,7 @@ export function initStrokes(c) {
             ).then(list => {
                 scatter.flats = list.filter(Boolean);
             });
-            try {
-                canvas.setPointerCapture(e.pointerId);
-            } catch {
-                /* fine */
-            }
+            capture(e.pointerId);
             return;
         }
         if (ctx.tool() === 'place') {
@@ -277,11 +277,7 @@ export function initStrokes(c) {
             placeDown(e, p).then(s => {
                 if (s && placePointer === pointerId) {
                     stroke = { place: s };
-                    try {
-                        canvas.setPointerCapture(pointerId);
-                    } catch {
-                        /* fine */
-                    }
+                    capture(pointerId);
                 }
             });
             return;
@@ -290,11 +286,7 @@ export function initStrokes(c) {
             const w = waterDown(e, p);
             if (w) {
                 stroke = { water: w };
-                try {
-                    canvas.setPointerCapture(e.pointerId);
-                } catch {
-                    /* fine */
-                }
+                capture(e.pointerId);
             }
             return;
         }
@@ -310,7 +302,7 @@ export function initStrokes(c) {
             ctx.tool()
         ];
         if (texture && !ctx.area().canPaint(texture)) {
-            $('statusMsg').textContent = 'This area has 255 textures, the most it can: paint with one it already has.';
+            say('This area has 255 textures, the most it can: paint with one it already has.');
             return;
         }
         ctx.area().beginStroke();
@@ -368,12 +360,7 @@ export function initStrokes(c) {
         dbg.strokes++;
         dbg.note = '';
         showDebug();
-        try {
-            canvas.setPointerCapture(e.pointerId);
-        } catch (err) {
-            dbg.note = `(capture failed: ${err.message})`;
-            showDebug();
-        }
+        capture(e.pointerId);
     });
     // A right-click that doesn't move (a drag turns the view) on a marker: its menu, from any tool.
     canvas.addEventListener('pointerdown', e => {
@@ -430,8 +417,9 @@ export function initStrokes(c) {
                 const plan = rampPlan(ctx.area(), stroke.ramp.from, p, rampOptions());
                 ctx.view.setRampPreview(plan, rampWidth());
                 const dir = plan.dh > 0.05 ? 'up' : plan.dh < -0.05 ? 'down' : 'level';
-                $('statusMsg').textContent =
-                    `Ramp ${plan.len.toFixed(1)} m long, ${dir} ${Math.abs(plan.dh).toFixed(2)} m: ${plan.degrees.toFixed(0)}°${plan.eased ? ' (eased: it was too steep or too high)' : ''}`;
+                say(
+                    `Ramp ${plan.len.toFixed(1)} m long, ${dir} ${Math.abs(plan.dh).toFixed(2)} m: ${plan.degrees.toFixed(0)}°${plan.eased ? ' (eased: it was too steep or too high)' : ''}`,
+                );
             }
         }
         if (stroke?.descent) {
@@ -440,9 +428,10 @@ export function initStrokes(c) {
                 stroke.descent.to = p;
                 const plan = descentPlan(ctx.area(), stroke.descent.from, p, descentOptions());
                 ctx.view.setDescentPreview(plan);
-                $('statusMsg').textContent =
+                say(
                     plan.error ??
-                    `${plan.floors} floors, ${plan.drop} m apart: ramps of ${plan.pitch.toFixed(0)} m at ${plan.degrees.toFixed(0)}°, the lowest at ${plan.bottom.toFixed(1)} m`;
+                        `${plan.floors} floors, ${plan.drop} m apart: ramps of ${plan.pitch.toFixed(0)} m at ${plan.degrees.toFixed(0)}°, the lowest at ${plan.bottom.toFixed(1)} m`,
+                );
             }
         }
         if (stroke?.room) {
@@ -451,7 +440,7 @@ export function initStrokes(c) {
                 stroke.room.to = p;
                 const r = roomRect(stroke.room.from, p, ctx.area().sizeX, ctx.area().sizeY);
                 ctx.view.setRoomOutline(r, stroke.room.floor);
-                $('statusMsg').textContent = `Room ${(r.x1 - r.x0).toFixed(2)} × ${(r.y1 - r.y0).toFixed(2)} m`;
+                say(`Room ${(r.x1 - r.x0).toFixed(2)} × ${(r.y1 - r.y0).toFixed(2)} m`);
             }
         }
     });
@@ -484,12 +473,9 @@ export function initStrokes(c) {
         if (p) {
             const tx = Math.floor(p.x / TILE),
                 ty = Math.floor(p.y / TILE);
-            const i = Math.round(p.x / 0.625),
-                j = Math.round(p.y / 0.625);
-            const ci = Math.min(i, ctx.area().nx - 1),
-                cj = Math.min(j, ctx.area().ny - 1);
-            const walk = ctx.area().walkable(ci, cj),
-                deep = ctx.area().depth(ci, cj);
+            const { i, j } = ctx.area().sampleAt(p.x, p.y);
+            const walk = ctx.area().walkable(i, j),
+                deep = ctx.area().depth(i, j);
             const what =
                 deep > SHALLOW
                     ? `water ${deep.toFixed(1)} m deep: too deep to walk`

@@ -11,10 +11,10 @@
 import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SPACING, TILE, VOID_BELOW } from './area.js';
+import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ } from './area.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
-import { at as entranceAt, scenery as entranceScenery } from './entrance.js';
+import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
@@ -24,8 +24,6 @@ const BLOCKED = new THREE.Color(0xc0503c);
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
 // Metres one texture repeat covers on the ground (landscaper's TEXTURE_METRES).
 const TEXTURE_METRES = 4;
-// Steeper than this (normal's up component) can't be walked (landscaper's WALKABLE_NZ).
-const WALKABLE_NZ = 0.64;
 
 // Splat shading, as landscaper bakes it into the NWN tiles: each sample has
 // a texture (an index into the area palette, stored in uMat); a point
@@ -664,10 +662,7 @@ export class View {
         };
         for (const e of area.entrances) {
             const sc = entranceScenery(e, height);
-            const [bx, by] = entranceAt(e, e.depth + 2, 0);
-            const bi = Math.min(area.nx - 1, Math.max(0, Math.round(bx / SPACING))),
-                bj = Math.min(area.ny - 1, Math.max(0, Math.round(by / SPACING)));
-            const hill = area.palette[area.materials[bj * area.nx + bi]];
+            const hill = groundBehind(area, e);
             this.blackMaterial ??= Object.assign(new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }), {
                 userData: { shared: true },
             });
@@ -1177,13 +1172,21 @@ export class View {
         }
     }
 
+    /** Points the raycaster from the camera through the pointer at `clientX`, `clientY` (page pixels, as a pointer event gives
+     *  them). */
+    aim(clientX, clientY) {
+        const r = this.renderer.domElement.getBoundingClientRect();
+        this.raycaster.setFromCamera(
+            new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1),
+            this.camera,
+        );
+    }
+
     /** The id of the thing whose marker is under the pointer, or null. Markers out of the Things tool are to look at, so
      *  they are only found with `any` (the right-click menu). */
     pickThing(clientX, clientY, any = false) {
         if (!this.thingGroup || (this.thingsInert && !any)) return null;
-        const r = this.renderer.domElement.getBoundingClientRect();
-        const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
-        this.raycaster.setFromCamera(ndc, this.camera);
+        this.aim(clientX, clientY);
         this.raycaster.params.Line.threshold = 0.6;
         // (a marker in a batch picks as its copy's thing)
         const thing = h => h.object.userData.thing ?? h.object.userData.things?.[h.instanceId] ?? null;
@@ -1195,9 +1198,7 @@ export class View {
     /** The corner of the selected outline under the pointer: { id, index }, or null. */
     pickCorner(clientX, clientY) {
         if (!this.thingGroup) return null;
-        const r = this.renderer.domElement.getBoundingClientRect();
-        const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
-        this.raycaster.setFromCamera(ndc, this.camera);
+        this.aim(clientX, clientY);
         const hit = this.raycaster.intersectObject(this.thingGroup, true).find(h => h.object.userData.corner);
         return hit?.object.userData.corner ?? null;
     }
@@ -1205,9 +1206,7 @@ export class View {
     /** The placed object under the pointer, or null. */
     pickObject(clientX, clientY) {
         if (!this.objectGroup) return null;
-        const r = this.renderer.domElement.getBoundingClientRect();
-        const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
-        this.raycaster.setFromCamera(ndc, this.camera);
+        this.aim(clientX, clientY);
         const hit = this.raycaster.intersectObject(this.objectGroup, true)[0];
         let n = hit?.object;
         while (n && !n.userData.object) n = n.parent;
@@ -1462,9 +1461,7 @@ export class View {
     /** Area point (NWN metres) under the mouse, or null. The answer is kept while the pointer, the camera and the ground stay
      *  as they are: the view asks every frame, and a drag asks again on each pointer move. */
     pick(clientX, clientY) {
-        const r = this.renderer.domElement.getBoundingClientRect();
-        const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
-        this.raycaster.setFromCamera(ndc, this.camera);
+        this.aim(clientX, clientY);
         const { origin, direction } = this.raycaster.ray,
             last = this.lastPick;
         if (!last || last.ground !== this.groundVersion || !last.origin.equals(origin) || !last.direction.equals(direction)) {

@@ -6,6 +6,7 @@
 // (live.js, ask.js) are swapped for the stubs in `stubs/`, and a test can swap more with stub(). Import this file first, then
 // the page's modules with import(): the swap applies only to modules loaded after it.
 
+import './importmap.js';
 import { registerHooks } from 'node:module';
 
 const STUBS = ['live.js', 'ask.js'];
@@ -169,6 +170,7 @@ async function handle(url, opts = {}) {
     }
     return answer({ error: `no ${u.pathname} in the test engine` }, 404);
 }
+// biome-ignore lint/plugin: the tests stand in for the browser's fetch(), which api() calls
 globalThis.fetch = handle;
 
 /** A save of `area` from another tab or computer (`query` after `name=<its name>`, such as `&new=1&replace=1`). */

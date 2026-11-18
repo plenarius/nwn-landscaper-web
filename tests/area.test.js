@@ -5,7 +5,9 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Area } from '../js/area.js';
+import './importmap.js';
+
+const { Area } = await import('../js/area.js');
 
 /** Area `a` saved and read back, as the engine and this browser keep it (JSON text). */
 const roundTrip = a => Area.fromJSON(JSON.parse(JSON.stringify(a.toJSON())));
@@ -232,4 +234,23 @@ test('a ceiling height fits the roof as the first search did, tie for tie', () =
     }
     a.clearance = null;
     assert.equal(a.ceilingFit(), null);
+});
+
+test('a new hilly area that is not square spans the whole height of its hills, as a square one does', () => {
+    for (const [start, amplitude] of [
+        ['hills', 6],
+        ['rough', 14],
+    ]) {
+        for (const [w, h] of [
+            [8, 8],
+            [8, 2],
+            [2, 8],
+        ]) {
+            const a = Area.create('hh', w, start, 5, h);
+            const low = a.heights.reduce((m, v) => Math.min(m, v), Infinity),
+                high = a.heights.reduce((m, v) => Math.max(m, v), -Infinity);
+            assert.ok(Math.abs(low - 5) < 1e-4, `${start} ${w}x${h}: lowest ${low}`);
+            assert.ok(Math.abs(high - (5 + amplitude)) < 1e-4, `${start} ${w}x${h}: highest ${high}`);
+        }
+    }
 });

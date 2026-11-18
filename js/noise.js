@@ -4,9 +4,10 @@
 
 // Seeded simplex noise in octaves: a new area's starting heights (area.js).
 // ergin3d's file from https://github.com/ergin3d/heightmap-generator (MIT), the project this one was forked from.
-// Changed here: the import of simplex-noise points at vendor/, and Biome formatted it and fixed its lint findings.
+// Changed here: simplex-noise comes through the page's import map; the map is `width` by `height` (it was square), and the pan
+// and black and white levels are gone (the one caller passed 0, 0, 0 and 1). Biome formatted it and fixed its lint findings.
 
-import { createNoise2D } from '../vendor/simplex-noise/simplex-noise.js';
+import { createNoise2D } from 'simplex-noise';
 
 // Mulberry32 seeded PRNG - returns function () => [0, 1)
 function mulberry32(seed) {
@@ -20,30 +21,29 @@ function mulberry32(seed) {
 }
 
 /**
- * Generate a height map using fractal Brownian motion (fBm).
- * @param {Object} params
- * @returns {Float32Array} height values normalized to [0, 1]
+ * A height map from fractal Brownian motion (fBm): `width` by `height` values in rows of `width`, normalised to [0, 1] over the map.
+ * `seed` picks the noise, `octaves` how many layers it adds, each `lacunarity` times finer than the last and `persistence` times
+ * its strength; `scale` is the first layer's feature size, in samples.
+ * @returns {Float32Array}
  */
-export function generateHeightMap(params) {
-    const { seed, mapSize, octaves, persistence, lacunarity, scale, panX, panY } = params;
-
+export function generateHeightMap({ seed, width, height, octaves, persistence, lacunarity, scale }) {
     const prng = mulberry32(seed);
     const noise2D = createNoise2D(prng);
 
-    const data = new Float32Array(mapSize * mapSize);
+    const data = new Float32Array(width * height);
     let min = Infinity;
     let max = -Infinity;
 
-    for (let y = 0; y < mapSize; y++) {
-        for (let x = 0; x < mapSize; x++) {
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
             let total = 0;
             let amplitude = 1;
             let frequency = 1;
             let maxAmplitude = 0;
 
             for (let o = 0; o < octaves; o++) {
-                const sx = ((x + panX) / scale) * frequency;
-                const sy = ((y + panY) / scale) * frequency;
+                const sx = (x / scale) * frequency;
+                const sy = (y / scale) * frequency;
                 total += noise2D(sx, sy) * amplitude;
                 maxAmplitude += amplitude;
                 amplitude *= persistence;
@@ -51,8 +51,7 @@ export function generateHeightMap(params) {
             }
 
             const value = total / maxAmplitude; // [-1, 1]
-            const idx = y * mapSize + x;
-            data[idx] = value;
+            data[y * width + x] = value;
 
             if (value < min) min = value;
             if (value > max) max = value;
@@ -63,15 +62,6 @@ export function generateHeightMap(params) {
     const range = max - min || 1;
     for (let i = 0; i < data.length; i++) {
         data[i] = (data[i] - min) / range;
-    }
-
-    // Apply black/white level adjustment
-    const { blackLevel, whiteLevel } = params;
-    if (blackLevel > 0 || whiteLevel < 1) {
-        const lvlRange = whiteLevel - blackLevel || 0.001;
-        for (let i = 0; i < data.length; i++) {
-            data[i] = Math.max(0, Math.min(1, (data[i] - blackLevel) / lvlRange));
-        }
     }
 
     return data;

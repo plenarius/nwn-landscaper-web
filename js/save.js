@@ -7,7 +7,7 @@
 import { Area } from './area.js';
 import { api, engine, failure, json } from './api.js';
 import { ask } from './ask.js';
-import { $, store } from './dom.js';
+import { $, store, say } from './dom.js';
 import { checkSoon } from './live.js';
 
 /** What app.js gives this file (initSave): `area()`, `me()`, `readOnly()`, and `open(name)`, which opens area `name` from
@@ -212,19 +212,19 @@ async function writeArea(a, also = '') {
         // while this one was on its way), or it is the same. A copy of another area of that name stays (see settleCopy).
         if (browserCopy(a.name) === json || (keptFrom.get(a.name) === a && browserCopy(a.name) === copy)) dropCopy(a.name);
         if ($('statusMsg').dataset.saveFailed) {
-            $('statusMsg').textContent = 'Saved.';
+            say('Saved.');
             delete $('statusMsg').dataset.saveFailed;
         }
     } catch (err) {
         if (err.status === 409 && also) throw err;
         if (err.status === 409) return replaced(a, json, err.moved);
         if (keepInBrowser(a, json))
-            $('statusMsg').textContent = engine.up
-                ? `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`
-                : `Saved ${a.name} in this browser (no engine to save it to disk).`;
-        else
-            $('statusMsg').textContent =
-                `Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`;
+            say(
+                engine.up
+                    ? `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`
+                    : `Saved ${a.name} in this browser (no engine to save it to disk).`,
+            );
+        else say(`Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`);
         $('statusMsg').dataset.saveFailed = '1';
     } finally {
         sending = null;
@@ -263,18 +263,20 @@ async function replaced(a, json, moved) {
         try {
             await putArea(a.name, JSON.stringify(a.toJSON()), '&replace=1');
             if (keptFrom.get(a.name) === a) dropCopy(a.name);
-            $('statusMsg').textContent = `Saved ${a.name} over the other one (the engine keeps that as ${a.name}.json.replaced-<time>).`;
+            say(`Saved ${a.name} over the other one (the engine keeps that as ${a.name}.json.replaced-<time>).`);
             return;
         } catch (err) {
-            $('statusMsg').textContent = `Couldn't save ${a.name}: ${err.message}`;
+            say(`Couldn't save ${a.name}: ${err.message}`);
         }
     }
     refused.add(a);
     $('statusMsg').dataset.saveFailed = '1';
     const why = moved ? 'it was saved from another tab or computer since' : 'another area of that name was made since';
-    $('statusMsg').textContent = kept
-        ? `${a.name} is kept in this browser only: ${why}.`
-        : `Couldn't keep ${a.name} anywhere: ${why}. Export it, or your changes may be lost.`;
+    say(
+        kept
+            ? `${a.name} is kept in this browser only: ${why}.`
+            : `Couldn't keep ${a.name} anywhere: ${why}. Export it, or your changes may be lost.`,
+    );
     // (not awaited: opening waits for the saves before it, this one among them)
     if (answer === false) ctx.open(a.name);
 }
@@ -324,7 +326,7 @@ export async function moveBrowserAreas() {
             )
         )
             moved++;
-    if (moved) $('statusMsg').textContent = `Moved ${moved} area${moved > 1 ? 's' : ''} from this browser to landscaper's folder.`;
+    if (moved) say(`Moved ${moved} area${moved > 1 ? 's' : ''} from this browser to landscaper's folder.`);
 }
 
 /**
@@ -408,7 +410,7 @@ export function initSave(c) {
         if (note === null) return;
         const btn = $('btnVersion');
         btn.disabled = true;
-        $('statusMsg').textContent = `Saving a version of ${ctx.area().name}…`;
+        say(`Saving a version of ${ctx.area().name}…`);
         try {
             clearTimeout(saveTimer);
             pending = null;
@@ -419,9 +421,9 @@ export function initSave(c) {
             });
             if (!res.ok) throw new Error(await failure(res));
             const body = await json(res);
-            $('statusMsg').textContent = `Saved a version of ${ctx.area().name} (${String(body.commit).slice(0, 7)}).`;
+            say(`Saved a version of ${ctx.area().name} (${String(body.commit).slice(0, 7)}).`);
         } catch (err) {
-            $('statusMsg').textContent = `Couldn't save a version: ${err.message}`;
+            say(`Couldn't save a version: ${err.message}`);
         } finally {
             btn.disabled = ctx.readOnly();
         }

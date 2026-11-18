@@ -6,7 +6,7 @@
 
 import { thingsForExport } from './things.js';
 import { api, engine, failure } from './api.js';
-import { $ } from './dom.js';
+import { $, say } from './dom.js';
 import { showReport, showError } from './report.js';
 
 /** What app.js gives this file (initExport): `area()`, `readOnly()` and `view`. */
@@ -55,8 +55,8 @@ export async function sendArea(what) {
 function showMarkers(a, report) {
     if (ctx.area() === a) {
         ctx.view.setMarkers(report.warnings || []);
-        $('statusMsg').textContent = '';
-    } else $('statusMsg').textContent = `The report is ${a.name}'s, which is no longer open: open it again to see where on the ground.`;
+        say('');
+    } else say(`The report is ${a.name}'s, which is no longer open: open it again to see where on the ground.`);
 }
 
 /** Sets up the Export and Check paths buttons. */
@@ -68,13 +68,13 @@ export function initExport(c) {
         const btn = $('btnExport');
         btn.disabled = true;
         const a = ctx.area();
-        $('statusMsg').textContent = `Exporting ${a.name}…`;
+        say(`Exporting ${a.name}…`);
         try {
             const report = await sendArea('export');
             showReport(report);
             showMarkers(a, report);
         } catch (err) {
-            $('statusMsg').textContent = '';
+            say('');
             showError(err.message, engine.up ? 'Export failed' : 'Export needs the engine');
         } finally {
             btn.disabled = false;
@@ -88,13 +88,13 @@ export function initExport(c) {
         const btn = $('btnCheck');
         btn.disabled = true;
         const a = ctx.area();
-        $('statusMsg').textContent = 'Checking how NWN will path this area…';
+        say('Checking how NWN will path this area…');
         try {
             const report = await sendArea('check');
             showReport(report, true);
             showMarkers(a, report);
         } catch (err) {
-            $('statusMsg').textContent = '';
+            say('');
             showError(err.message, engine.up ? 'Path check failed' : 'Check paths needs the engine');
         } finally {
             btn.disabled = false;

@@ -4,10 +4,10 @@
 // The Entrance tool: a click carves an entrance into the ground (entrance.js shapes it), and its panel says where each
 // entrance's door leads.
 
-import { TILE, SPACING } from './area.js';
-import { carve, fitInTile, rockFor, at as entranceAt, nearest as nearestEntrance } from './entrance.js';
+import { TILE } from './area.js';
+import { carve, fitInTile, rockFor, groundBehind, nearest as nearestEntrance } from './entrance.js';
 import { api } from './api.js';
-import { $, el } from './dom.js';
+import { $, el, say } from './dom.js';
 import { saveSoon } from './save.js';
 import { waterChanged } from './water.js';
 
@@ -108,10 +108,9 @@ export function entranceDown(e, p) {
         return;
     }
     // In a cave: on the floor beside a wall, not on the rock (the void).
-    const ci = Math.min(ctx.area().nx - 1, Math.round(p.x / SPACING)),
-        cj = Math.min(ctx.area().ny - 1, Math.round(p.y / SPACING));
-    if (ctx.area().void(ci, cj)) {
-        $('statusMsg').textContent = 'In a cave, click the floor right beside a wall: the entrance is carved into that wall.';
+    const c = ctx.area().sampleAt(p.x, p.y);
+    if (ctx.area().void(c.i, c.j)) {
+        say('In a cave, click the floor right beside a wall: the entrance is carved into that wall.');
         return;
     }
     const gx = ctx.area().heightAt(p.x + 1, p.y) - ctx.area().heightAt(p.x - 1, p.y);
@@ -135,10 +134,7 @@ export function entranceDown(e, p) {
     ent.id = ctx.area().newEntranceId();
     ctx.area().entrances.push(ent);
     // Rock that suits the slope: what's painted right behind the mouth.
-    const [bx, by] = entranceAt(ent, ent.depth + 2, 0);
-    const bi = Math.min(ctx.area().nx - 1, Math.max(0, Math.round(bx / SPACING))),
-        bj = Math.min(ctx.area().ny - 1, Math.max(0, Math.round(by / SPACING)));
-    const ground = ctx.area().palette[ctx.area().materials[bj * ctx.area().nx + bi]];
+    const ground = groundBehind(ctx.area(), ent);
     ent.rock = rockFor(ctx.library.byId.get(ground)?.category, ground, id => ctx.library.byId.has(id));
     // (unpainted when the area has 255 textures without it: materialIndex() would throw with the entrance half made)
     const rock = ent.rock && ctx.area().canPaint(ent.rock) ? ctx.area().materialIndex(ent.rock) : undefined;
@@ -149,10 +145,11 @@ export function entranceDown(e, p) {
     ctx.view.markEntrance(ent);
     ctx.view.updateShade();
     showEntrances();
-    $('statusMsg').textContent =
+    say(
         `Entrance ${ent.id}: its door will be tagged ${ctx.area().doorTag(ent)}` +
-        (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '') +
-        (ent.rock && rock === undefined ? `. Its rock isn't painted: this area has 255 textures, the most it can.` : '');
+            (moved > 0.05 ? ` (moved ${moved.toFixed(1)} m to sit inside one tile)` : '') +
+            (ent.rock && rock === undefined ? `. Its rock isn't painted: this area has 255 textures, the most it can.` : ''),
+    );
     saveSoon();
 }
 

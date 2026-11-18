@@ -17,6 +17,11 @@ export function el(tag, props = {}, ...kids) {
 /** The page's element with id `id` (null when there is none). */
 export const $ = id => document.getElementById(id);
 
+/** Shows `text` in the status line under the view (the empty string clears it). */
+export function say(text) {
+    $('statusMsg').textContent = text;
+}
+
 /**
  * Storage in this browser that never throws. With the site's data blocked (cookies off for it, some private modes) even
  * reading `localStorage` throws `SecurityError`, and a full one throws on writing; the page works without it, so `get` then
