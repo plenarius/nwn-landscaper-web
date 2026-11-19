@@ -1,5 +1,0 @@
-# Links lychee skips in this repository only (lychee.toml is shared word for word with the other repositories).
-#
-# The engine's repository is private until it is published together with this one, so every link to it gives 404 for now.
-# Remove this line once https://github.com/plenarius/landscaper is public.
-^https://github\.com/plenarius/landscaper(/|$)
