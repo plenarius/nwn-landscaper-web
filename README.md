@@ -30,17 +30,35 @@ What it does (*team* marks what only a team server offers, see nwn-landscaper's
 Pull requests, the dev server, and the pictures of items and creatures need a review service: one you run yourself that answers
 the calls in nwn-landscaper's [REVIEW-SERVICE.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/REVIEW-SERVICE.md).
 
+## Install
+
+Download the archive for your system from nwn-landscaper's
+[releases](https://github.com/plenarius/nwn-landscaper/releases): Windows (x86-64), macOS (Apple silicon and Intel) or Linux
+(x86-64). It holds the engine and this editor of the same release, in `web/` beside the program. Unpack it anywhere and start the
+program in it: `landscaper.exe` on Windows, `landscaper` on macOS and Linux. Your browser opens the editor at
+<http://127.0.0.1:8765/>. Close the program's window to stop it. `QUICKSTART.txt` in the archive says what to set when it can't
+find the game.
+
+The builds are not signed:
+
+- **macOS** refuses the program the first time. Open System Settings, Privacy & Security, and click **Open Anyway**. On older
+  macOS, right-click the program and choose **Open**. Or run `xattr -dr com.apple.quarantine` on the unpacked folder.
+- **Windows** SmartScreen may say it protected your PC. Click **More info**, then **Run anyway**.
+
+To run this page from a checkout instead, see "Run" below.
+
 ## You need
 
 - The engine, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and what it needs: your own copy of NWN:EE and
   `nwn_gff`. Its [SELF-HOSTING.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/SELF-HOSTING.md) lists them.
-  Releases of the two are tagged together: use the same `vX.Y.Z` of both. [CHANGELOG.md](CHANGELOG.md) lists what each
-  release of this page changed.
+  Releases of the two are tagged together: use the same `vX.Y.Z` of both. A release download has both. [CHANGELOG.md](CHANGELOG.md)
+  lists what each release of this page changed.
 - A browser with WebGL.
 
 ## Run
 
-Clone [nwn-landscaper](https://github.com/plenarius/nwn-landscaper) next to this folder, then:
+From a release download, start the program (above). From source, clone
+[nwn-landscaper](https://github.com/plenarius/nwn-landscaper) next to this folder, then:
 
 ```bash
 cd ../nwn-landscaper && cargo build --release
