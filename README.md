@@ -2,15 +2,15 @@
 
 Sculpt a Neverwinter Nights area in the browser and export it as an area with its own generated tileset (hak + module), checked
 against NWN's pathfinding. It is for builders of NWN:EE modules. This repository is the page (three.js, no build step); the engine
-that reads the game, builds the areas and serves this page is [landscaper](https://github.com/plenarius/landscaper), a separate
+that reads the game, builds the areas and serves this page is [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), a separate
 repository (Rust). The page talks to it over HTTP. Without the engine the page opens a blank area and only sculpting works: the
 textures to paint with, saving to disk, importing, exporting, the path check, and the game's models and blueprints all come
 from the engine.
 
 ![The editor with Dalos Lake, an outdoor area imported from a module, open in the Paint tool](docs/screenshot.png)
 
-What it does (*team* marks what only a team server offers, see landscaper's
-[TEAM-SERVER.md](https://github.com/plenarius/landscaper/blob/master/docs/TEAM-SERVER.md)):
+What it does (*team* marks what only a team server offers, see nwn-landscaper's
+[TEAM-SERVER.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/TEAM-SERVER.md)):
 
 - **Sculpt** the ground: raise, lower, smooth, flatten; water; cave entrances.
 - **Paint** with a texture library the engine builds from your own game files, or pick a texture up from the ground.
@@ -28,30 +28,30 @@ What it does (*team* marks what only a team server offers, see landscaper's
 - **Test on the dev server**, **Save version** into the team's history, and an **Activity** log for admins (*team*).
 
 Pull requests, the dev server, and the pictures of items and creatures need a review service: one you run yourself that answers
-the calls in landscaper's [REVIEW-SERVICE.md](https://github.com/plenarius/landscaper/blob/master/docs/REVIEW-SERVICE.md).
+the calls in nwn-landscaper's [REVIEW-SERVICE.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/REVIEW-SERVICE.md).
 
 ## You need
 
-- The engine, [landscaper](https://github.com/plenarius/landscaper), and what it needs: your own copy of NWN:EE and
-  `nwn_gff`. Its [SELF-HOSTING.md](https://github.com/plenarius/landscaper/blob/master/docs/SELF-HOSTING.md) lists them.
+- The engine, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and what it needs: your own copy of NWN:EE and
+  `nwn_gff`. Its [SELF-HOSTING.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/SELF-HOSTING.md) lists them.
   Releases of the two are tagged together: use the same `vX.Y.Z` of both. [CHANGELOG.md](CHANGELOG.md) lists what each
   release of this page changed.
 - A browser with WebGL.
 
 ## Run
 
-Clone [landscaper](https://github.com/plenarius/landscaper) next to this folder, then:
+Clone [nwn-landscaper](https://github.com/plenarius/nwn-landscaper) next to this folder, then:
 
 ```bash
-cd ../landscaper && cargo build --release
+cd ../nwn-landscaper && cargo build --release
 NWN_ROOT=/path/to/nwn ./target/release/landscaper serve   # http://127.0.0.1:8765/  (only on this machine)
 ```
 
 `NWN_ROOT` is the game's install folder (the Steam install on Linux is found without it); `NWN_HOME` is your user folder, the
 one with `hak/`, `modules/` and `tlk/`. Then open <http://127.0.0.1:8765/>. `serve` looks for this folder as `web/` beside the
-program, then `landscaper-web` and `../landscaper-web` from where you start it; or pass `--web <folder>` (or set
-`LANDSCAPER_WEB`). `--port` changes the port. landscaper's
-[SELF-HOSTING.md](https://github.com/plenarius/landscaper/blob/master/docs/SELF-HOSTING.md) covers a team server.
+program, then `nwn-landscaper-web` and `../nwn-landscaper-web` (or `landscaper-web`, this repository's earlier name) from where
+you start it; or pass `--web <folder>` (or set `LANDSCAPER_WEB`). `--port` changes the port. nwn-landscaper's
+[SELF-HOSTING.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/SELF-HOSTING.md) covers a team server.
 
 The page needs WebGL. Without a GPU (e.g. a remote desktop), start a separate browser window with software rendering:
 
@@ -81,7 +81,8 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 - **Caves and interiors**: cut rooms and passages out of the rock with Room and Dig (passages about 6 m wide at least, along tile
   middles). Lay a Ramp between levels (a little wider than the passage), or drag a box with Descent to fill it with halls that
   step down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See
-  landscaper's [BUILDER-WORKFLOW.md](https://github.com/plenarius/landscaper/blob/master/docs/BUILDER-WORKFLOW.md) for the rules and the limits.
+  nwn-landscaper's [BUILDER-WORKFLOW.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/BUILDER-WORKFLOW.md) for the
+  rules and the limits.
 - **Walkable** (`W`) tints ground too steep for NWN creatures in red, by the same rule the exporter
   uses. The status bar shows position, height, tile and walkability under the cursor.
 - **Export to NWN** builds the hak (into your NWN `hak/` folder) and module (into `modules/`, ready
@@ -95,8 +96,8 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   computer), the page asks which copy to keep. So does a tab whose area another tab or computer saved since it opened it: the
   engine refuses the older tab's save, which stays in the browser until you choose.
 - **File, Delete area** deletes the area open, after asking: it leaves your areas with its export, and the page opens your
-  newest other area. The engine keeps its last copy (landscaper's
-  [TEAM-SERVER.md](https://github.com/plenarius/landscaper/blob/master/docs/TEAM-SERVER.md#deleted-areas), "Deleted areas", says
+  newest other area. The engine keeps its last copy (nwn-landscaper's
+  [TEAM-SERVER.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/TEAM-SERVER.md#deleted-areas), "Deleted areas", says
   how to bring it back); the module it was exported into and its hak stay.
 
 ## Development

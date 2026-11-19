@@ -1,7 +1,7 @@
 # Contributing
 
 Issues and pull requests are welcome. For a change to how areas are built, exported or checked, look at the engine,
-[landscaper](https://github.com/plenarius/landscaper), too: most of that work happens there, and this page only shows it.
+[nwn-landscaper](https://github.com/plenarius/nwn-landscaper), too: most of that work happens there, and this page only shows it.
 
 ## Before a pull request
 
