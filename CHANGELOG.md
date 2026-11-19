@@ -4,6 +4,12 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## 0.1.1
+
+- **Released as downloads with the engine.** Each nwn-landscaper release now has an archive per system (Windows, macOS, Linux)
+  holding the engine and this page, in `web/` beside the program: unpack it and start the program, and the editor opens in the
+  browser. The page itself is unchanged. README, "Install".
+
 ## 0.1.0
 
 The first public release: the page that sculpts, paints, digs caves and places things in an NWN area, and talks to the engine to
