@@ -1,7 +1,7 @@
 # nwn-bake's copies of the files STYLE.md shares, at the release below, as scripts/shared-files.sh --pin wrote them.
 # Change them only with that command (see the top of scripts/shared-files.sh).
-tag v0.5.2
-43b36f88295d52e012ae8801f5cff5ffe41fe56092452845f4015ea56b17bb8d  STYLE.md
+tag v0.6.1
+083265a99480190dac3445ab76df9a7316098eba560a8c66af396c1c57ba8173  STYLE.md
 c03277390ef9c24b5a3549ccc9c02f8af2ce04816f82c1f7868d98f3c12717a3  scripts/check.sh
 372bed1779efc3517beccae19ba8597f8613ae6119958a569dbe46460a2478db  .editorconfig
 0cfc838de758f333008d72a906f52e8fa074c3059885a2fe91710a2d5150c438  _typos.toml
