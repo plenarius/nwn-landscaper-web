@@ -326,7 +326,16 @@
             <label id="pubNoteRow">Note for the reviewers <small>(optional)</small>
                 <input type="text" id="pubNote" maxlength="300" autocomplete="off"></label>
             <div id="pubLinks"></div>
-            <div class="dialog-buttons"><button type="button" id="pubGo">Open the pull requests</button><button type="submit" value="cancel" id="pubClose">Close</button></div>
+            <section id="pubTrial" class="trial" hidden aria-labelledby="pubTrialTitle">
+                <h3 id="pubTrialTitle">Your trial on dev</h3>
+                <p class="finding warn" id="pubTrialReconnect" hidden></p>
+                <p class="note" id="pubTrialText"></p>
+                <ul class="trial-commands" id="pubTrialCommands"></ul>
+                <ul class="findings" id="pubTrialNotes" hidden></ul>
+                <p class="note" id="pubTrialLeft"></p>
+                <div class="trial-buttons"><button type="button" id="pubTrialKeep" title="Push the hour back, so dev keeps your areas">Keep it longer</button><button type="button" id="pubTrialRelease" title="Put dev's areas back to live and take your files off it">Release</button></div>
+            </section>
+            <div class="dialog-buttons"><button type="button" id="pubTry" hidden title="Put what this would publish on the dev server, with no restart, to walk it in the game first">Try on dev</button><button type="button" id="pubGo">Open the pull requests</button><button type="submit" value="cancel" id="pubClose">Close</button></div>
         </form>
     </dialog>
 

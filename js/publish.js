@@ -6,6 +6,7 @@
 
 import { api, failure, json } from './api.js';
 import { $ } from './dom.js';
+import { initTrial, trialChecked, trialClosed, trialOpen } from './trial.js';
 
 /** What app.js gives this file (initPublish): `area()`, `me()` (who is signed in) and `readOnly()`. */
 let ctx = null;
@@ -57,6 +58,7 @@ async function pubCheck() {
         whole = $('pubWhole').checked;
     $('pubGo').hidden = true;
     $('pubNote').disabled = true;
+    trialChecked(false);
     pubShow(
         `Checking ${whole ? `module ${ctx.area().module}` : ctx.area().name}${ctx.me().package ? '' : ' with the publishing service'}…`,
         'work',
@@ -85,6 +87,7 @@ async function pubCheck() {
         $('pubNoteRow').hidden = !!ctx.me().package;
         $('pubGo').hidden = errors > 0;
         $('pubNote').disabled = errors > 0;
+        trialChecked(errors === 0);
         if (errors)
             pubShow(
                 `${errors} problem${errors === 1 ? '' : 's'} to fix before this can be published (listed below). Fix them, export again, and check again.`,
@@ -119,7 +122,11 @@ function showFindings(findings) {
 /** Wires the Publish dialog. `c`: { area(), me(), readOnly() } from app.js. */
 export function initPublish(c) {
     ctx = c;
-    $('publishDialog').addEventListener('close', () => clearInterval(pubClock));
+    $('publishDialog').addEventListener('close', () => {
+        clearInterval(pubClock);
+        trialClosed();
+    });
+    initTrial({ area: () => ctx.area(), me: () => ctx.me(), whole: () => $('pubWhole').checked, show: pubShow });
     $('pubWhole').onchange = pubCheck;
     $('btnPublish').onclick = async () => {
         if (ctx.readOnly() || !ctx.area()) return;
@@ -140,7 +147,7 @@ export function initPublish(c) {
             /* the list fails to load: publish only this area */
         }
         dlg.showModal();
-        await pubCheck();
+        await Promise.all([pubCheck(), trialOpen()]);
     };
     $('pubGo').onclick = async () => {
         if (ctx.me().package) {

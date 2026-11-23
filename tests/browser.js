@@ -47,6 +47,10 @@ function element(id, tag = 'div') {
         append(...kids) {
             for (const k of kids) if (typeof k === 'object') this.children.push(k);
         },
+        replaceChildren(...kids) {
+            this.children = [];
+            this.append(...kids);
+        },
         open: false,
         showModal() {
             this.open = true;
@@ -109,13 +113,15 @@ export const status = () => document.getElementById('statusMsg').textContent;
  * whose `base` isn't the saved copy's version (`version`, the copy's text here; `none` without one), unless `replace=1`. A
  * delete (`DELETE /api/area`) is refused the same way when its `base` isn't the version, and with `used_by` when an area's name
  * is in `usedBy` (other areas use its import). `exports`: each export or check sent (its query and body). `blueprints`: the
- * answers to `/api/new-blueprint` (a builder's blueprint), by resref.
+ * answers to `/api/new-blueprint` (a builder's blueprint), by resref. `routes`: more answers a test sets, by `METHOD /path`,
+ * each a function of the URL and options giving `[body, status]`.
  */
 export const engine = {
     areas: new Map(),
     saved: new Map(),
     blueprints: new Map(),
     usedBy: new Map(),
+    routes: new Map(),
     exports: [],
     log: [],
     failSaves: false,
@@ -126,6 +132,7 @@ export const engine = {
         this.saved.clear();
         this.blueprints.clear();
         this.usedBy.clear();
+        this.routes.clear();
         this.exports = [];
         this.log = [];
         this.failSaves = false;
@@ -191,6 +198,8 @@ async function handle(url, opts = {}) {
         engine.saved.set(name, ++clock);
         return answer({ saved: clock, version: engine.version(name) });
     }
+    const route = engine.routes.get(`${method} ${u.pathname}`);
+    if (route) return answer(...(await route(u, opts)));
     return answer({ error: `no ${u.pathname} in the test engine` }, 404);
 }
 // biome-ignore lint/plugin: the tests stand in for the browser's fetch(), which api() calls

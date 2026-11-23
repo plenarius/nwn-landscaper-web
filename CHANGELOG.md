@@ -4,6 +4,14 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## 0.2.0
+
+- **Try on dev**, beside the Publish dialog's button, where the review service takes trials. It puts the area, or with the box
+  ticked its whole module, on the dev server with no restart, once the check finds no errors. The dialog then says whether to
+  reconnect, how to walk in (`;forge <area>`, with a Copy button for each area), what went wrong or needs a look, and how long
+  the trial has left. **Keep it longer** pushes the hour back; **Release** puts dev's areas back to live. Opening the dialog shows
+  the trial you have, without keeping it longer. Needs the engine of the same release.
+
 ## 0.1.2
 
 - No change to the page. Tagged with the engine's 0.1.2, whose publish now sends only the files the Landscaper made.
