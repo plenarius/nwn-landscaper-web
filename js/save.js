@@ -143,10 +143,6 @@ function leaving(e) {
 // copy never goes into another's workspace on a shared browser.
 const key = (what, name) => `landscaper.${what}.${ctx.me().team ? `${ctx.me().user}:` : ''}${name}`;
 
-/** The key in this browser's storage of this user's `what` for `name` (`landscaper.<what>.<name>`, on a team server
- *  `landscaper.<what>.<user>:<name>`): what one builder keeps never shows for another on a shared browser. */
-export const userKey = key;
-
 // The area last open: `landscaper.current`, on a team server `landscaper.current.<user>`.
 const currentKey = () => (ctx.me().team ? `landscaper.current.${ctx.me().user}` : 'landscaper.current');
 

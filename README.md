@@ -26,8 +26,8 @@ What it does (*team* marks what only a team server offers, see nwn-landscaper's
 - **Publish**: a package (a zip) to unzip into your module's repository; with a review service, pull requests opened for review
   (*team*).
 - **Try on dev**, in the Publish dialog: the area or its module on the dev server with no restart, walked in with `;forge <area>`,
-  kept longer or released (*team*).
-- **Test on the dev server**, **Save version** into the team's history, and an **Activity** log for admins (*team*).
+  kept longer or released (*team*). New scripts can't be tried on dev: they go through Publish.
+- **Save version** into the team's history, and an **Activity** log for admins (*team*).
 
 Pull requests, the dev server, and the pictures of items and creatures need a review service: one you run yourself that answers
 the calls in nwn-landscaper's [REVIEW-SERVICE.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/REVIEW-SERVICE.md).

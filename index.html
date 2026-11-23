@@ -86,7 +86,6 @@
         <div class="menu menu-right" id="menuShare">
             <button class="top-btn menu-btn" type="button" aria-haspopup="true" aria-expanded="false">Share</button>
             <div class="menu-list" hidden>
-                <button type="button" class="menu-item" id="btnTest" hidden title="Put your exported module on the dev server and walk it in the game"><span>Test on the dev server…</span></button>
                 <button type="button" class="menu-item" id="btnPublish" hidden title="Send your last export to the team for review as pull requests (or, where there is no review service, build a package of its files to download)"><span>Publish to the team…</span></button>
             </div>
         </div>
@@ -336,27 +335,6 @@
                 <div class="trial-buttons"><button type="button" id="pubTrialKeep" title="Push the hour back, so dev keeps your areas">Keep it longer</button><button type="button" id="pubTrialRelease" title="Put dev's areas back to live and take your files off it">Release</button></div>
             </section>
             <div class="dialog-buttons"><button type="button" id="pubTry" hidden title="Put what this would publish on the dev server, with no restart, to walk it in the game first">Try on dev</button><button type="button" id="pubGo">Open the pull requests</button><button type="submit" value="cancel" id="pubClose">Close</button></div>
-        </form>
-    </dialog>
-
-    <dialog id="testDialog" aria-labelledby="testTitle">
-        <form method="dialog">
-            <h2 id="testTitle">Test on the dev server</h2>
-            <p class="note" id="testStatus"></p>
-            <div id="testForm">
-                <p class="note">Puts your last export of this module on the dev server, with a temporary way in from an existing area. One person tests at a time; it frees itself after an hour of nothing.</p>
-                <label>Enter from an existing area <small>3 letters of its name or tag</small>
-                    <input type="text" id="testFind" autocomplete="off" placeholder="e.g. bay"></label>
-                <div id="testAreas" class="open-list import-list"></div>
-                <label>At its waypoint <select id="testWp"><option value="">Pick an area first</option></select></label>
-                <label>Leads to <select id="testEntry"></select></label>
-                <label class="check" id="testTakeRow" hidden><input type="checkbox" id="testTake"> Take it from the person testing now</label>
-            </div>
-            <div class="dialog-buttons">
-                <button type="button" id="testGo" class="primary" disabled>Load on the dev server</button>
-                <button type="button" id="testRelease" hidden>Give it back</button>
-                <button type="submit" value="cancel">Close</button>
-            </div>
         </form>
     </dialog>
 

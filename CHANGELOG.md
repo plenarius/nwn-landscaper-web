@@ -4,6 +4,12 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## 0.2.1
+
+- **Test on the dev server is gone** from the Share menu, with its dialog: Try on dev, in the Publish dialog, replaces it. New
+  scripts can't be tried on dev; they go through Publish. A transition's *Pick a waypoint of an existing area* now asks the
+  engine's `/api/waypoints`. Needs the engine of the same release.
+
 ## 0.2.0
 
 - **Try on dev**, beside the Publish dialog's button, where the review service takes trials. It puts the area, or with the box

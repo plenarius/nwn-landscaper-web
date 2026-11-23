@@ -862,7 +862,7 @@ ThingsTool.prototype.destinationPicker = function (t, _input) {
                 b.append(title, ' ', small);
                 b.onclick = async () => {
                     note.textContent = `Waypoints of ${s.area}…`;
-                    const w = await api(`/api/dev-test/waypoints?area=${encodeURIComponent(s.area)}`)
+                    const w = await api(`/api/waypoints?area=${encodeURIComponent(s.area)}`)
                         .then(json)
                         .catch(() => ({}));
                     wps.textContent = '';
