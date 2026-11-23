@@ -5,7 +5,7 @@
 // init function, and handles the keys. Here: the tool buttons, the Paint tool's textures and eyedropper, Open, the Show menu, who
 // is signed in, the area's undo and settings, the keys, and opening the last area at start. Elsewhere: placeables (place.js),
 // importing (import.js), scatter (scatter.js), sky & fog (sky.js), the menus (menus.js), the pointer and its strokes (strokes.js),
-// water (water.js), entrances (entrancetool.js), activity, publish and the dev server (activity.js, publish.js, devtest.js),
+// water (water.js), entrances (entrancetool.js), activity and publish (activity.js, publish.js),
 // autosave (save.js), the live path check (live.js), New area (newarea.js), and Export and Check paths (export.js).
 
 import { Area, DEFAULT_TEXTURE } from './area.js';
@@ -26,7 +26,6 @@ import { initSky, showAreaSky, refreshSky } from './sky.js';
 import { initMenus } from './menus.js';
 import { initActivity } from './activity.js';
 import { initPublish } from './publish.js';
-import { initDevTest } from './devtest.js';
 import { initScripts } from './scripts.js';
 import { initReport, showError } from './report.js';
 import { initNewArea } from './newarea.js';
@@ -486,9 +485,7 @@ function showButtons() {
     // Its dialog says the same: a package to download, or pull requests for the team.
     $('pubTitle').textContent = me.package ? 'Package for your module' : 'Publish to the team';
     $('pubGo').textContent = me.package ? 'Download the package' : 'Open the pull requests';
-    $('btnTest').hidden = !(me.team && me.publish);
     $('btnPublish').disabled = readOnly;
-    $('btnTest').disabled = readOnly;
     $('btnVersion').disabled = readOnly;
 }
 
@@ -512,7 +509,6 @@ function showWho() {
 
 initActivity();
 initPublish(editor);
-initDevTest(editor);
 initScripts(editor);
 
 // Save a version, Delete area, and autosave (save.js).

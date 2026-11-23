@@ -302,17 +302,12 @@ dialog button.busy:disabled {
 #publishDialog {
     width: min(640px, 92vw);
 }
-#pubText.err,
-#testStatus.err {
+#pubText.err {
     color: var(--bad);
     font-weight: 600;
 }
-#pubText.ok,
-#testStatus.ok {
+#pubText.ok {
     color: #5cc46a;
-}
-#testStatus.work {
-    color: #8fb3e0;
 }
 .progress {
     height: 6px;

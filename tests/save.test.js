@@ -194,7 +194,6 @@ test('the area last open is kept for each user on a team server', () => {
     assert.equal(save.lastOpen(), 'aa');
     me = { team: true, user: 'bob' };
     assert.equal(save.lastOpen(), null);
-    assert.equal(save.userKey('testway', 'mod'), 'landscaper.testway.bob:mod');
 });
 
 test("someone else's workspace (read-only) is never saved, and its area isn't noted as the last open", async () => {
