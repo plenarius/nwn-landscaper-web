@@ -25,6 +25,8 @@ What it does (*team* marks what only a team server offers, see nwn-landscaper's
 - **Export to NWN**: the hak and module, ready to play.
 - **Publish**: a package (a zip) to unzip into your module's repository; with a review service, pull requests opened for review
   (*team*).
+- **Try on dev**, in the Publish dialog: the area or its module on the dev server with no restart, walked in with `;forge <area>`,
+  kept longer or released (*team*).
 - **Test on the dev server**, **Save version** into the team's history, and an **Activity** log for admins (*team*).
 
 Pull requests, the dev server, and the pictures of items and creatures need a review service: one you run yourself that answers

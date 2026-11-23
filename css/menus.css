@@ -134,6 +134,37 @@
     color: var(--text);
 }
 
+/* Try on dev, under the check in the Publish dialog: the way in, a ;forge command per area, the time left. */
+.trial {
+    margin: 14px 0 0;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border-radius: 8px;
+}
+.trial h3 {
+    margin: 0 0 6px;
+    font-size: 14px;
+}
+.trial-commands {
+    list-style: none;
+    margin: 6px 0;
+    padding: 0;
+}
+.trial-commands li {
+    margin-bottom: 4px;
+}
+.trial-commands code {
+    user-select: all;
+}
+.trial-buttons {
+    display: flex;
+    gap: 8px;
+}
+.trial-copy {
+    padding: 1px 8px;
+    font-size: 12px;
+}
+
 .dest-picker {
     margin: 4px 0 8px;
     font-size: 13px;
