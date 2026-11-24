@@ -33,12 +33,29 @@ const TEXTURE_METRES = 4;
 // v is negated: the texture array's rows run top first, NWN's bottom first.
 // Baked shadows over the lit ground, as the game's shadow-map shader
 // multiplies them (fog comes after, in three.js as in the game).
-// Only over the area: the edge scenery has no shadow map.
+// Only over the area: the edge scenery has no shadow map. With baked
+// objects, their shadows from the view's shadow map join the terrain's as
+// the engine joins them (landscaper shade.rs, combine; without the sky they
+// hide, which it adds).
 const SHADE_FRAGMENT = `
     {
         vec2 extent = (uShadeCells - 1.0) * ${SHADE_STEP.toFixed(4)};
         if (all(greaterThanEqual(vArea, vec2(0.0))) && all(lessThanEqual(vArea, extent)))
-            diffuseColor.rgb *= texture2D(uShade, (vArea / ${SHADE_STEP.toFixed(4)} + 0.5) / uShadeCells).r;
+        {
+            vec4 sh = texture2D(uShade, (vArea / ${SHADE_STEP.toFixed(4)} + 0.5) / uShadeCells);
+            float s = sh.r;
+            #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+            if (uObjectShadows) {
+                float through = getShadow(directionalShadowMap[0], directionalLightShadows[0].shadowMapSize,
+                    directionalLightShadows[0].shadowIntensity, directionalLightShadows[0].shadowBias,
+                    directionalLightShadows[0].shadowRadius, vDirectionalShadowCoord[0]);
+                float lit = 1.0 - 0.6 * (1.0 - (1.0 - sh.g) * through);
+                s = clamp(1.0 - uShadowStrength * (1.0 - lit * (1.0 - 0.8 * sh.b)), 0.15, 1.0) * sh.a;
+            }
+            #endif
+            // (The game multiplies in display colours, three.js in linear ones: 0.64 there is about 0.37 here.)
+            diffuseColor.rgb *= pow(s, 2.2);
+        }
         if (vGap <= ${VOID_BELOW.toFixed(2)}) diffuseColor.rgb = vec3(0.0);
     }`;
 
@@ -151,7 +168,14 @@ export class View {
         this.areaSun = new THREE.DirectionalLight(0xffffff, Math.PI);
         this.areaSun.position.set(4000, 7000, -4500).normalize();
         this.areaAmbient = new THREE.AmbientLight(0x000000, Math.PI);
-        this.scene.add(this.workSun, this.workSky, this.areaSun, this.areaAmbient);
+        // The baked objects' shadows, from the game's sun in either light: a light that lights nothing, only its shadow map
+        // (the ground reads it, see SHADE_FRAGMENT). Drawn again only when the objects change (updateObjectShadows).
+        this.shadowSun = new THREE.DirectionalLight(0xffffff, 0);
+        this.shadowSun.shadow.radius = 3;
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFShadowMap;
+        this.renderer.shadowMap.autoUpdate = false;
+        this.scene.add(this.workSun, this.workSky, this.areaSun, this.areaAmbient, this.shadowSun, this.shadowSun.target);
         this.areaSun.visible = this.areaAmbient.visible = false;
         this.fog = null; // { start, end } as the game's camera sees it
 
@@ -172,6 +196,9 @@ export class View {
             // Baked shadows (shade.js): a grid SHADE_STEP apart over the area.
             uShade: { value: null },
             uShadeCells: { value: new THREE.Vector2(1, 1) },
+            // The baked objects' shadows (updateObjectShadows), and the area's shadow strength they are drawn at.
+            uObjectShadows: { value: false },
+            uShadowStrength: { value: 0 },
             // A cave's rock tops from here up are void: black.
             // An imported area's picture, and its palette index (-1: none).
             uImport: { value: null },
@@ -283,6 +310,8 @@ export class View {
         this.shadeDirty = null;
         this.updateShade(true);
         this.mesh = new THREE.Mesh(geo, this.splatMaterial());
+        // (So three.js hands it the object shadows' map. Its own dimming darkens only the shadow light, which lights nothing.)
+        this.mesh.receiveShadow = true;
         this.scene.add(this.mesh);
         this.buildSkirt();
         this.grid = new THREE.LineSegments(
@@ -316,7 +345,7 @@ export class View {
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform vec2 uSize;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
+                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform vec2 uSize;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${SHADE_FRAGMENT}`);
         };
@@ -343,13 +372,82 @@ export class View {
         }
         const { mx, my, data } = shadeArea(this.area, this.area.shadow);
         const old = this.uniforms.uShade.value;
-        const tex = new THREE.DataTexture(data, mx, my, THREE.RedFormat, THREE.UnsignedByteType);
+        const tex = new THREE.DataTexture(data, mx, my, THREE.RGBAFormat, THREE.UnsignedByteType);
         tex.minFilter = tex.magFilter = THREE.LinearFilter;
         tex.unpackAlignment = 1;
         tex.needsUpdate = true;
         this.uniforms.uShade.value = tex;
         this.uniforms.uShadeCells.value.set(mx, my);
         old?.dispose();
+        // (the strength or the kind of area may have changed)
+        this.updateObjectShadows();
+    }
+
+    /** Draws the baked objects' shadows again (they moved, came or went, or the area changed): the shadow light's map over
+     *  the area and its objects, about 6 cm a texel up to 4096 a side. None underground, at strength 0, or with no baked
+     *  object (the engine bakes none then either). */
+    updateObjectShadows() {
+        const area = this.area,
+            light = this.shadowSun,
+            group = this.objectGroup;
+        const casting = group?.children.some(c => c.userData.object?.baked !== false && !c.userData.decal);
+        const on = !!(area && area.shadow > 0 && !area.enclosed() && casting);
+        this.uniforms.uShadowStrength.value = area?.shadow ?? 0;
+        this.uniforms.uObjectShadows.value = on;
+        if (light.castShadow !== on) light.castShadow = on;
+        if (!on) return;
+        // Towards the game's sun, (4000, 4500, 7000) in NWN axes, from the middle of the area and everything in it.
+        const box = new THREE.Box3().setFromObject(group);
+        box.expandByPoint(new THREE.Vector3(0, box.min.y, 0)).expandByPoint(new THREE.Vector3(area.sizeX, box.max.y, area.sizeY));
+        const centre = box.getCenter(new THREE.Vector3()),
+            reach = box.getSize(new THREE.Vector3()).length();
+        light.target.position.copy(centre);
+        light.position.copy(centre).addScaledVector(new THREE.Vector3(4000, 7000, -4500).normalize(), reach);
+        light.target.updateMatrixWorld();
+        light.updateMatrixWorld();
+        // The camera's box: the area's and objects' corners as the light sees them.
+        const cam = light.shadow.camera;
+        cam.position.copy(light.position);
+        cam.lookAt(light.target.position);
+        cam.updateMatrixWorld();
+        const lo = new THREE.Vector3(Infinity, Infinity, Infinity),
+            hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+        for (let k = 0; k < 8; k++) {
+            const p = new THREE.Vector3(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z);
+            p.applyMatrix4(cam.matrixWorldInverse);
+            lo.min(p);
+            hi.max(p);
+        }
+        Object.assign(cam, { left: lo.x, right: hi.x, bottom: lo.y, top: hi.y, near: Math.max(0.1, -hi.z - 1), far: -lo.z + 1 });
+        cam.updateProjectionMatrix();
+        const size = Math.min(
+            4096,
+            this.renderer.capabilities.maxTextureSize,
+            2 ** Math.ceil(Math.log2(Math.max(hi.x - lo.x, hi.y - lo.y) / 0.06)),
+        );
+        if (light.shadow.mapSize.x !== size) {
+            light.shadow.mapSize.set(size, size);
+            light.shadow.map?.dispose();
+            light.shadow.map = null;
+        }
+        this.renderer.shadowMap.needsUpdate = true;
+        // Cut-outs cast through their pictures' alpha, so a picture still loading casts nothing: again once they are all in.
+        const loading = [...(this.models?.loaded.values() ?? [])];
+        Promise.all(loading).then(() => {
+            if (this.uniforms.uObjectShadows.value) this.renderer.shadowMap.needsUpdate = true;
+        });
+    }
+
+    /** Puts a copy of object `o`'s model where it stands; a baked one casts a shadow, a placeable (object mode) none, as the
+     *  engine bakes them. */
+    place(inst, o) {
+        inst.position.set(o.x, o.z, this.area.sizeY - o.y);
+        inst.rotation.y = o.bearing;
+        inst.scale.setScalar(o.scale);
+        const casts = o.baked !== false;
+        inst.traverse(m => {
+            if (m.isMesh) m.castShadow = casts;
+        });
     }
 
     /** Uses the texture library to show painted textures. */
@@ -693,8 +791,8 @@ export class View {
         const group = new THREE.Group();
         this.objectGroup = group;
         this.scene.add(group);
+        this.updateObjectShadows();
         if (!this.models) return;
-        const size = this.area.sizeY;
         // All at once, each drawn as its model arrives. (syncObjects waits for this to end before matching what is drawn.)
         this.objectsLoading = group;
         await Promise.all(
@@ -707,9 +805,7 @@ export class View {
                 }
                 if (group !== this.objectGroup) return; // rebuilt meanwhile
                 const inst = model.clone();
-                inst.position.set(o.x, o.z, size - o.y);
-                inst.rotation.y = o.bearing;
-                inst.scale.setScalar(o.scale);
+                this.place(inst, o);
                 inst.userData.object = o;
                 group.add(inst);
                 this.addDecal(group, o, model.userData.flat);
@@ -717,6 +813,7 @@ export class View {
             }),
         );
         if (this.objectsLoading === group) this.objectsLoading = null;
+        if (group === this.objectGroup) this.updateObjectShadows();
     }
 
     /** Draws the area's objects again after undo or redo, which gives the area new copies of them all: each one drawn is
@@ -760,9 +857,7 @@ export class View {
             this.updateObjects();
             return;
         }
-        inst.position.set(o.x, o.z, this.area.sizeY - o.y);
-        inst.rotation.y = o.bearing;
-        inst.scale.setScalar(o.scale);
+        this.place(inst, o);
         const old = group.children.find(c => c.userData.object === o && c.userData.decal);
         if (old) {
             group.remove(old);
@@ -770,6 +865,7 @@ export class View {
         }
         this.addDecal(group, o, inst.userData.flat);
         if (o === this.selected) this.showSelection(inst);
+        this.updateObjectShadows();
     }
 
     /** An imported thing's patch of ground, draped on the ground where it
@@ -841,13 +937,12 @@ export class View {
         }
         if (group !== this.objectGroup || !this.area.objects.includes(o)) return;
         const inst = model.clone();
-        inst.position.set(o.x, o.z, this.area.sizeY - o.y);
-        inst.rotation.y = o.bearing;
-        inst.scale.setScalar(o.scale);
+        this.place(inst, o);
         inst.userData.object = o;
         group.add(inst);
         this.applyCut(inst);
         this.addDecal(group, o, model.userData.flat);
+        this.updateObjectShadows();
     }
 
     /** Cuts the imported tiles' roofs and upper floors away above `h` metres (null: shows them whole). Only imported tile
@@ -878,6 +973,7 @@ export class View {
                 this.objectGroup.remove(c);
                 if (c.userData.decal) disposeDecal(c);
             }
+        this.updateObjectShadows();
     }
 
     /**

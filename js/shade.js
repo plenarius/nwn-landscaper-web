@@ -45,24 +45,31 @@ function occlusion(x, y, z, height) {
     return sum / 8;
 }
 
+/** What the terrain does to (x, y): how much of the sun it hides (0 underground, with `sun` false) and of the sky. */
+function terrain(x, y, height, sun) {
+    const z = height(x, y);
+    return [sun ? castShadow(x, y, z, height) : 0, occlusion(x, y, z, height)];
+}
+
+/** The shadow-map value from terrain()'s two: 1 unshaded; `strength` 0..1. */
+const combine = (strength, [cast, hidden]) => Math.min(1, Math.max(0.15, 1 - strength * (1 - (1 - 0.6 * cast) * (1 - 0.8 * hidden))));
+
 /** The shadow-map value at (x, y): 1 unshaded; `strength` 0..1. */
 export function shade(x, y, strength, height, sun = true) {
-    const z = height(x, y);
-    // Underground: no sun, only the ambient occlusion.
-    const lit = sun ? 1 - 0.6 * castShadow(x, y, z, height) : 1;
-    const open = 1 - 0.8 * occlusion(x, y, z, height);
-    return Math.min(1, Math.max(0.15, 1 - strength * (1 - lit * open)));
+    return combine(strength, terrain(x, y, height, sun));
 }
 
 // Metres between the preview's samples.
 export const SHADE_STEP = 1.25;
 
-/** The area's shadows on a grid SHADE_STEP apart: mx across, my rows
- *  from the south. */
+/** The area's shadows on a grid SHADE_STEP apart: mx across, my rows from the south, four bytes a point: the shadow-map value
+ *  (with the entrances' darkness), and for the view's object shadows the terrain's two (the sun and the sky it hides) and the
+ *  entrances' darkness on their own (the view works out the engine's value with the objects again from them). */
 export function shadeArea(area, strength) {
     const mx = Math.round(area.sizeX / SHADE_STEP) + 1,
         my = Math.round(area.sizeY / SHADE_STEP) + 1;
-    const out = new Uint8Array(mx * my).fill(255);
+    const out = new Uint8Array(mx * my * 4);
+    for (let k = 0; k < mx * my; k++) out.set([255, 0, 0, 255], k * 4);
     // No shadow maps at 0 (landscaper writes none), so no dark entrances either.
     if (strength <= 0) return { mx, my, data: out };
     shadeRect(area, strength, out, { x0: 0, y0: 0, x1: area.sizeX, y1: area.sizeY });
@@ -100,8 +107,12 @@ function shadeRect(area, strength, data, r) {
         for (let i = i0; i <= i1; i++) {
             const x = i * SHADE_STEP,
                 y = j * SHADE_STEP;
-            const s = shade(x, y, strength, height, !area.enclosed());
-            data[j * mx + i] = Math.round(255 * s * darkness(area.entrances, x, y));
+            const t = terrain(x, y, height, !area.enclosed()),
+                dark = darkness(area.entrances, x, y);
+            data.set(
+                [Math.round(255 * combine(strength, t) * dark), Math.round(255 * t[0]), Math.round(255 * t[1]), Math.round(255 * dark)],
+                (j * mx + i) * 4,
+            );
         }
     }
 }
