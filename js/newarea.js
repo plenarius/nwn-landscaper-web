@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// The New area dialog: its size, what kind of ground it starts as (hills, a cave, an interior, a sample descent), its module.
+// The New area dialog: its size, what kind of ground it starts as (hills, a cave, an interior, a sample descent or landscape),
+// its module.
 
 import { Area, TILE } from './area.js';
 import { descentPlan, cutDescent } from './tools.js';
@@ -9,6 +10,7 @@ import { $, el, say } from './dom.js';
 import { api, engine } from './api.js';
 import { ask } from './ask.js';
 import { browserCopy, saveNew } from './save.js';
+import { TERRAIN_STARTERS, seedTerrain, starterSettings } from './starters.js';
 
 /** What app.js gives this file (initNewArea): `setArea(a)`, the Things tool (`thingsTool`) and the texture `library`. */
 let ctx = null;
@@ -89,7 +91,7 @@ export function initNewArea(c) {
 
     for (const radio of document.querySelectorAll('input[name=start]')) {
         radio.addEventListener('change', () => {
-            const size = DESCENT_STARTERS[radio.value]?.size;
+            const size = (DESCENT_STARTERS[radio.value] ?? TERRAIN_STARTERS[radio.value])?.size;
             if (size && radio.checked) {
                 $('newW').value = size[0];
                 $('newH').value = size[1];
@@ -145,18 +147,21 @@ async function create(name, form) {
     const start = new FormData(form).get('start');
     const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
     const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
-    const starter = DESCENT_STARTERS[start];
-    const created = Area.create(name, tiles($('newW').value), starter?.from ?? start, base, tiles($('newH').value));
-    if (starter) {
+    const starter = DESCENT_STARTERS[start],
+        terrain = TERRAIN_STARTERS[start];
+    const created = Area.create(name, tiles($('newW').value), starter?.from ?? (terrain ? 'flat' : start), base, tiles($('newH').value));
+    if (starter || terrain) {
         // (the library comes from the engine a moment after the page starts)
         const library = ctx.library;
         if (!library.catalog.length && engine.up) await library.load();
-        seedDescent(created, starter, starterFloor(starter, library));
+        if (starter) seedDescent(created, starter, starterFloor(starter, library));
+        else seedTerrain(created, terrain, base, library);
     }
     created.module = $('newModule').value.trim().toLowerCase() || created.name;
     // A new area starts with the project's template (the standard scripts and so on; the server's, or a plain one).
     const meta = await ctx.thingsTool.loadMeta();
     created.settings = { ...structuredClone(meta.template ?? {}), tag: created.name };
+    if (terrain) created.settings = starterSettings(created.settings, terrain);
     delete created.settings._note;
     // The engine has the last word: an area made since the list was read (another tab, a teammate) is refused with 409.
     if (!(await saveNew(created, replace))) {

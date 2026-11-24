@@ -11,6 +11,11 @@ of that release; before 1.0, a minor version may change the HTTP API between the
   Placeables (object mode) cast none, as in the game.
 - **Baked shadows are as dark as in the game.** The view darkened them about half as much: the game multiplies them in display
   colours and the view did in linear ones.
+- **Four sample landscapes** in New area: a canyon (a sandy floor between stepped rock walls), a snowy mountain pass (a path
+  over a saddle between cliffs, snow falling), a dune desert and a valley with a lake. Each is painted with the starter
+  library's textures (or the area's default where a team's library lacks them), lit, and given a sky box and weather; each is
+  different every time. Their walkable ground passes the path check: every route works, with a few *too winding* tiles where a
+  wall crosses the grid at an angle.
 
 ## 0.2.4
 
