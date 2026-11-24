@@ -12,7 +12,7 @@ from the engine.
 What it does (*team* marks what only a team server offers, see nwn-landscaper's
 [TEAM-SERVER.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/TEAM-SERVER.md)):
 
-- **Sculpt** the ground: raise, lower, smooth, flatten; water; cave entrances.
+- **Sculpt** the ground: raise, lower, smooth, flatten; water; cave entrances; or start it from a greyscale heightmap image.
 - **Paint** with a texture library the engine builds from your own game files, or pick a texture up from the ground.
 - **Caves and interiors**: cut rooms and passages out of rock, ramps and descending halls, a ceiling height.
 - **Things**: creatures, placeables, doors, waypoints, triggers, sounds, encounters, stores and items from the module's
@@ -104,6 +104,10 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   step down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See
   nwn-landscaper's [BUILDER-WORKFLOW.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/BUILDER-WORKFLOW.md) for the
   rules and the limits.
+- **Area > Import heightmap** replaces the open area's ground with a greyscale image (its top is north): the heights black
+  and white stand for, stretched over the area or cropped to its shape. A 16-bit PNG is read at its full 65,536 levels; an
+  8-bit image (JPEG, WebP, an 8-bit PNG) has 256, so *Smooth out steps* rounds off its terraces. Paint, water and things stay;
+  Undo puts the old ground back. Not for caves and interiors.
 - **Walkable** (`W`) tints ground too steep for NWN creatures in red, by the same rule the exporter
   uses. The status bar shows position, height, tile and walkability under the cursor.
 - **Export to NWN** builds the hak (into your NWN `hak/` folder) and module (into `modules/`, ready

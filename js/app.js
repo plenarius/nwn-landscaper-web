@@ -29,6 +29,7 @@ import { initPublish } from './publish.js';
 import { initScripts } from './scripts.js';
 import { initReport, showError } from './report.js';
 import { initNewArea } from './newarea.js';
+import { initHeightmap } from './heightmap.js';
 import { initPlace, selectObject, removeObject, changeSelected, transformer, showPlaceables } from './place.js';
 import { initScatter, showScatterables } from './scatter.js';
 import { initWater } from './water.js';
@@ -563,6 +564,7 @@ $('menuArea')
     .querySelector('.menu-btn')
     .addEventListener('click', () => {
         $('btnCeiling').hidden = !area?.enclosed();
+        $('btnHeightmap').hidden = !area || area.enclosed();
     });
 $('btnCeiling').onclick = async () => {
     if (!area?.enclosed() || readOnly) return;
@@ -588,6 +590,16 @@ $('btnRedo').onclick = () => {
 
 // The New area dialog (newarea.js).
 initNewArea({ setArea, thingsTool, library });
+
+// Import heightmap (heightmap.js): the whole ground changes, so all of it is redrawn and saved.
+initHeightmap({
+    area: () => area,
+    readOnly: () => readOnly,
+    changed: () => {
+        area.lastChange = null;
+        refreshAll();
+    },
+});
 
 initExport(editor);
 
