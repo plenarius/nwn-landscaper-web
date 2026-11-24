@@ -122,7 +122,9 @@ function updatePanels() {
     $('btnSky').classList.toggle('active', skyOpen);
 }
 // Creatures, waypoints, triggers, sounds...: the Things tool.
+let showLabel = () => {}; // the Show button's text, set with the Show menu below
 const thingsTool = new ThingsTool({
+    onActive: () => showLabel(),
     $,
     area: () => area,
     view,
@@ -369,9 +371,11 @@ initStrokes({
 // The Show menu: which kinds of thing are on the map out of the Things tool.
 {
     const boxes = [...document.querySelectorAll('#menuShow input[data-kind]')];
+    // In the Things tool everything shows, whatever is ticked: the button says so.
     const label = () => {
-        $('btnShow').textContent = `Show (${thingsTool.shown.size})`;
+        $('btnShow').textContent = thingsTool.active ? 'Show: all (Things tool)' : `Show (${thingsTool.shown.size})`;
     };
+    showLabel = label;
     for (const cb of boxes) {
         cb.checked = thingsTool.shown.has(cb.dataset.kind);
         cb.closest('label').style.setProperty('--kind', css(THING_COLOURS[cb.dataset.kind] ?? 0xffffff));
