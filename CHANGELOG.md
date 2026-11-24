@@ -4,6 +4,10 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## 0.3.1
+
+- **No change to the editor.** Released with the engine's 0.3.1, whose exports of imported areas are quicker again.
+
 ## 0.3.0
 
 - **The view shows baked objects' shadows.** Trees and other baked objects cast their shadows on the ground as the engine
