@@ -198,6 +198,7 @@ export class ThingsTool {
 
     show() {
         this.active = true;
+        this.ctx.onActive?.();
         this.loadMeta();
         this.loadLinks();
         this.refresh();
@@ -220,6 +221,7 @@ export class ThingsTool {
 
     hide() {
         this.active = false;
+        this.ctx.onActive?.();
         this.workOrig = null;
         this.draft = null;
         this.redrawing = null;
