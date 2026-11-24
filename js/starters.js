@@ -272,7 +272,7 @@ function lakeValley(area, base, rand, library) {
             h[k] = base + 0.5 + meadow[k] + ring - dip;
         }
     }
-    // The water's level: under the lowest ground just outside the lake, so the body never spills into the meadow.
+    // The water's level: under the lowest ground in a ring round the lake, so the body never spills into the meadow.
     let rim = Infinity,
         deepest = 0;
     for (let k = 0; k < nx * ny; k++) {
