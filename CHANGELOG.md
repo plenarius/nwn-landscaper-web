@@ -4,6 +4,14 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## Unreleased
+
+- **The view shows baked objects' shadows.** Trees and other baked objects cast their shadows on the ground as the engine
+  bakes them: from the game's sun, through the gaps in leaves, at the area's shadow strength, in either light.
+  Placeables (object mode) cast none, as in the game.
+- **Baked shadows are as dark as in the game.** The view darkened them about half as much: the game multiplies them in display
+  colours and the view did in linear ones.
+
 ## 0.2.4
 
 - **The Place list's pictures check which way up they come back.** On a builder's machine they stayed upside down after
