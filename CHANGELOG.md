@@ -19,6 +19,10 @@ of that release; before 1.0, a minor version may change the HTTP API between the
 - **Import heightmap** (Area menu): a greyscale image becomes the open area's ground, black and white at the heights you give,
   stretched over the area or cropped to its shape. 16-bit PNGs are read at full precision (the browser alone gives 8 bits,
   256 levels); 8-bit images can be smoothed to hide their steps. Undoable.
+- **Underlay** (Area menu): a picture under the ground to paint, raise and place on top of, such as a battlemat or a map from
+  a book. It can be made see-through, moved by dragging, turned, sized by its width or by two points a known distance apart
+  (in metres or feet), and hidden with `U`. Where it lies is saved with the area; the picture is kept by the engine beside
+  the area, so it is there on another computer. Needs the engine of the same release (`/api/underlay`).
 
 ## 0.2.4
 
