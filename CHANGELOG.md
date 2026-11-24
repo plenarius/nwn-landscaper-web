@@ -16,6 +16,9 @@ of that release; before 1.0, a minor version may change the HTTP API between the
   library's textures (or the area's default where a team's library lacks them), lit, and given a sky box and weather; each is
   different every time. Their walkable ground passes the path check: every route works, with a few *too winding* tiles where a
   wall crosses the grid at an angle.
+- **Import heightmap** (Area menu): a greyscale image becomes the open area's ground, black and white at the heights you give,
+  stretched over the area or cropped to its shape. 16-bit PNGs are read at full precision (the browser alone gives 8 bits,
+  256 levels); 8-bit images can be smoothed to hide their steps. Undoable.
 
 ## 0.2.4
 

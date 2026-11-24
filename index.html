@@ -52,6 +52,7 @@
                 <button type="button" class="menu-item" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span><span>Sky &amp; fog</span><kbd>L</kbd></button>
                 <button type="button" class="menu-item" id="btnCeiling" hidden title="How high the ceiling stays over the floor in a cave or interior"><span>Ceiling height…</span></button>
                 <button type="button" class="menu-item" id="btnSettings" title="Name, tag, scripts, weather, music... of this area"><span>Area settings…</span></button>
+                <button type="button" class="menu-item" id="btnHeightmap" title="Replace this area's ground with a greyscale heightmap image"><span>Import heightmap…</span></button>
             </div>
         </div>
         <div class="spacer"></div>
@@ -373,6 +374,30 @@
             <label id="askLabel" hidden><span id="askLabelText"></span><input type="text" id="askInput" maxlength="200" autocomplete="off"></label>
             <p id="askError" class="note err" hidden></p>
             <div class="dialog-buttons"><button type="submit" value="ok" id="askOk">OK</button><button type="submit" value="cancel" id="askCancel">Cancel</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="heightmapDialog" aria-labelledby="heightmapTitle">
+        <form method="dialog">
+            <h2 id="heightmapTitle">Import a heightmap</h2>
+            <p class="note">A greyscale image becomes this area's ground; its top is north. The paint, water and things stay where they are. Undo puts the old ground back.</p>
+            <label>Image <small>PNG (16-bit read at full precision), JPEG, WebP, GIF or BMP</small>
+                <input type="file" id="heightmapFile" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"></label>
+            <canvas id="heightmapPreview" class="heightmap-preview" width="1" height="1" hidden></canvas>
+            <p id="heightmapInfo" class="note"></p>
+            <div class="size-free"><label>Black <input id="heightmapLow" type="number" min="0" max="200" step="0.5" value="0"></label>
+                <label>White <input id="heightmapHigh" type="number" min="0" max="200" step="0.5" value="20"></label><small>metres</small></div>
+            <label>Fit</label>
+            <div class="start-choices">
+                <label><input type="radio" name="heightmapFit" value="stretch" checked> Stretch over the area <small>(the whole image; a different shape is squeezed)</small></label>
+                <label><input type="radio" name="heightmapFit" value="crop"> Keep its shape <small>(the middle of the image, cut to the area's shape)</small></label>
+            </div>
+            <label class="check"><input type="checkbox" id="heightmapSmooth"> Smooth out steps <small>(an 8-bit image has 256 levels: over 20 m, steps of 8 cm)</small></label>
+            <p id="heightmapError" class="note err" hidden></p>
+            <div class="dialog-buttons">
+                <button type="submit" value="cancel" formnovalidate>Cancel</button>
+                <button type="submit" value="ok" id="heightmapOk" class="primary" disabled>Import</button>
+            </div>
         </form>
     </dialog>
 
