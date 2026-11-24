@@ -13,6 +13,7 @@ What it does (*team* marks what only a team server offers, see nwn-landscaper's
 [TEAM-SERVER.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/TEAM-SERVER.md)):
 
 - **Sculpt** the ground: raise, lower, smooth, flatten; water; cave entrances; or start it from a greyscale heightmap image.
+- **Underlay**: lay a battlemat or a map under the area, scale it by two points a known distance apart, and trace over it.
 - **Paint** with a texture library the engine builds from your own game files, or pick a texture up from the ground.
 - **Caves and interiors**: cut rooms and passages out of rock, ramps and descending halls, a ceiling height.
 - **Things**: creatures, placeables, doors, waypoints, triggers, sounds, encounters, stores and items from the module's
@@ -108,6 +109,10 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   and white stand for, stretched over the area or cropped to its shape. A 16-bit PNG is read at its full 65,536 levels; an
   8-bit image (JPEG, WebP, an 8-bit PNG) has 256, so *Smooth out steps* rounds off its terraces. Paint, water and things stay;
   Undo puts the old ground back. Not for caves and interiors.
+- **Area > Underlay** lays a picture under the ground to trace over: a virtual tabletop battlemat, or a map from a book (as
+  an image: PNG, JPEG, WebP, GIF or BMP, up to 16 MB). Set how see-through it is, drag it with **Move**, turn it, and size it
+  with **Scale by 2 points**: click two points of the picture a known distance apart (two corners of a square) and say how far,
+  in metres or feet (`5 ft`). `U` shows or hides it. The engine keeps the picture beside the area; it is never exported.
 - **Walkable** (`W`) tints ground too steep for NWN creatures in red, by the same rule the exporter
   uses. The status bar shows position, height, tile and walkability under the cursor.
 - **Export to NWN** builds the hak (into your NWN `hak/` folder) and module (into `modules/`, ready

@@ -248,3 +248,31 @@ input[type="color"] {
     user-select: text;
     -webkit-user-select: text;
 }
+
+/* The underlay panel: its buttons in a row that wraps, and its width and turn side by side. */
+.underlay-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0;
+}
+.underlay-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+}
+.underlay-fields label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    white-space: nowrap;
+}
+.underlay-fields input {
+    width: 5.5em;
+}
+#underlayMove.active,
+#underlayMeasure.active {
+    border-color: var(--accent);
+    color: var(--accent);
+}

@@ -65,6 +65,9 @@ export class Area {
         this.things = [];
         this.nextThingId = 1;
         this.settings = null;
+        // A picture laid under the ground to trace over (underlay.js): where it lies { x, y, w, h, angle, opacity, shown };
+        // the engine keeps the picture itself. null: none.
+        this.underlay = null;
         // An imported area's own objects, as the editor changed them: { removed: ["Creature List:3"], moved: { "Placeable List:7": { x, y, bearing } } }.
         this.originals = { removed: [], moved: {}, edited: {} };
         // 'surface', 'underground' (a cave dug out of rock up to `roof`) or
@@ -439,6 +442,7 @@ export class Area {
             settings: this.settings,
             originals: this.originals,
             created: this.created,
+            underlay: this.underlay,
         };
     }
 
@@ -461,6 +465,7 @@ export class Area {
         if (Array.isArray(o.things)) area.things = o.things;
         area.nextThingId = o.nextThingId ?? Math.max(0, ...area.things.map(x => x.id ?? 0)) + 1;
         if (o.settings) area.settings = o.settings;
+        if (o.underlay && typeof o.underlay === 'object') area.underlay = o.underlay;
         if (o.originals)
             area.originals = { removed: o.originals.removed ?? [], moved: o.originals.moved ?? {}, edited: o.originals.edited ?? {} };
         area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;

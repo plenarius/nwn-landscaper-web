@@ -30,6 +30,7 @@ import { initScripts } from './scripts.js';
 import { initReport, showError } from './report.js';
 import { initNewArea } from './newarea.js';
 import { initHeightmap } from './heightmap.js';
+import { initUnderlay, underlayAreaChanged, underlayEscape, toggleUnderlay, showUnderlay, hideUnderlay } from './underlay.js';
 import { initPlace, selectObject, removeObject, changeSelected, transformer, showPlaceables } from './place.js';
 import { initScatter, showScatterables } from './scatter.js';
 import { initWater } from './water.js';
@@ -105,20 +106,29 @@ function selectTool(id) {
 // One panel over the left of the view: the sky's when open, else the
 // texture picker while painting, the placeables while placing.
 let skyOpen = false;
+// The underlay's panel lies there too, in place of the sky's.
+let underlayOpen = false;
 function updatePanels() {
+    if (underlayOpen && skyOpen) underlayOpen = false;
+    $('underlayPanel').hidden = !underlayOpen;
+    $('btnUnderlay').classList.toggle('active', underlayOpen);
+    if (underlayOpen) showUnderlay();
+    else hideUnderlay();
     $('skyPanel').hidden = !skyOpen;
-    $('palette').hidden = skyOpen || tool !== 'paint';
-    $('placePanel').hidden = skyOpen || tool !== 'place';
-    $('rampPanel').hidden = skyOpen || tool !== 'ramp';
-    $('descentPanel').hidden = skyOpen || tool !== 'descent';
-    $('entrancePanel').hidden = skyOpen || tool !== 'entrance';
-    if (tool === 'entrance' && !skyOpen) showEntrances();
-    $('scatterPanel').hidden = skyOpen || tool !== 'scatter';
-    if (tool === 'scatter' && !skyOpen) showScatterables();
+    // (either lies over the tools' panels)
+    const over = skyOpen || underlayOpen;
+    $('palette').hidden = over || tool !== 'paint';
+    $('placePanel').hidden = over || tool !== 'place';
+    $('rampPanel').hidden = over || tool !== 'ramp';
+    $('descentPanel').hidden = over || tool !== 'descent';
+    $('entrancePanel').hidden = over || tool !== 'entrance';
+    if (tool === 'entrance' && !over) showEntrances();
+    $('scatterPanel').hidden = over || tool !== 'scatter';
+    if (tool === 'scatter' && !over) showScatterables();
     if (tool !== 'place' && view.selected) selectObject(null);
-    if (tool === 'place' && !skyOpen) showPlaceables();
-    $('thingsPanel').hidden = skyOpen || tool !== 'things';
-    if (tool === 'things' && !skyOpen) thingsTool.show();
+    if (tool === 'place' && !over) showPlaceables();
+    $('thingsPanel').hidden = over || tool !== 'things';
+    if (tool === 'things' && !over) thingsTool.show();
     else thingsTool.hide();
     $('btnSky').classList.toggle('active', skyOpen);
 }
@@ -342,10 +352,20 @@ async function openArea(a, settle = true) {
 initScatter(editor);
 
 initSky({ ...editor, saveSoon });
+initUnderlay({ ...editor, saveSoon });
 initMenus();
 
 $('btnSky').onclick = () => {
     skyOpen = !skyOpen;
+    updatePanels();
+};
+$('btnUnderlay').onclick = () => {
+    underlayOpen = !underlayOpen;
+    skyOpen = false;
+    updatePanels();
+};
+$('underlayClose').onclick = () => {
+    underlayOpen = false;
     updatePanels();
 };
 $('skyClose').onclick = () => {
@@ -442,6 +462,7 @@ function setArea(a, blank = false) {
     showAreaSky(a);
     if (tool === 'entrance' && !skyOpen) showEntrances();
     if (!blank) checkSoon();
+    underlayAreaChanged();
 }
 
 // Who is signed in (on a team server) and whose workspace is shown: your own,
@@ -646,6 +667,13 @@ window.addEventListener('keydown', e => {
         e.preventDefault();
         return;
     }
+    // Escape stops the underlay's move or measure, then closes its panel.
+    if (e.key === 'Escape' && underlayEscape()) return;
+    if (e.key === 'Escape' && underlayOpen) {
+        underlayOpen = false;
+        updatePanels();
+        return;
+    }
     // Escape closes Sky & fog, which lies over the tools' panels.
     if (e.key === 'Escape' && skyOpen) {
         skyOpen = false;
@@ -708,6 +736,7 @@ window.addEventListener('keydown', e => {
         /* the browser's own (Ctrl+F, Ctrl+N, Ctrl+O...) */
     } else if (key === 'w') $('btnWalk').click();
     else if (key === 'l') $('btnSky').click();
+    else if (key === 'u') toggleUnderlay();
     else if (key === 'n' || key === 'o') {
         // (not typed into the dialog's first box as well)
         e.preventDefault();

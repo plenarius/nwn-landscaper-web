@@ -59,6 +59,17 @@ const SHADE_FRAGMENT = `
         if (vGap <= ${VOID_BELOW.toFixed(2)}) diffuseColor.rgb = vec3(0.0);
     }`;
 
+// The underlay (underlay.js): a picture lying on the ground to trace over, blended over the ground's colour where it covers
+// it. uUnderM maps area metres to the picture's 0..1; uUnderOpacity 0 hides it.
+const UNDERLAY_FRAGMENT = `
+    if (uUnderOpacity > 0.0) {
+        vec2 uv = (uUnderM * vec3(vArea, 1.0)).xy;
+        if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)))) {
+            vec4 under = texture2D(uUnder, uv);
+            diffuseColor.rgb = mix(diffuseColor.rgb, under.rgb, under.a * uUnderOpacity);
+        }
+    }`;
+
 const SPLAT_VERTEX = `
     vArea = vec2(transformed.x, uSize.y - transformed.z);
     vUp = transformed.y;
@@ -203,7 +214,12 @@ export class View {
             // An imported area's picture, and its palette index (-1: none).
             uImport: { value: null },
             uImportLayer: { value: -1 },
+            // The underlay's picture, where it lies (area metres to its 0..1) and how opaque it is (0: not shown).
+            uUnder: { value: new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1) },
+            uUnderM: { value: new THREE.Matrix3() },
+            uUnderOpacity: { value: 0 },
         };
+        this.uniforms.uUnder.value.needsUpdate = true;
         this.uniforms.uTex.value.needsUpdate = true;
         this.raycaster = new THREE.Raycaster();
         this.dirty = null;
@@ -345,9 +361,9 @@ export class View {
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform vec2 uSize;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
+                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
                 )
-                .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${SHADE_FRAGMENT}`);
+                .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
         return material;
@@ -550,6 +566,44 @@ export class View {
         sph.phi = 0.02;
         this.camera.position.copy(this.controls.target).add(off.setFromSpherical(sph));
         this.controls.update();
+    }
+
+    /** Lays picture `image` (an HTMLImageElement or canvas; null: none) under the ground, as underlay.js keeps it. */
+    setUnderlayPicture(image) {
+        const old = this.uniforms.uUnder.value;
+        const tex = image ? new THREE.Texture(image) : new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
+        if (image) {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.anisotropy = 4;
+            tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+        }
+        tex.needsUpdate = true;
+        this.uniforms.uUnder.value = tex;
+        old.dispose();
+    }
+
+    /** Where the underlay lies: `u` is { x, y (its middle, area metres), w, h (metres), angle (radians, anticlockwise),
+     *  opacity (0 to 1), shown }, or null for none. */
+    setUnderlayPlace(u) {
+        if (!u?.shown || !(u.w > 0) || !(u.h > 0)) {
+            this.uniforms.uUnderOpacity.value = 0;
+            return;
+        }
+        const c = Math.cos(u.angle ?? 0),
+            s = Math.sin(u.angle ?? 0);
+        // Area point p: its offset from the middle turned back by the angle, over the size, plus a half.
+        this.uniforms.uUnderM.value.set(
+            c / u.w,
+            s / u.w,
+            -(c * u.x + s * u.y) / u.w + 0.5,
+            -s / u.h,
+            c / u.h,
+            (s * u.x - c * u.y) / u.h + 0.5,
+            0,
+            0,
+            1,
+        );
+        this.uniforms.uUnderOpacity.value = Math.min(1, Math.max(0, u.opacity ?? 0.6));
     }
 
     /** The whole area, as a dirty range. */
