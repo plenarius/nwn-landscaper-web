@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// The top bar's menus (File, Area, Show, Share): one open at a time, closed by a pick, a click elsewhere or Escape.
+// The top bar's menus (File, Area, Show, Share, and the version beside the title): one open at a time, closed by a pick, a click elsewhere or Escape.
 // From the keyboard: Enter, Space or the down arrow opens one at its first item, the arrows (and Home, End) move through
 // its items, Escape closes it and gives the focus back to its button, and Tab out of it closes it.
 function closeMenus() {
@@ -12,9 +12,9 @@ function closeMenus() {
         btn.setAttribute('aria-expanded', 'false');
     }
 }
-/** A menu's items that can take the focus now: its buttons and ticks, shown and not off. */
+/** A menu's items that can take the focus now: its buttons, ticks and links, shown and not off. */
 const menuItems = list =>
-    [...list.querySelectorAll('button, input')].filter(i => !i.disabled && !i.closest('[hidden]') && i.getClientRects().length);
+    [...list.querySelectorAll('button, input, a[href]')].filter(i => !i.disabled && !i.closest('[hidden]') && i.getClientRects().length);
 
 /** Wires every `.menu` of the page: opening, closing and moving through it from the keyboard. */
 export function initMenus() {
