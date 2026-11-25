@@ -31,6 +31,72 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
+/* The Paint panel's categories: each heading a button that collapses its textures (palette.js), and Collapse all and Expand
+   all over them. */
+.palette-all {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin: 2px 0 -4px;
+}
+.palette-all button {
+    padding: 2px 8px;
+    font-size: 12px;
+    color: var(--muted);
+    background: none;
+    border-color: transparent;
+}
+.palette-all button:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--panel-2);
+}
+.palette-all button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+.side-panel h4:has(> .category) {
+    margin: 8px 0 4px;
+}
+.side-panel h4 .category {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 4px 4px 2px;
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    text-align: left;
+    background: none;
+    border: none;
+}
+.side-panel h4 .category:hover {
+    color: var(--text);
+    background: var(--panel-2);
+}
+.category .chevron::before {
+    content: "▾";
+    display: inline-block;
+    width: 10px;
+    transition: transform 0.12s;
+}
+.category[aria-expanded="false"] .chevron::before {
+    transform: rotate(-90deg);
+}
+.category .count {
+    margin-left: auto;
+    padding: 0 7px;
+    font-size: 11px;
+    letter-spacing: 0;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 9px;
+}
+.swatches[hidden],
+.swatch[hidden] {
+    display: none;
+}
+
 .swatches {
     display: grid;
     grid-template-columns: repeat(3, 76px);
