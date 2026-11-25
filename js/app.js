@@ -13,6 +13,7 @@ import { View } from './view.js';
 import { TOOLS } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
+import { COLLAPSED_KEY, allCollapsed, categoriesOf, opened, readCollapsed, swatchHidden, toggled, writeCollapsed } from './palette.js';
 import { ThingsTool } from './things.js';
 import './thingprops.js'; // (adds the properties panel to ThingsTool)
 import './newbp.js'; // (adds the builder's own blueprints to ThingsTool)
@@ -164,7 +165,8 @@ $('btnWalk').onclick = () => {
 const library = new TextureLibrary();
 let paintTexture = DEFAULT_TEXTURE;
 
-const CATEGORY_ORDER = ['Grass', 'Flowers & leaves', 'Earth', 'Rock', 'Sand', 'Snow', 'Floors', 'Walls', 'Special'];
+// The categories collapsed in the Paint panel (palette.js), as this browser last left them.
+let collapsed = readCollapsed(store.get(COLLAPSED_KEY));
 
 function buildPalette() {
     const body = $('paletteBody');
@@ -174,31 +176,82 @@ function buildPalette() {
             '<p>No texture library. Run the page from <code>landscaper serve</code>: it builds a starter library from your game files the first time (or run <code>landscaper textures init</code>).</p>';
         return;
     }
-    const categories = [...new Set(library.catalog.map(t => t.category))].sort(
-        (a, b) => (CATEGORY_ORDER.indexOf(a) + 1 || 99) - (CATEGORY_ORDER.indexOf(b) + 1 || 99),
+    const categories = categoriesOf(library.catalog);
+    body.append(
+        el(
+            'div',
+            { className: 'palette-all' },
+            el('button', {
+                type: 'button',
+                id: 'paletteCollapse',
+                textContent: 'Collapse all',
+                onclick: () => setCollapsed(allCollapsed(collapsed, categories)),
+            }),
+            el('button', { type: 'button', id: 'paletteExpand', textContent: 'Expand all', onclick: () => setCollapsed(new Set()) }),
+        ),
     );
-    for (const category of categories) {
-        const h = document.createElement('h4');
-        h.textContent = category;
-        const grid = document.createElement('div');
-        grid.className = 'swatches';
-        for (const t of library.catalog.filter(t => t.category === category)) {
+    categories.forEach((category, k) => {
+        const textures = library.catalog.filter(t => t.category === category);
+        const grid = el('div', { className: 'swatches', id: `paletteCategory${k}` });
+        grid.dataset.category = category;
+        for (const t of textures) {
             const b = document.createElement('button');
             b.className = 'swatch';
             b.dataset.texture = t.id;
             b.title = `${t.name} (${t.source})`;
             b.append(el('img', { loading: 'lazy', alt: '', src: library.swatchUrl(t.id) }), el('span', { textContent: t.name }));
-            b.onclick = () => selectTexture(t.id);
+            b.onclick = () => selectTexture(t.id, false);
             grid.appendChild(b);
         }
-        body.append(h, grid);
-    }
-    selectTexture(paintTexture);
+        const head = el(
+            'button',
+            { type: 'button', className: 'category', onclick: () => setCollapsed(toggled(collapsed, category)) },
+            el('span', { className: 'chevron', ariaHidden: 'true' }),
+            el('span', { className: 'name', textContent: category }),
+            el('span', { className: 'count', textContent: String(textures.length), title: `${textures.length} textures` }),
+        );
+        head.dataset.category = category;
+        head.setAttribute('aria-controls', grid.id);
+        body.append(el('h4', {}, head), grid);
+    });
+    selectTexture(paintTexture, false);
 }
 
-function selectTexture(id) {
+/** Collapses the Paint panel's categories in `next` (a set of their names) and opens the others, and keeps that in this browser. */
+function setCollapsed(next) {
+    collapsed = next;
+    store.set(COLLAPSED_KEY, writeCollapsed(collapsed));
+    showCollapsed();
+}
+
+/** Shows each category of the Paint panel open or collapsed as `collapsed` says. A collapsed one keeps the texture painted with. */
+function showCollapsed() {
+    const categories = [];
+    for (const grid of document.querySelectorAll('#paletteBody .swatches')) {
+        const category = grid.dataset.category;
+        categories.push(category);
+        let shown = 0;
+        for (const b of grid.querySelectorAll('.swatch')) {
+            b.hidden = swatchHidden(collapsed, category, b.dataset.texture, paintTexture);
+            if (!b.hidden) shown++;
+        }
+        grid.hidden = shown === 0;
+        const head = document.querySelector(`#paletteBody .category[aria-controls="${grid.id}"]`);
+        head.setAttribute('aria-expanded', String(!collapsed.has(category)));
+    }
+    if (!$('paletteCollapse')) return;
+    $('paletteCollapse').disabled = categories.every(c => collapsed.has(c));
+    $('paletteExpand').disabled = !categories.some(c => collapsed.has(c));
+}
+
+/** Paints with texture `id`. `reveal` (any route but a click on its swatch) opens its category and scrolls its swatch into view. */
+function selectTexture(id, reveal = true) {
     paintTexture = id;
+    const category = library.byId.get(id)?.category;
+    if (reveal && collapsed.has(category)) setCollapsed(opened(collapsed, category));
+    else showCollapsed();
     for (const b of document.querySelectorAll('#paletteBody .swatch')) b.classList.toggle('active', b.dataset.texture === id);
+    if (reveal) document.querySelector(`#paletteBody .swatch[data-texture="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' });
     // Start loading it now so the first dab shows at once.
     library.layerPixels(id).catch(() => {});
 }
@@ -224,7 +277,6 @@ async function pickTexture(p) {
     if (!ground) return;
     if (!ground.startsWith('@import:')) {
         selectTexture(ground);
-        document.querySelector(`#paletteBody .swatch[data-texture="${CSS.escape(ground)}"]`)?.scrollIntoView({ block: 'nearest' });
         say(`Picked ${library.byId.get(ground)?.name ?? ground}.`);
         return;
     }
@@ -254,7 +306,6 @@ async function pickTexture(p) {
         buildPalette();
     }
     selectTexture(r.id);
-    document.querySelector(`#paletteBody .swatch[data-texture="${CSS.escape(r.id)}"]`)?.scrollIntoView({ block: 'nearest' });
     say(r.added ? `Picked ${r.name}: added to the Tileset textures.` : `Picked ${library.byId.get(r.id)?.name ?? r.name}.`);
 }
 

@@ -102,6 +102,9 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 - **Pick a texture up**: in the Paint tool press `I` (or the **Pick from the ground** button, or Alt-click) and click the ground. On painted
   ground it picks that texture; on an imported area it picks the tileset's own texture under the click and adds it to the library
   (under **Tileset**) the first time.
+- **Texture categories**: click a category's heading in the Paint panel to fold its textures away, or use **Collapse all** and
+  **Expand all**. A folded category still shows the texture you paint with, and picking a texture up opens its category. This
+  browser remembers which are folded.
 - **Caves and interiors**: cut rooms and passages out of the rock with Room and Dig (passages about 6 m wide at least, along tile
   middles). Lay a Ramp between levels (a little wider than the passage), or drag a box with Descent to fill it with halls that
   step down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See
