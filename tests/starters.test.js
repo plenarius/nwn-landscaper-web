@@ -126,6 +126,48 @@ test('a library without the stock textures falls back to the default texture', (
     assert.deepEqual(a.palette, ['grassMedium']);
 });
 
+// A team library that names its textures its own way (like the Layonara forge's): no starter library ids for sand or snow.
+const TEAM = [
+    ['grassMedium', 'Grass', 'Grass'],
+    ['grassDry', 'Dry grass', 'Grass'],
+    ['grassMossy', 'Mossy grass', 'Grass'],
+    ['dirt', 'Dirt', 'Earth'],
+    ['forestGround', 'Forest floor', 'Earth'],
+    ['mud', 'Swamp mud', 'Earth'],
+    ['cracked', 'Cracked earth', 'Earth'],
+    ['gravelSandy', 'Sandy gravel', 'Earth'],
+    ['rock', 'Rock', 'Rock'],
+    ['canyonRock', 'Red canyon rock', 'Rock'],
+    ['sand', 'Sand', 'Sand'],
+    ['beach', 'Beach', 'Sand'],
+    ['desertSand', 'Desert sand', 'Sand'],
+    ['snow', 'Snow', 'Snow'],
+    ['patchySnow', 'Patchy snow', 'Snow'],
+    ['rockSnow', 'Rocks in snow', 'Snow'],
+    ['winterRock', 'Winter rock', 'Snow'],
+].map(([id, name, category]) => ({ id, name, category }));
+
+test("a team library's own textures stand in by category: snow stays snow, sand stays sand", () => {
+    const team = { catalog: TEAM, byId: new Map(TEAM.map(t => [t.id, t])) };
+    const category = id => team.byId.get(id)?.category;
+    const paletteOf = id => {
+        const a = Area.create('aa', 16, 'flat', 5);
+        seedTerrain(a, TERRAIN_STARTERS[id], 5, team, 3);
+        return a.palette;
+    };
+    const pass = paletteOf('snowy-pass');
+    assert.ok(
+        pass.every(t => category(t) === 'Snow'),
+        pass.join(),
+    );
+    assert.ok(pass.includes('snow') && pass.includes('patchySnow'), pass.join());
+    assert.ok(paletteOf('dunes').every(t => category(t) === 'Sand'));
+    const lake = paletteOf('lake-valley');
+    assert.ok(lake.includes('mud') && lake.includes('beach') && lake.includes('forestGround'), lake.join());
+    const canyon = paletteOf('canyon');
+    assert.ok(canyon.includes('canyonRock') && canyon.includes('gravelSandy') && canyon.includes('sand'), canyon.join());
+});
+
 test('the same seed makes the same landscape', () => {
     assert.deepEqual(make('dunes', 9).heights, make('dunes', 9).heights);
     assert.notDeepEqual(make('dunes', 9).heights, make('dunes', 10).heights);

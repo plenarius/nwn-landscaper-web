@@ -96,12 +96,32 @@ function rise(area, k) {
     return r;
 }
 
-/** Paints every sample with the texture `role(k, steep)` names (a key of `textures`); `steep` is the sample's rise over
- *  MAX_RISE (1 and over: too steep to walk). Each key's texture is the first of its ids the library has (a team's own
- *  library may lack the starter library's); none: the area's default. */
+/** The texture for one of `paint`'s keys: the first of `wanted` the library has. A string is a starter library id; an array is
+ *  `[category, ...words]`, the library's first texture of that category whose id or name holds the first word that any holds,
+ *  else its first of that category (a team's own library names its textures its own way). None: the area's default. */
+function pick(library, wanted) {
+    const all = library.catalog ?? [...library.byId.values()];
+    for (const w of wanted) {
+        if (typeof w === 'string') {
+            if (library.byId.has(w)) return w;
+            continue;
+        }
+        const [category, ...words] = w;
+        const of = all.filter(t => t?.category === category);
+        for (const word of words) {
+            const t = of.find(t => `${t.id} ${t.name ?? ''}`.toLowerCase().includes(word));
+            if (t) return t.id;
+        }
+        if (of.length) return of[0].id;
+    }
+    return DEFAULT_TEXTURE;
+}
+
+/** Paints every sample with the texture `role(k, steep)` names (a key of `textures`, each a `pick` list); `steep` is the
+ *  sample's rise over MAX_RISE (1 and over: too steep to walk). */
 function paint(area, library, textures, role) {
     const chosen = {};
-    for (const [key, ids] of Object.entries(textures)) chosen[key] = ids.find(id => library.byId.has(id)) ?? DEFAULT_TEXTURE;
+    for (const [key, wanted] of Object.entries(textures)) chosen[key] = pick(library, wanted);
     area.palette = [];
     const index = {};
     for (const [key, id] of Object.entries(chosen)) index[key] = area.materialIndex(id);
@@ -140,11 +160,11 @@ function canyon(area, base, rand, library) {
         area,
         library,
         {
-            sand: ['sandFine', 'sandSoft', 'dirt'],
-            gravel: ['gravelPebbles', 'gravelGrey', 'dirtBrown'],
-            wall: ['canyonRock', 'rockRed', 'rock'],
-            ledge: ['earthCracked', 'dirtBrown', 'dirt'],
-            top: ['grassDry', 'earthCracked', 'dirt'],
+            sand: ['sandFine', 'sandSoft', ['Sand', 'fine', 'sand'], 'dirt'],
+            gravel: ['gravelPebbles', 'gravelGrey', ['Earth', 'gravel', 'pebble'], ['Rock', 'pebble', 'cobble'], 'dirtBrown'],
+            wall: ['canyonRock', 'rockRed', ['Rock', 'canyon', 'red'], 'rock'],
+            ledge: ['earthCracked', 'dirtBrown', ['Earth', 'crack', 'parched', 'dry'], 'dirt'],
+            top: ['grassDry', ['Grass', 'dry'], 'earthCracked', 'dirt'],
         },
         (k, steep) => {
             if (steep > 0.8) return 'wall';
@@ -186,10 +206,10 @@ function snowyPass(area, base, rand, library) {
         area,
         library,
         {
-            path: ['snowPacked', 'snowFresh', 'gravelGrey'],
-            snow: ['snowFresh', 'snowDrift', 'snowPacked'],
-            drift: ['snowDrift', 'snowFresh', 'snowPacked'],
-            rock: ['rockFrosted', 'winterRock', 'rockGrey'],
+            path: ['snowPacked', 'snowFresh', ['Snow', 'pack', 'rock', 'snow'], 'gravelGrey'],
+            snow: ['snowFresh', 'snowDrift', 'snowPacked', ['Snow', 'fresh', 'snow']],
+            drift: ['snowDrift', 'snowFresh', 'snowPacked', ['Snow', 'drift', 'patch', 'snow']],
+            rock: ['rockFrosted', 'winterRock', ['Snow', 'winter', 'rock'], ['Rock', 'grey', 'rock'], 'rockGrey'],
         },
         (k, steep) => {
             // Snow lies on the cliffs' gentler parts, as it would up to about 60 degrees; the steepest are bare rock.
@@ -230,9 +250,9 @@ function dunes(area, base, rand, library) {
         area,
         library,
         {
-            dune: ['sandDune', 'sandFine', 'sandSoft'],
-            trough: ['sandSoft', 'sandFine', 'sandDune'],
-            face: ['sandFine', 'sandDune', 'sandSoft'],
+            dune: ['sandDune', 'sandFine', 'sandSoft', ['Sand', 'dune', 'desert', 'sand']],
+            trough: ['sandSoft', 'sandFine', 'sandDune', ['Sand', 'soft', 'sand']],
+            face: ['sandFine', 'sandDune', 'sandSoft', ['Sand', 'fine', 'beach', 'sand']],
         },
         (k, steep) => {
             if (crest[k] < 0.18) return 'trough';
@@ -286,12 +306,12 @@ function lakeValley(area, base, rand, library) {
         area,
         library,
         {
-            bed: ['mudSwamp', 'sandSilt', 'dirtDark'],
-            shore: ['sandSilt', 'sandFine', 'gravelMuddy'],
-            meadow: ['grassMeadow', 'grassBright', 'grassMedium'],
-            grass: ['grassMedium', 'grassBright', 'grassMeadow'],
-            wood: ['grassForest', 'dirtForest', 'grassMoss'],
-            rock: ['rockMossy', 'rock', 'rockGrey'],
+            bed: ['mudSwamp', 'sandSilt', 'dirtDark', ['Earth', 'mud', 'swamp', 'dark']],
+            shore: ['sandSilt', 'sandFine', 'gravelMuddy', ['Sand', 'silt', 'beach', 'sand']],
+            meadow: ['grassMeadow', 'grassBright', ['Grass', 'lush', 'meadow', 'bright'], 'grassMedium'],
+            grass: ['grassMedium', 'grassBright', 'grassMeadow', ['Grass', 'medium', 'grass']],
+            wood: ['grassForest', 'dirtForest', 'grassMoss', ['Earth', 'forest'], ['Grass', 'moss', 'dark']],
+            rock: ['rockMossy', 'rock', 'rockGrey', ['Rock', 'moss', 'rock']],
         },
         (k, steep) => {
             if (steep > 0.8) return 'rock';
