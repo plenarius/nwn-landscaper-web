@@ -4,7 +4,7 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
-## Unreleased
+## 0.6.0
 
 - **Paint a mix of textures.** Mix, at the top of the Paint panel, paints several textures at once as a blend of patches,
   the way Scatter mixes models: click textures to put them in the mix or take them out (Shift-click starts a mix from One
