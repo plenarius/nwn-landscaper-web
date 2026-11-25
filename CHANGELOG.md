@@ -6,6 +6,14 @@ of that release; before 1.0, a minor version may change the HTTP API between the
 
 ## Unreleased
 
+- **Paint a mix of textures.** Mix, at the top of the Paint panel, paints several textures at once as a blend of patches,
+  the way Scatter mixes models: click textures to put them in the mix or take them out (Shift-click starts a mix from One
+  texture, Shift with the eyedropper adds the ground's texture), and give each a weight. *Patch size* sets how big the patches
+  are, 1 to 20 m. The same ground always takes the same patches, so going over it again changes nothing; *Reshuffle* lays them
+  out anew. With a mix the brush's strength is *Cover*: how much of the ground the mix paints, in whole patches, the rest
+  keeping its texture; *Soft edge* thins it out toward the brush's rim. The mix stays in this browser for every area; the area
+  file is the same as for any painting. A tile with several textures gets its own baked texture in the hak (about 175 KB):
+  half of a 16 × 16 area in a mix made its hak 24 MB larger and its export 11 seconds longer (on four cores).
 - **The quick buttons match whole words.** **rock** found anything with "rock" inside a word, a rocking chair with an old
   woman among them; it now finds rock, rocks and rocky. The other buttons do the same (cacti for cactus, bushy for bush).
   Typed searches still match inside words.

@@ -98,7 +98,7 @@
         <div class="slider-group">
             <div class="slider-head"><label for="brushSize">Brush size</label><output id="sizeOut" for="brushSize"></output></div>
             <input type="range" id="brushSize" min="1" max="30" step="0.5" value="6">
-            <div class="slider-head"><label for="brushStrength">Strength</label><output id="strengthOut" for="brushStrength"></output></div>
+            <div class="slider-head"><label for="brushStrength" id="strengthLabel">Strength</label><output id="strengthOut" for="brushStrength"></output></div>
             <input type="range" id="brushStrength" min="0.05" max="1" step="0.05" value="0.5">
         </div>
         <button type="button" class="tool toggle on" id="btnWalk" title="Show where NWN won't let creatures walk (W)"><span class="icon" data-icon="walk"></span><span>Walkable</span></button>
@@ -258,6 +258,20 @@
         <section id="palette" class="side-panel" hidden>
             <h3>Textures</h3>
             <div class="chips"><button id="btnPick" type="button" title="Click the ground to paint with the texture that is there: a tileset's own texture on an imported area (I, or Alt-click)">Pick from the ground</button><button id="btnPacks" type="button" title="Texture packs to add to the library">Get more textures…</button></div>
+            <div id="mixPanelWrap" class="mix">
+                <div class="chips" role="group" aria-label="What the brush paints"><button id="paintOne" type="button" title="The brush paints the texture you click">One texture</button><button id="paintMix" type="button" title="The brush paints a blend of several textures in patches (Shift-click a texture to start one)">Mix</button></div>
+                <div id="mixPanel" hidden>
+                    <p class="note">Click textures to put them in or take them out (Shift-pick adds one from the ground). Cover: how much ground it paints.</p>
+                    <div id="mixStrip" class="mix-strip"></div>
+                    <div class="slider"><label for="mixPatch">Patch size</label> <output id="mixPatchOut"></output>
+                        <input type="range" id="mixPatch" min="1" max="20" step="0.5" value="4"></div>
+                    <div class="mix-options">
+                        <label class="check" title="The mix thins out toward the brush's rim, so a stroke has no hard edge"><input type="checkbox" id="mixSoft" checked> Soft edge</label>
+                        <span><button type="button" id="mixShuffle" title="Lay the patches out anew for the next strokes">Reshuffle</button>
+                        <button type="button" id="mixClear" title="Take every texture out of the mix">Clear</button></span>
+                    </div>
+                </div>
+            </div>
             <div id="paletteBody"></div>
         </section>
     </main>

@@ -92,6 +92,82 @@
     background: rgba(0, 0, 0, 0.25);
     border-radius: 9px;
 }
+/* The Paint panel's mix (mixpanel.js): One texture or Mix, and the mix's strip with its settings. It stays at the top of the panel
+   as the library scrolls under it, so the mix shows whichever categories are collapsed. */
+.mix {
+    position: sticky;
+    top: -10px;
+    z-index: 1;
+    margin: 0 -12px;
+    padding: 6px 12px 4px;
+    background: rgba(38, 44, 52, 0.98);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+}
+.mix .note {
+    margin: 2px 0 6px;
+}
+.mix-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.mix-row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 64px 34px 22px;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 3px;
+    font-size: 12px;
+    background: var(--panel-2);
+    border-radius: 7px;
+}
+.mix-row img,
+.mix-row .img {
+    width: 28px;
+    height: 28px;
+    border-radius: 5px;
+    display: block;
+    background: #555;
+}
+.mix-row .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mix-row input[type="range"] {
+    width: 64px;
+    margin: 0;
+}
+.mix-row output {
+    color: var(--muted);
+    text-align: right;
+}
+.mix-row .remove {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    line-height: 1;
+    color: var(--muted);
+    background: none;
+    border: none;
+}
+.mix-row .remove:hover {
+    color: var(--text);
+    background: #3a4452;
+}
+.mix-options {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.mix-options button {
+    padding: 3px 10px;
+    font-size: 13px;
+}
+#mixPanel[hidden] {
+    display: none;
+}
 .swatches[hidden],
 .swatch[hidden] {
     display: none;
