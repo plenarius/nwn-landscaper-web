@@ -8,6 +8,9 @@
 
 import './importmap.js';
 import { registerHooks } from 'node:module';
+import { clearIdb, idb } from './idb.js';
+
+export { idb };
 
 const STUBS = ['live.js', 'ask.js'];
 
@@ -89,18 +92,49 @@ class Storage {
         return Object.hasOwn(this, k) ? this[k] : null;
     }
     setItem(k, v) {
+        const was = this[k];
         this[k] = String(v);
+        // (a browser's limit, about 5 MB: `storageQuota` characters here)
+        if (this === local && storageQuota !== null && Object.values(this).reduce((n, x) => n + x.length, 0) > storageQuota) {
+            if (was === undefined) delete this[k];
+            else this[k] = was;
+            throw Object.assign(new Error('over the quota'), { name: 'QuotaExceededError' });
+        }
     }
     removeItem(k) {
         delete this[k];
     }
 }
-globalThis.localStorage = new Storage();
+const local = new Storage();
+let blocked = false;
+let storageQuota = null;
+
+/** Limits localStorage to `chars` characters, as a browser limits it to 5 or 10 MB (null: no limit). */
+export function limitStorage(chars) {
+    storageQuota = chars;
+}
+Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() {
+        if (blocked) throw Object.assign(new Error('the site may not keep data'), { name: 'SecurityError' });
+        return local;
+    },
+});
 globalThis.sessionStorage = new Storage();
 
-/** Empties this browser's storage. */
+/** Blocks this browser's storage (`on` true), as a browser does with the site's data blocked: reading `localStorage` or
+ *  `indexedDB` throws. */
+export function blockStorage(on = true) {
+    blocked = on;
+    idb.blocked = on;
+}
+
+/** Empties this browser's storage (localStorage and IndexedDB) and lets it work again. */
 export function clearStorage() {
-    for (const k of Object.keys(localStorage)) delete localStorage[k];
+    blocked = false;
+    storageQuota = null;
+    for (const k of Object.keys(local)) delete local[k];
+    clearIdb();
 }
 
 /** The status line's text. */

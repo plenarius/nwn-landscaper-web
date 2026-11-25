@@ -10,6 +10,9 @@ import { api, engine, failure, json } from './api.js';
 import { ask } from './ask.js';
 import { $, store, say } from './dom.js';
 import { checkSoon } from './live.js';
+import { copyKeys, copyOf, dropCopyOf, keepCopy } from './copies.js';
+
+export { loadCopies } from './copies.js';
 
 /** What app.js gives this file (initSave): `area()`, `me()`, `readOnly()`, `open(name)`, which opens area `name` from the
  *  engine as Open does, and `blank()`, which shows a new blank area (the one the page starts with when none was open). */
@@ -89,13 +92,12 @@ export async function loadArea(name, settle = true) {
 
 /** Area `name` from this user's copy in this browser (an area only there); a save of it then replaces the copy. */
 export function openCopy(name) {
-    const text = browserCopy(name);
-    if (!text) throw new Error('this browser no longer has it');
-    const a = Area.fromJSON(JSON.parse(text));
+    const copy = copyOf(key(name));
+    if (!copy?.json) throw new Error('this browser no longer has it');
+    const a = Area.fromJSON(JSON.parse(copy.json));
     keptFrom.set(name, a);
     // (its saves start from the engine's copy this one was based on, when the browser knows it)
-    const version = store.get(key('version', name));
-    if (version) engineVersion.set(name, version);
+    if (copy.version) engineVersion.set(name, copy.version);
     return a;
 }
 
@@ -128,32 +130,31 @@ function inTurn(f) {
 }
 
 /** The page is going away (tab closed, reloaded by the browser, navigated) or hidden, which on a phone may be the last
- *  chance: an area whose save is waiting or not yet answered is kept in this browser at once, and the next start moves it
- *  to the engine (moveBrowserAreas). A request can't carry it: the browser lets a request outlive the page only up to
- *  64 KB, and an 8×8 area is about 110 KB. While the page stays (a hidden tab), the save also goes now. */
+ *  chance: an area whose save is waiting or not yet answered is kept in this browser at once (its IndexedDB write is sent
+ *  before the page goes), and the next start moves it to the engine (moveBrowserAreas). A request can't carry it: the
+ *  browser lets a request outlive the page only up to 64 KB, and an 8×8 area is about 110 KB. While the page stays (a hidden
+ *  tab), the save also goes now. */
 function leaving(e) {
     if (e.type === 'visibilitychange' && document.visibilityState !== 'hidden') return;
     for (const a of new Set([pending, sending, ...queued.keys()])) if (a) keepInBrowser(a, JSON.stringify(a.toJSON()));
     if (e.type === 'visibilitychange') flushSave();
 }
 
-// An area's copy in this browser: `landscaper.area.<name>` (its JSON), `landscaper.base.<name>` (when the engine had saved
-// the copy it started from, Unix seconds; 0 when not known) and `landscaper.version.<name>` (that copy's version, see
-// engineVersion; none when not known). On a team server the name is `<user>:<name>`, so one builder's
-// copy never goes into another's workspace on a shared browser.
-const key = (what, name) => `landscaper.${what}.${ctx.me().team ? `${ctx.me().user}:` : ''}${name}`;
+// An area's copy in this browser (copies.js): its JSON, when the engine had saved the copy it started from (Unix seconds; 0
+// when not known) and that copy's version (see engineVersion; null when not known), kept under the area's name. On a team
+// server the name is `<user>:<name>`, so one builder's copy never goes into another's workspace on a shared browser.
+const key = name => `${ctx.me().team ? `${ctx.me().user}:` : ''}${name}`;
 
 // The area last open: `landscaper.current`, on a team server `landscaper.current.<user>`.
 const currentKey = () => (ctx.me().team ? `landscaper.current.${ctx.me().user}` : 'landscaper.current');
 
 /** This user's copy of area `name` kept in this browser (its JSON), or null. */
-export const browserCopy = name => store.get(key('area', name));
+export const browserCopy = name => copyOf(key(name))?.json ?? null;
 
 /** The names of the areas this user has a copy of in this browser. */
 export function browserCopies() {
-    const prefix = key('area', '');
-    return store
-        .keys()
+    const prefix = key('');
+    return copyKeys()
         .filter(k => k.startsWith(prefix) && !k.slice(prefix.length).includes(':'))
         .map(k => k.slice(prefix.length));
 }
@@ -163,22 +164,21 @@ export function noteSaved(areas) {
     for (const a of areas) if (a.saved) engineSaved.set(a.name, a.saved);
 }
 
-/** Keeps area `a` (its JSON) in this browser; false when it doesn't fit (or storage is off). */
+/** Keeps area `a` (its JSON) in this browser: browserCopy() has it at once. Resolves false when it doesn't fit (or storage
+ *  is off). */
 function keepInBrowser(a, json) {
     store.set(currentKey(), a.name);
     keptFrom.set(a.name, a);
-    const base = engineSaved.get(a.name) ?? +(store.get(key('base', a.name)) ?? 0);
-    const version = engineVersion.get(a.name) ?? store.get(key('version', a.name));
-    if (version) store.set(key('version', a.name), version);
-    return store.set(key('area', a.name), json) && store.set(key('base', a.name), String(base));
+    const was = copyOf(key(a.name));
+    const base = engineSaved.get(a.name) ?? was?.base ?? 0;
+    const version = engineVersion.get(a.name) ?? was?.version ?? null;
+    return keepCopy(key(a.name), { json, base, version });
 }
 
 /** Drops the copy of area `name` kept in this browser (and the time stamp older pages kept with it). */
 function dropCopy(name) {
     keptFrom.delete(name);
-    store.remove(key('area', name));
-    store.remove(key('base', name));
-    store.remove(key('version', name));
+    dropCopyOf(key(name));
     store.remove(`landscaper.saved.${name}`);
 }
 
@@ -215,7 +215,7 @@ async function writeArea(a, also = '') {
     } catch (err) {
         if (err.status === 409 && also) throw err;
         if (err.status === 409) return replaced(a, json, err.moved);
-        if (keepInBrowser(a, json))
+        if (await keepInBrowser(a, json))
             say(
                 engine.up
                     ? `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`
@@ -236,7 +236,7 @@ async function writeArea(a, also = '') {
  * the question keeps `a` here without asking again at each change.
  */
 async function replaced(a, json, moved) {
-    const kept = keepInBrowser(a, json);
+    const kept = await keepInBrowser(a, json);
     if (refused.has(a)) return;
     const when = moved?.saved ? ` at ${new Date(moved.saved * 1000).toLocaleTimeString()}` : '';
     const keptNote = kept ? ' Your changes are kept in this browser for now.' : '';
@@ -334,12 +334,12 @@ export async function moveBrowserAreas() {
  * the next start.
  */
 async function settleCopy(name, there) {
-    const base = +(store.get(key('base', name)) ?? 0);
+    const base = copyOf(key(name))?.base ?? 0;
     if (!there || (base > 0 && (there.saved ?? 0) <= base)) {
         try {
             // (With the version the copy started from, when it knows it: a save since from elsewhere is then asked about,
             // even within the same second.)
-            await inTurn(() => putArea(name, browserCopy(name), '', store.get(key('version', name)) ?? engineVersion.get(name)));
+            await inTurn(() => putArea(name, browserCopy(name), '', copyOf(key(name))?.version ?? engineVersion.get(name)));
             dropCopy(name);
             return true;
         } catch (err) {

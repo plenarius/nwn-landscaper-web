@@ -31,9 +31,10 @@ async function made(name) {
 /** The sky preset of area `name` as the engine has it. */
 const engineSky = name => JSON.parse(engine.areas.get(name)).atmosphere.preset;
 
-beforeEach(() => {
+beforeEach(async () => {
     engine.reset();
     clearStorage();
+    await save.loadCopies();
     questions.asked = [];
     questions.answers = [];
     opened.length = 0;
