@@ -253,7 +253,7 @@
         </section>
         <section id="palette" class="side-panel" hidden>
             <h3>Textures</h3>
-            <div class="chips"><button id="btnPick" type="button" title="Click the ground to paint with the texture that is there: a tileset's own texture on an imported area (I, or Alt-click)">Pick from the ground</button></div>
+            <div class="chips"><button id="btnPick" type="button" title="Click the ground to paint with the texture that is there: a tileset's own texture on an imported area (I, or Alt-click)">Pick from the ground</button><button id="btnPacks" type="button" title="Texture packs to add to the library">Get more textures…</button></div>
             <div id="paletteBody"></div>
         </section>
     </main>
@@ -459,6 +459,19 @@
                 <button type="submit" value="cancel" formnovalidate>Cancel</button>
                 <button type="button" id="importGo" class="primary" disabled>Import</button>
             </div>
+        </form>
+    </dialog>
+
+    <dialog id="packsDialog" aria-labelledby="packsTitle">
+        <form method="dialog">
+            <h2 id="packsTitle">Get more textures</h2>
+            <p class="note">A texture pack adds ready-made textures to the library, in their own categories. Like the rest of the library, they go into every export's texture hak.</p>
+            <p class="note" id="packsManage" hidden>Only an admin installs or removes packs here: the library is the whole team's.</p>
+            <p class="note err" id="packsIndexError" hidden></p>
+            <div id="packsList" class="packs-list"></div>
+            <progress id="packsBar" max="1" aria-label="Install progress" hidden></progress>
+            <p id="packsStatus" class="note" role="status" aria-live="polite"></p>
+            <div class="dialog-buttons"><button type="submit" value="cancel">Close</button></div>
         </form>
     </dialog>
 

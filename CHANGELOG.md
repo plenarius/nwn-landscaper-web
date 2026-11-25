@@ -4,6 +4,14 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## Unreleased
+
+- **Get more textures** (the Paint panel): a dialog of the texture packs the engine offers (name, size, texture count, licence,
+  credits and a few swatches) and those installed, with **Install** (its download, check and install shown on a progress bar,
+  going on with the dialog closed) and **Remove** (refused, with the areas named, while one paints with the pack). After either,
+  the library and the palette load again; a texture painted with that left gives way to the default. Builders on a team server
+  see the list without the buttons. Needs the engine of the same release (`/api/textures/packs`).
+
 ## 0.4.0
 
 - **Chasm** (key `c`): a bottomless drop that blocks the way, for a cliff edge, a canyon rim, a gap between ledges or a

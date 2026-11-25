@@ -14,6 +14,8 @@ import { TOOLS } from './tools.js';
 import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { COLLAPSED_KEY, allCollapsed, categoriesOf, opened, readCollapsed, swatchHidden, toggled, writeCollapsed } from './palette.js';
+import { stillThere } from './packs.js';
+import { initPacks } from './packsdialog.js';
 import { ThingsTool } from './things.js';
 import './thingprops.js'; // (adds the properties panel to ThingsTool)
 import './newbp.js'; // (adds the builder's own blueprints to ThingsTool)
@@ -308,6 +310,17 @@ async function pickTexture(p) {
     selectTexture(r.id);
     say(r.added ? `Picked ${r.name}: added to the Tileset textures.` : `Picked ${library.byId.get(r.id)?.name ?? r.name}.`);
 }
+
+// A texture pack installed or removed: the library again, the view's textures, and the palette. A texture painted with that
+// left gives way to the default.
+initPacks({
+    changed: async () => {
+        await library.load();
+        view.setLibrary(library);
+        if (!stillThere(library.catalog, paintTexture)) paintTexture = DEFAULT_TEXTURE;
+        buildPalette();
+    },
+});
 
 initPlace(editor);
 
