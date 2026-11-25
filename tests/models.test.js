@@ -187,3 +187,30 @@ test('a picture no longer wanted when its turn comes is skipped, and drawn when 
     assert.deepEqual(drawn, ['new', 'shared']);
     assert.equal(await m.thumbnail('old'), 'url:old');
 });
+
+test("a quick button's word matches whole words only: rock finds rocks, not a rocking chair", () => {
+    const m = library([
+        { row: 1, label: 'Rock_Grey', name: 'Rock, grey', model: 'plc_rock', source: 'game' },
+        { row: 2, label: 'Rocks_Small', name: 'Rocks, small', model: 'plc_rocks', source: 'game' },
+        { row: 3, label: 'Rocking_chair_with_old_woman', name: 'Rocking chair with old woman', model: 'zlc_g53', source: 'my_plc' },
+        { row: 4, label: 'Cacti_small', name: 'Cacti, small', model: 'plc_cac', source: 'game' },
+        { row: 5, label: 'Bushy_shrub', name: 'Bushy shrub', model: 'plc_shrub', source: 'game' },
+    ]);
+    assert.deepEqual(
+        m.search('rock').results.map(p => p.row),
+        [1, 2],
+    );
+    assert.deepEqual(
+        m.search('cactus').results.map(p => p.row),
+        [4],
+    );
+    assert.deepEqual(
+        m.search('bush').results.map(p => p.row),
+        [5],
+    );
+    // Typed text still matches inside words.
+    assert.deepEqual(
+        m.search('rocki').results.map(p => p.row),
+        [3],
+    );
+});

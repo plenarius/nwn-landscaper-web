@@ -4,6 +4,12 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## Unreleased
+
+- **The quick buttons match whole words.** **rock** found anything with "rock" inside a word, a rocking chair with an old
+  woman among them; it now finds rock, rocks and rocky. The other buttons do the same (cacti for cactus, bushy for bush).
+  Typed searches still match inside words.
+
 ## 0.5.0
 
 - **Texture categories fold.** Each category in the Paint panel is a heading that opens and closes, with its count, and
