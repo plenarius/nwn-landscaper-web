@@ -4,6 +4,11 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## 0.6.1
+
+- **No change to the editor.** Released with the engine's 0.6.1: no more dark teeth along river banks, and a signed Windows
+  build.
+
 ## 0.6.0
 
 - **Paint a mix of textures.** Mix, at the top of the Paint panel, paints several textures at once as a blend of patches,
