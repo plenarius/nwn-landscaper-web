@@ -18,6 +18,11 @@ export const TOOLS = {
         key: '6',
         hint: 'Click in a hollow and drag up to fill it; drag on water to change its level; Shift-click water to drain it',
     },
+    chasm: {
+        label: 'Chasm',
+        key: 'c',
+        hint: 'Open a bottomless chasm under the brush: nobody can walk into it or across it. Shift-drag fills it in again',
+    },
     entrance: {
         label: 'Entrance',
         key: '7',
@@ -151,10 +156,7 @@ function dig(area, x, y, radius, floor, paintIndex) {
         for (let i = i0; i <= i1; i++) {
             const px = i * SPACING,
                 py = j * SPACING;
-            const a = Math.atan2(py - y, px - x);
-            // The same rough edge wherever the brush passes: noise by place.
-            const rough = 1 + 0.12 * Math.sin(3 * a + px * 0.7) + 0.08 * Math.sin(5 * a + py * 1.1);
-            if (Math.hypot(px - x, py - y) <= radius * rough) {
+            if (Math.hypot(px - x, py - y) <= radius * rough(Math.atan2(py - y, px - x), px, py)) {
                 const k = j * n + i;
                 if (h[k] > floor) {
                     h[k] = floor;
@@ -164,6 +166,53 @@ function dig(area, x, y, radius, floor, paintIndex) {
         }
     }
     return { i0, i1, j0, j1 };
+}
+
+/** The rough edge a brush cuts at sample (px, py), `a` radians round from its middle: the same wherever the brush passes (noise
+ *  by place), so a chasm's rim or a cave's wall isn't a row of smooth arcs. */
+function rough(a, px, py) {
+    return 1 + 0.12 * Math.sin(3 * a + px * 0.7) + 0.08 * Math.sin(5 * a + py * 1.1);
+}
+
+/** Opens a chasm under the brush at (x, y) (its edge a little ragged), or with `fill` fills it in: the ground comes back as it
+ *  was. Returns the changed sample rectangle. */
+export function chasmStamp(area, x, y, radius, fill) {
+    const n = area.nx,
+        reach = radius * 1.2;
+    const i0 = Math.max(0, Math.floor((x - reach) / SPACING)),
+        i1 = Math.min(n - 1, Math.ceil((x + reach) / SPACING));
+    const j0 = Math.max(0, Math.floor((y - reach) / SPACING)),
+        j1 = Math.min(area.ny - 1, Math.ceil((y + reach) / SPACING));
+    if (i0 > i1 || j0 > j1) return null;
+    if (!area.chasm) {
+        if (fill) return null;
+        area.chasm = new Uint8Array(n * area.ny);
+    }
+    for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+            const px = i * SPACING,
+                py = j * SPACING;
+            if (Math.hypot(px - x, py - y) <= radius * rough(Math.atan2(py - y, px - x), px, py)) area.chasm[j * n + i] = fill ? 0 : 1;
+        }
+    }
+    return { i0, i1, j0, j1 };
+}
+
+/** Opens a chasm along the whole edge of the area, `width` metres in (its inner edge a little ragged): a plateau or an island
+ *  that drops away into nothing. Returns the changed sample rectangle (the whole area). */
+export function chasmEdge(area, width) {
+    const { nx, ny, sizeX, sizeY } = area;
+    area.chasm ??= new Uint8Array(nx * ny);
+    for (let j = 0; j < ny; j++) {
+        for (let i = 0; i < nx; i++) {
+            const px = i * SPACING,
+                py = j * SPACING;
+            // (the roughness along the edge, by place as the brush's)
+            const d = Math.min(px, py, sizeX - px, sizeY - py);
+            if (d <= width * rough(px * 0.05 + py * 0.05, px, py)) area.chasm[j * nx + i] = 1;
+        }
+    }
+    return { i0: 0, i1: nx - 1, j0: 0, j1: ny - 1 };
 }
 
 // Rooms snap to this grid and are at least this wide: narrower ones were
