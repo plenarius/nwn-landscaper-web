@@ -19,6 +19,19 @@ export const PAGE = 48;
 
 /** The plant groups the engine measures (plants.rs), by the chip that shows each. */
 export const GROUPS = { 'small plants': 'small', 'large plants': 'large' };
+/** The quick buttons' searches match whole words, and these forms of them: `rock` finds rocks and rocky ground but not a
+ *  rocking chair. Anything typed matches anywhere in a word, as before. */
+export const WHOLE = {
+    rock: ['rock', 'rocks', 'rocky'],
+    boulder: ['boulder', 'boulders'],
+    tree: ['tree', 'trees'],
+    bush: ['bush', 'bushes', 'bushy'],
+    cactus: ['cactus', 'cacti', 'cactuses'],
+    ruin: ['ruin', 'ruins', 'ruined'],
+    pillar: ['pillar', 'pillars'],
+    statue: ['statue', 'statues'],
+    fence: ['fence', 'fences', 'fencing'],
+};
 
 /** At most this many models in the mix a group's chip gives Scatter: enough variety, few enough to see and change. */
 export const MIX = 12;
@@ -123,6 +136,8 @@ export class ModelLibrary {
      *  (`small plants`) gives that group's models ([`GROUPS`]; loadGroups first). The models in `first` (a Set) come first. */
     search(query, { offset = 0, limit = PAGE, source = '', first = null } = {}) {
         const group = GROUPS[query.trim().toLowerCase()];
+        const whole = WHOLE[query.trim().toLowerCase()];
+        const matches = whole ? e => e.text.split(/[^a-z]+/).some(w => whole.includes(w)) : e => words.every(w => e.text.includes(w));
         // (An underscore parts words, as a space does: "saguaro_cactus" finds the label Saguaro_Cactus and the name "Saguaro cactus".)
         const words = group
             ? []
@@ -137,7 +152,7 @@ export class ModelLibrary {
             : this.index;
         for (const e of order) {
             if (source && e.source !== source) continue;
-            if (group ? this.groupOf(e.p.model) !== group : !words.every(w => e.text.includes(w))) continue;
+            if (group ? this.groupOf(e.p.model) !== group : !matches(e)) continue;
             if (total >= offset && results.length < limit) results.push(e.p);
             total++;
         }
