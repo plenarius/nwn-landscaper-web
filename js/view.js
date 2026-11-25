@@ -1421,6 +1421,8 @@ export class View {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(verts * 3).fill(0.72), 3));
+        // (no cave void out there: without it the shader read 0, under VOID_BELOW, and drew the edge scenery black)
+        geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(verts).fill(1e9), 1));
         const index = [];
         for (let s = 0; s < 4; s++) {
             for (let k = 0; k < strips[s] - 1; k++) {
