@@ -6,6 +6,7 @@
 
 import { $ } from './dom.js';
 import { QUICK, modelResults, searchSoon, appearanceOf, groundUnder } from './place.js';
+import { basePoints } from './footing.js';
 
 /** What app.js gives this file (initScatter): `area()` and `view`. */
 let ctx = null;
@@ -28,6 +29,15 @@ export async function showScatterables() {
 }
 function markMix() {
     for (const b of $('scatterResults').children) b.classList.toggle('active', scatterMix.has(b.dataset.model));
+}
+
+/** Whether the ground under object `o`'s base suits it: walkable and dry at every corner and the middle, not only under its
+ *  origin (a bush at a lake's edge stood in the water). */
+export function groundSuits(area, o, flat) {
+    return basePoints(o, flat).every(([x, y]) => {
+        const { i, j } = area.sampleAt(x, y);
+        return area.walkable(i, j) && area.depth(i, j) <= 0;
+    });
 }
 
 /** A few tries a frame at a random point in the brush; a try is kept when
@@ -55,9 +65,10 @@ export function scatterStamp(p, radius, s) {
             y = p.y + Math.sin(a) * d;
         if (x < 0.5 || y < 0.5 || x > ctx.area().sizeX - 0.5 || y > ctx.area().sizeY - 0.5) continue;
         if (ctx.area().objects.some(o => Math.hypot(o.x - x, o.y - y) < spacing)) continue;
-        const { i, j } = ctx.area().sampleAt(x, y);
-        if ($('scatterSteep').checked && (!ctx.area().walkable(i, j) || ctx.area().depth(i, j) > 0)) continue;
         const [model, flat] = mix[Math.floor(Math.random() * mix.length)];
+        const bearing = Math.random() * Math.PI * 2,
+            scale = lo + Math.random() * (hi - lo);
+        if ($('scatterSteep').checked && !groundSuits(ctx.area(), { x, y, bearing, scale }, flat)) continue;
         const o = {
             id: ctx.area().nextObjectId++,
             model,
@@ -65,8 +76,8 @@ export function scatterStamp(p, radius, s) {
             x,
             y,
             z: 0,
-            bearing: Math.random() * Math.PI * 2,
-            scale: lo + Math.random() * (hi - lo),
+            bearing,
+            scale,
             solid: $('scatterSolid').checked,
             baked: true,
         };

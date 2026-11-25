@@ -9,6 +9,7 @@ import { Transformer } from './transform.js';
 import { engine, NEEDS_ENGINE } from './api.js';
 import { $, el, say } from './dom.js';
 import { saveSoon } from './save.js';
+import { groundUnder as groundUnderBase } from './footing.js';
 
 /** What app.js gives this file (initPlace): `area()`, `tool()` and `view`. */
 let ctx = null;
@@ -72,18 +73,9 @@ function settle(o, flat) {
     return o.model.startsWith('@import:') ? ctx.area().heightAt(o.x, o.y) : groundUnder(o, flat);
 }
 
-/** Ground under an object: the lowest point under its outline, so it doesn't float on a slope. */
+/** Ground under object `o`: the lowest point under its base (footing.js), so it doesn't float on a slope or sink to its crown. */
 export function groundUnder(o, flat) {
-    const c = Math.cos(o.bearing),
-        s = Math.sin(o.bearing);
-    const corners = [
-        [flat.min[0], flat.min[1]],
-        [flat.max[0], flat.min[1]],
-        [flat.min[0], flat.max[1]],
-        [flat.max[0], flat.max[1]],
-        [0, 0],
-    ];
-    return Math.min(...corners.map(([x, y]) => ctx.area().heightAt(o.x + (c * x - s * y) * o.scale, o.y + (s * x + c * y) * o.scale)));
+    return groundUnderBase(o, flat, (x, y) => ctx.area().heightAt(x, y));
 }
 
 /** Removes placed object `o` from the area (undoable), and deselects it. */

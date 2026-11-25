@@ -15,6 +15,12 @@ of that release; before 1.0, a minor version may change the HTTP API between the
   along y), blended by which way the ground faces, as the engine of the same release draws it in the game. Steep ground took its
   texture from the side along x + y, so a slope facing north-east or south-west smeared it into streaks; walkable slopes took it
   from above, 1.6 times stretched at 50 degrees. An older engine still exports the old way.
+- **Scattered and placed objects stand on their base.** On a slope, a tree sank until only its crown showed, and a bush
+  until only its top did: the editor stood each one on the lowest ground under its whole bounding box, crown and all. It now
+  stands on the lowest ground under its base: its walkmesh's footprint (a tree's trunk), or else its lowest 0.3 m. Moving,
+  turning or sizing one settles it the same way.
+- **"Not on steep ground or water" looks under the whole base**, not only its middle: a bush no longer stands in a lake
+  beside its shore.
 
 ## 0.4.0
 
