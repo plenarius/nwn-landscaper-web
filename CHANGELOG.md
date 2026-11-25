@@ -4,8 +4,14 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
-## Unreleased
+## 0.5.0
 
+- **Texture categories fold.** Each category in the Paint panel is a heading that opens and closes, with its count, and
+  *Collapse all* and *Expand all* sit at the top; which ones are closed is remembered in the browser. A closed category still
+  shows the texture you paint with, and picking a texture from the ground opens its category.
+- **Sample landscapes take a team library's own textures.** Where a library lacks the starter library's ids, each part of a
+  sample landscape takes the library's texture of the same category (snow, sand, rock…) instead of the default grass: the
+  snowy pass is snowy and the dunes sandy with any library that has snow and sand.
 - **The module's haks' placeables in Place and Scatter.** With an engine that reads the module's haks, the panels offer their placeables
   too (a module of 57 haks: 6,259 models where the game alone gives 1,304; "cactus" finds 52, "bush" 71). Each result names where it comes
   from (the game or a hak), and a list under the search box picks one source alone. Results come 48 at a time with **Show more**, the
