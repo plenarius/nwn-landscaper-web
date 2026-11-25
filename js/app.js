@@ -15,6 +15,7 @@ import { ICONS } from './icons.js';
 import { TextureLibrary } from './textures.js';
 import { COLLAPSED_KEY, allCollapsed, categoriesOf, opened, readCollapsed, swatchHidden, toggled, writeCollapsed } from './palette.js';
 import { stillThere } from './packs.js';
+import { initMixPanel, mixClick, mixOn, mixPicked, setMixOn, currentMix, mixLibraryChanged } from './mixpanel.js';
 import { initPacks } from './packsdialog.js';
 import { ThingsTool } from './things.js';
 import './thingprops.js'; // (adds the properties panel to ThingsTool)
@@ -97,8 +98,16 @@ for (const [id, t] of Object.entries(TOOLS)) {
 // Whether the next click on the ground in the Paint tool picks its texture up (see setPicking).
 let picking = false;
 
+/** The strength slider's name: Cover while painting a mix, as it is how much of the ground the mix covers (mix.js). */
+function showStrengthName() {
+    const cover = mixOn() && tool === 'paint';
+    $('strengthLabel').textContent = cover ? 'Cover' : 'Strength';
+    $('strengthLabel').title = cover ? 'How much of the ground under the brush the mix covers, in patches' : '';
+}
+
 function selectTool(id) {
     tool = id;
+    showStrengthName();
     for (const c of document.querySelectorAll('canvas')) c.style.cursor = '';
     picking = false;
     $('btnPick')?.classList.remove('active');
@@ -202,7 +211,10 @@ function buildPalette() {
             b.dataset.texture = t.id;
             b.title = `${t.name} (${t.source})`;
             b.append(el('img', { loading: 'lazy', alt: '', src: library.swatchUrl(t.id) }), el('span', { textContent: t.name }));
-            b.onclick = () => selectTexture(t.id, false);
+            // (With Mix on, or with Shift, a click puts it in the mix or takes it out: mixpanel.js.)
+            b.onclick = e => {
+                if (!mixClick(t.id, e.shiftKey)) selectTexture(t.id, false);
+            };
             grid.appendChild(b);
         }
         const head = el(
@@ -217,6 +229,7 @@ function buildPalette() {
         body.append(el('h4', {}, head), grid);
     });
     selectTexture(paintTexture, false);
+    mixLibraryChanged();
 }
 
 /** Collapses the Paint panel's categories in `next` (a set of their names) and opens the others, and keeps that in this browser. */
@@ -234,7 +247,8 @@ function showCollapsed() {
         categories.push(category);
         let shown = 0;
         for (const b of grid.querySelectorAll('.swatch')) {
-            b.hidden = swatchHidden(collapsed, category, b.dataset.texture, paintTexture);
+            // (A mix's textures show in its strip, above the categories.)
+            b.hidden = swatchHidden(collapsed, category, b.dataset.texture, mixOn() ? null : paintTexture);
             if (!b.hidden) shown++;
         }
         grid.hidden = shown === 0;
@@ -252,11 +266,29 @@ function selectTexture(id, reveal = true) {
     const category = library.byId.get(id)?.category;
     if (reveal && collapsed.has(category)) setCollapsed(opened(collapsed, category));
     else showCollapsed();
-    for (const b of document.querySelectorAll('#paletteBody .swatch')) b.classList.toggle('active', b.dataset.texture === id);
+    markSwatches();
     if (reveal) document.querySelector(`#paletteBody .swatch[data-texture="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' });
     // Start loading it now so the first dab shows at once.
     library.layerPixels(id).catch(() => {});
 }
+
+/** Marks the swatches the brush paints with: the mix's with Mix on, else the one texture. */
+function markSwatches() {
+    const mix = currentMix(),
+        on = mixOn();
+    const painted = new Set(on ? mix.textures.map(t => t.id) : [paintTexture]);
+    for (const b of document.querySelectorAll('#paletteBody .swatch')) b.classList.toggle('active', painted.has(b.dataset.texture));
+    showStrengthName();
+}
+
+initMixPanel({
+    library,
+    paintTexture: () => paintTexture,
+    changed: () => {
+        showCollapsed();
+        markSwatches();
+    },
+});
 
 // The library comes from the engine; it is loaded once /api/me has said whether there is one (see the start, at the end).
 async function loadLibrary() {
@@ -274,12 +306,22 @@ function setPicking(on) {
 }
 $('btnPick').onclick = () => setPicking(!picking);
 
-async function pickTexture(p) {
+/** Picks the texture at area point `p` up: to paint with alone, or with `add` (Shift) into the mix. */
+async function pickTexture(p, add = false) {
     const ground = area.textureAt(p.x, p.y);
     if (!ground) return;
+    const picked = (id, name) => {
+        if (add) {
+            mixPicked(id);
+            say(`Added ${name} to the mix. Shift-click more ground to add another; Esc ends picking.`);
+            return;
+        }
+        setMixOn(false);
+        selectTexture(id);
+        say(`Picked ${name}.`);
+    };
     if (!ground.startsWith('@import:')) {
-        selectTexture(ground);
-        say(`Picked ${library.byId.get(ground)?.name ?? ground}.`);
+        picked(ground, library.byId.get(ground)?.name ?? ground);
         return;
     }
     if (readOnly) {
@@ -307,8 +349,8 @@ async function pickTexture(p) {
         await library.load();
         buildPalette();
     }
-    selectTexture(r.id);
-    say(r.added ? `Picked ${r.name}: added to the Tileset textures.` : `Picked ${library.byId.get(r.id)?.name ?? r.name}.`);
+    picked(r.id, library.byId.get(r.id)?.name ?? r.name);
+    if (r.added) say(`${$('statusMsg').textContent} It is in the Tileset textures now.`);
 }
 
 // A texture pack installed or removed: the library again, the view's textures, and the palette. A texture painted with that
@@ -446,6 +488,8 @@ initStrokes({
     thingsTool,
     selectTool,
     paintTexture: () => paintTexture,
+    mixOn,
+    currentMix,
     picking: () => picking,
     setPicking,
     pickTexture,

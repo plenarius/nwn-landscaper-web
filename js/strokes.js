@@ -11,13 +11,15 @@ import { ask } from './ask.js';
 import { $, say } from './dom.js';
 import { models, transformer, selectObject, placeDown, placeDrag } from './place.js';
 import { scatterMix, scatterStamp } from './scatter.js';
+import { mixPlan, mixStamp } from './mix.js';
 import { waterDown, waterDrag, waterChanged } from './water.js';
 import { entranceDown } from './entrancetool.js';
 import { live } from './live.js';
 import { saveSoon } from './save.js';
 
 /** What app.js gives this file (initStrokes): `area()`, `tool()`, `readOnly()`, `view`, the Things tool (`thingsTool`),
- *  `selectTool(id)`, the Paint tool's `paintTexture()`, `picking()`, `setPicking(on)` and `pickTexture(p)`, the texture
+ *  `selectTool(id)`, the Paint tool's `paintTexture()`, `mixOn()`, `currentMix()`, `picking()`, `setPicking(on)` and
+ *  `pickTexture(p, add)`, the texture
  *  `library`, and the brush's `sizeIn` and `strengthIn` sliders. */
 let ctx = null;
 
@@ -317,17 +319,33 @@ export function initStrokes(c) {
             capture(e.pointerId);
             return;
         }
-        // The eyedropper (its button, the I key, or Alt-click): one click picks the texture, no paint goes down.
+        // The eyedropper (its button, the I key, or Alt-click): one click picks the texture, no paint goes down. With Shift it goes
+        // into the mix, and the eyedropper stays on for the next.
         if (ctx.tool() === 'paint' && (ctx.picking() || e.altKey)) {
             e.preventDefault();
-            ctx.setPicking(false);
-            ctx.pickTexture(p);
+            if (!e.shiftKey) ctx.setPicking(false);
+            ctx.pickTexture(p, e.shiftKey);
             return;
         }
+        // A mix: all its textures must fit in the area's palette before the stroke starts.
+        const mix = ctx.tool() === 'paint' && ctx.mixOn() ? ctx.currentMix() : null;
+        if (mix) {
+            const ids = mix.textures.map(t => t.id);
+            if (!ids.length) {
+                say('The mix is empty: click textures in the panel to add them, or choose One texture.');
+                return;
+            }
+            const missing = ids.filter(id => !ctx.area().palette.includes(id)).length;
+            if (ctx.area().palette.length + missing > 255) {
+                say(`This area has room for ${255 - ctx.area().palette.length} more textures; the mix needs ${missing}.`);
+                return;
+            }
+        }
         // A texture the area has no room for (255 at most) stops the stroke before it starts, not halfway with no paint.
-        const texture = { paint: ctx.paintTexture(), dig: ctx.paintTexture() === DEFAULT_TEXTURE ? 'dirt' : ctx.paintTexture() }[
-            ctx.tool()
-        ];
+        const texture = {
+            paint: mix ? null : ctx.paintTexture(),
+            dig: ctx.paintTexture() === DEFAULT_TEXTURE ? 'dirt' : ctx.paintTexture(),
+        }[ctx.tool()];
         if (texture && !ctx.area().canPaint(texture)) {
             say('This area has 255 textures, the most it can: paint with one it already has.');
             return;
@@ -336,7 +354,12 @@ export function initStrokes(c) {
         // The tool is kept with the stroke: it is the one that stamps until the button comes up.
         stroke = { tool: ctx.tool(), flattenTo: ctx.area().heightAt(p.x, p.y), last: performance.now() };
         if (ctx.tool() === 'paint') {
-            stroke.paintIndex = ctx.area().materialIndex(ctx.paintTexture());
+            if (mix)
+                stroke.mix = mixPlan(
+                    mix,
+                    mix.textures.map(t => ctx.area().materialIndex(t.id)),
+                );
+            else stroke.paintIndex = ctx.area().materialIndex(ctx.paintTexture());
             ctx.view.syncPalette();
         }
         if (ctx.tool() === 'ramp') {
@@ -527,7 +550,9 @@ export function initStrokes(c) {
             ctx.view.markDirty(
                 stroke.tool === 'chasm'
                     ? chasmStamp(ctx.area(), p.x, p.y, radius, stroke.fill)
-                    : stamp(ctx.area(), stroke.tool, p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
+                    : stroke.mix
+                      ? mixStamp(ctx.area(), p.x, p.y, radius, +ctx.strengthIn.value, stroke.mix)
+                      : stamp(ctx.area(), stroke.tool, p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
                 stroke.tool !== 'paint',
             );
             dbg.stamps++;

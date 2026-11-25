@@ -15,7 +15,8 @@ What it does (*team* marks what only a team server offers, see nwn-landscaper's
 - **Sculpt** the ground: raise, lower, smooth, flatten; water; bottomless chasms; cave entrances; or start it from a greyscale
   heightmap image.
 - **Underlay**: lay a battlemat or a map under the area, scale it by two points a known distance apart, and trace over it.
-- **Paint** with a texture library the engine builds from your own game files, or pick a texture up from the ground.
+- **Paint** with a texture library the engine builds from your own game files, or pick a texture up from the ground; or paint a
+  mix of several textures (grasses, sands, snow) in patches of a size you set.
 - **Caves and interiors**: cut rooms and passages out of rock, ramps and descending halls, a ceiling height.
 - **Things**: creatures, placeables, doors, waypoints, triggers, sounds, encounters, stores and items from the module's
   blueprints, with their tag, name, scripts and variables; your own creature and item blueprints made from existing ones.
