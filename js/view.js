@@ -719,17 +719,50 @@ export class View {
                 col.setXYZ(v, c.r, c.g, c.b);
             }
         }
-        pos.needsUpdate = true;
-        gap.needsUpdate = true;
-        deep.needsUpdate = true;
-        col.needsUpdate = true;
-        this.uniforms.uMat.value.needsUpdate = true;
+        for (const a of [pos, gap, deep, col]) this.uploadRows(a, i0, i1, j0, j1);
+        this.uploadPaint(i0, i1, j0, j1);
         // Only what the change reaches: on a 32×32 area each of these over the whole mesh took most of a 245 ms frame.
         this.updateNormals(i0 - 1, i1 + 1, j0 - 1, j1 + 1);
         this.updateBounds(i0, i1, j0, j1);
         this.updateGrid({ i0, i1, j0, j1 });
         // (the edge scenery carries the outer rows and columns out: a fifth of a stroke's redraw, for a stroke far from them)
         if (i0 === 0 || j0 === 0 || i1 === n - 1 || j1 === area.ny - 1) this.updateSkirt();
+    }
+
+    /**
+     * Ground attribute `attr` goes to the GPU at the next draw for samples i0..i1, j0..j1 only (clamped to the area): one range
+     * from the first of them to the last, the rows between whole, as one upload. Whole buffers were 12.7 MB a stroke frame on a
+     * 32×32 area, ranges 0.67 MB, and the frame took 3.6 ms instead of 7.3 (a GeForce GTX 1050). The whole of it when that is
+     * the whole area, and until a whole upload asked for has been made.
+     */
+    uploadRows(attr, i0, i1, j0, j1) {
+        const { nx, ny } = this.area;
+        i0 = Math.max(0, i0);
+        j0 = Math.max(0, j0);
+        i1 = Math.min(nx - 1, i1);
+        j1 = Math.min(ny - 1, j1);
+        attr.needsUpdate = true;
+        if (wholeLeft(attr, i0 === 0 && j0 === 0 && i1 === nx - 1 && j1 === ny - 1)) return;
+        // (rows run north to south: the northmost row's first vertex comes first)
+        const first = this.vertex(i0, j1),
+            last = this.vertex(i1, j0);
+        attr.addUpdateRange(first * attr.itemSize, (last - first + 1) * attr.itemSize);
+    }
+
+    /** The paint texture (uMat) goes to the GPU at the next draw for samples i0..i1, j0..j1 only (clamped), a range a row: three.js
+     *  uploads a texture's ranges a row at a time. The whole of it as uploadRows sends a whole buffer. */
+    uploadPaint(i0, i1, j0, j1) {
+        const tex = this.uniforms.uMat.value,
+            { nx, ny } = this.area;
+        i0 = Math.max(0, i0);
+        j0 = Math.max(0, j0);
+        i1 = Math.min(nx - 1, i1);
+        j1 = Math.min(ny - 1, j1);
+        tex.needsUpdate = true;
+        if (wholeLeft(tex, i0 === 0 && j0 === 0 && i1 === nx - 1 && j1 === ny - 1)) return;
+        // (three.js counts a texture's ranges in RGBA components, 4 a texel, and uploads them in texels of the texture's own
+        // format: one byte each here)
+        for (let j = j0; j <= j1; j++) tex.addUpdateRange((j * nx + i0) * 4, (i1 - i0 + 1) * 4);
     }
 
     /** The samples whose ceiling or drawn height differ between ceiling fits `was` and `now` (i0..i1, j0..j1), null when none
@@ -796,7 +829,7 @@ export class View {
                 nor.setXYZ(this.vertex(i, j), -east / len, 1 / len, north / len);
             }
         }
-        nor.needsUpdate = true;
+        this.uploadRows(nor, i0, i1, j0, j1);
     }
 
     /** The ground's bounds (for picking): worked out whole when everything changed, else grown to the changed heights. A
@@ -1644,19 +1677,28 @@ export class View {
         }
         const a = attr.array;
         const put = (seg, x0, y0, z0, x1, y1, z1) => a.set([x0, z0 + 0.05, size - y0, x1, z1 + 0.05, size - y1], seg * 6);
+        // (only the segments moved go to the GPU, a range a line, as uploadRows sends the ground)
+        attr.needsUpdate = true;
+        const whole = wholeLeft(attr, r.i0 <= 0 && r.j0 <= 0 && r.i1 >= nx - 1 && r.j1 >= ny - 1);
+        const upload = (seg, count) => !whole && count > 0 && attr.addUpdateRange(seg * 6, count * 6);
         for (let t = Math.ceil(r.i0 / per); t * per <= r.i1 && t <= area.tiles; t++) {
             const i = t * per,
-                along = t * TILE;
-            for (let k = Math.max(0, r.j0 - 1); k <= Math.min(ny - 2, r.j1); k++)
+                along = t * TILE,
+                k0 = Math.max(0, r.j0 - 1),
+                k1 = Math.min(ny - 2, r.j1);
+            for (let k = k0; k <= k1; k++)
                 put(t * (ny - 1) + k, along, k * SPACING, h[k * nx + i], along, (k + 1) * SPACING, h[(k + 1) * nx + i]);
+            upload(t * (ny - 1) + k0, k1 - k0 + 1);
         }
         for (let t = Math.ceil(r.j0 / per); t * per <= r.j1 && t <= area.tilesY; t++) {
             const j = t * per,
-                along = t * TILE;
-            for (let k = Math.max(0, r.i0 - 1); k <= Math.min(nx - 2, r.i1); k++)
+                along = t * TILE,
+                k0 = Math.max(0, r.i0 - 1),
+                k1 = Math.min(nx - 2, r.i1);
+            for (let k = k0; k <= k1; k++)
                 put(north + t * (nx - 1) + k, k * SPACING, along, h[j * nx + k], (k + 1) * SPACING, along, h[j * nx + k + 1]);
+            upload(north + t * (nx - 1) + k0, k1 - k0 + 1);
         }
-        attr.needsUpdate = true;
     }
 
     /** Area point (NWN metres) under the mouse, or null. The answer is kept while the pointer, the camera and the ground stay
@@ -1890,6 +1932,28 @@ export class View {
         if (this.markers) this.markers.visible = on;
     }
 }
+
+/**
+ * Whether buffer attribute or texture `x` goes to the GPU whole at its next upload: `whole` asks for that (its ranges are then
+ * dropped, which three.js reads as the whole of it), and it stays so until the upload is made, so a range added meanwhile
+ * can't shrink it. Ranges are added only when this is false.
+ */
+function wholeLeft(x, whole) {
+    if (!wholeUploads.has(x)) {
+        // (whole until its first upload: three.js sends a new texture's ranges only, the rest of it left unset)
+        wholeUploads.set(x, true);
+        // (three.js calls these after each upload)
+        if (x.isTexture) x.onUpdate = () => wholeUploads.set(x, false);
+        else x.onUpload(() => wholeUploads.set(x, false));
+    }
+    if (whole) {
+        x.clearUpdateRanges();
+        wholeUploads.set(x, true);
+    }
+    return wholeUploads.get(x);
+}
+// Each buffer attribute and texture waiting for a whole upload (wholeLeft).
+const wholeUploads = new WeakMap();
 
 function makeLabel(text, color) {
     const canvas = document.createElement('canvas');
