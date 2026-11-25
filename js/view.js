@@ -15,6 +15,7 @@ import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK } from './area.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
+import { triplanarGlsl } from './triplanar.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
@@ -26,15 +27,13 @@ const union = (a, b) =>
     a && b ? { i0: Math.min(a.i0, b.i0), i1: Math.max(a.i1, b.i1), j0: Math.min(a.j0, b.j0), j1: Math.max(a.j1, b.j1) } : a || b || null;
 // Multiplies the painted texture on ground too steep to walk.
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
-// Metres one texture repeat covers on the ground (landscaper's TEXTURE_METRES).
-const TEXTURE_METRES = 4;
-
 // Splat shading, as landscaper bakes it into the NWN tiles: each sample has
 // a texture (an index into the area palette, stored in uMat); a point
 // blends its four surrounding samples' textures bilinearly, so painted
-// edges soften over one 0.625 m sample. Ground too steep to walk takes its
-// texture from the side (along x + y, and up) and from the nearest sample.
-// v is negated: the texture array's rows run top first, NWN's bottom first.
+// edges soften over one 0.625 m sample. Ground too steep to walk takes the
+// nearest sample's texture alone. Every texture is drawn from three sides by
+// the ground's slope (triplanar.js), as the game's shader and landscaper's
+// bake draw it, so it keeps its size on every slope.
 // Baked shadows over the lit ground, as the game's shadow-map shader
 // multiplies them (fog comes after, in three.js as in the game).
 // Only over the area: the edge scenery has no shadow map. With baked
@@ -81,14 +80,15 @@ const SPLAT_VERTEX = `
     vUp = transformed.y;
     vGap = aGap;
     vDeep = aDeep;
-    vNormalUp = normal.y;`;
+    vNormalUp = normal.y;
+    vNormalArea = vec3(normal.x, -normal.z, normal.y);`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
         vec2 f = clamp(vArea / ${SPACING.toFixed(4)}, vec2(0.0), uN - 1.0);
         vec2 base = min(floor(f), uN - 2.0);
         vec2 t = f - base;
         ivec2 b = ivec2(base);
-        vec2 uv = vec2(vArea.x, -vArea.y) / ${TEXTURE_METRES.toFixed(1)};
+${triplanarGlsl('vNormalArea', 'vArea', 'vUp')}
         float m00 = floor(texelFetch(uMat, b, 0).r * 255.0 + 0.5);
         float m10 = floor(texelFetch(uMat, b + ivec2(1, 0), 0).r * 255.0 + 0.5);
         float m01 = floor(texelFetch(uMat, b + ivec2(0, 1), 0).r * 255.0 + 0.5);
@@ -108,14 +108,13 @@ const SPLAT_FRAGMENT = `
         vec4 imported = texture2D(uImport, folded / uSize);
         vec4 splat;
         if (vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
-            vec2 side = vec2(vArea.x + vArea.y, -vUp) / ${TEXTURE_METRES.toFixed(1)};
             float nearest = t.x < 0.5 ? (t.y < 0.5 ? m00 : m01) : (t.y < 0.5 ? m10 : m11);
-            splat = nearest == uImportLayer ? imported : texture(uTex, vec3(side, nearest));
+            splat = nearest == uImportLayer ? imported : TRIPLANAR(nearest);
         } else {
-            splat = (m00 == uImportLayer ? imported : texture(uTex, vec3(uv, m00))) * (1.0 - t.x) * (1.0 - t.y)
-                  + (m10 == uImportLayer ? imported : texture(uTex, vec3(uv, m10))) * t.x * (1.0 - t.y)
-                  + (m01 == uImportLayer ? imported : texture(uTex, vec3(uv, m01))) * (1.0 - t.x) * t.y
-                  + (m11 == uImportLayer ? imported : texture(uTex, vec3(uv, m11))) * t.x * t.y;
+            splat = (m00 == uImportLayer ? imported : TRIPLANAR(m00)) * (1.0 - t.x) * (1.0 - t.y)
+                  + (m10 == uImportLayer ? imported : TRIPLANAR(m10)) * t.x * (1.0 - t.y)
+                  + (m01 == uImportLayer ? imported : TRIPLANAR(m01)) * (1.0 - t.x) * t.y
+                  + (m11 == uImportLayer ? imported : TRIPLANAR(m11)) * t.x * t.y;
         }
         diffuseColor.rgb *= splat.rgb;
     }`;
@@ -366,13 +365,13 @@ export class View {
             shader.vertexShader = shader.vertexShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
+                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
                 )
                 .replace('#include <begin_vertex>', `#include <begin_vertex>${SPLAT_VERTEX}`);
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
+                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`);
         };

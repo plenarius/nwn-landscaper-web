@@ -11,6 +11,10 @@ of that release; before 1.0, a minor version may change the HTTP API between the
   going on with the dialog closed) and **Remove** (refused, with the areas named, while one paints with the pack). After either,
   the library and the palette load again; a texture painted with that left gives way to the default. Builders on a team server
   see the list without the buttons. Needs the engine of the same release (`/api/textures/packs`).
+- **Textures keep their size on every slope.** The view draws each texture from three sides at once (from above, along x and
+  along y), blended by which way the ground faces, as the engine of the same release draws it in the game. Steep ground took its
+  texture from the side along x + y, so a slope facing north-east or south-west smeared it into streaks; walkable slopes took it
+  from above, 1.6 times stretched at 50 degrees. An older engine still exports the old way.
 
 ## 0.4.0
 
