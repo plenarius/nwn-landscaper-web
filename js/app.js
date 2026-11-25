@@ -120,6 +120,7 @@ function updatePanels() {
     $('palette').hidden = over || tool !== 'paint';
     $('placePanel').hidden = over || tool !== 'place';
     $('rampPanel').hidden = over || tool !== 'ramp';
+    $('chasmPanel').hidden = over || tool !== 'chasm';
     $('descentPanel').hidden = over || tool !== 'descent';
     $('entrancePanel').hidden = over || tool !== 'entrance';
     if (tool === 'entrance' && !over) showEntrances();

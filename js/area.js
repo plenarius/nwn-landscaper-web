@@ -23,6 +23,18 @@ export const SHALLOW = 0.5;
 // under the roof up) are void, drawn black (landscaper's VOID_BELOW).
 export const CAVE_ROCK = 6;
 export const VOID_BELOW = 0.3;
+// A chasm drops this far under its rim (the nearest ground that isn't chasm), and ground more than CHASM_BELOW under its rim is in
+// it: nobody walks there. Its walls fade to black, all black from CHASM_DARK of the way down (landscaper's CHASM_DEPTH,
+// CHASM_BELOW and CHASM_DARK).
+export const CHASM_DEPTH = 20;
+export const CHASM_BELOW = 0.3;
+export const CHASM_DARK = 0.65;
+
+/** How bright a chasm wall is `t` of the way down (0 at the rim, 1 at the floor), in the game's colours: the fade landscaper
+ *  bakes into its walls (shared.rs, chasm_fade). */
+export function chasmFade(t) {
+    return Math.max(0, 1 - t / CHASM_DARK) ** 1.6;
+}
 
 /** An area being edited: its ground (heights and textures on a 0.625 m grid), and the objects, water, entrances, things and
  *  settings on it, with undo. Saved and sent to the engine as JSON (toJSON, fromJSON). */
@@ -48,6 +60,9 @@ export class Area {
         // each sample's water level from them (NaN: dry), as landscaper
         // floods them.
         this.water = [];
+        // The samples that drop away into a chasm (1), as a mask in the heights' order; null: none. Their heights stay as they
+        // were (filling a chasm in brings the ground back); what is drawn and exported is chasmFit's.
+        this.chasm = null;
         // Baked shadows' strength, 0 (none) to 1.
         this.shadow = 0.6;
         // Cave entrances (entrance.js), each with an `id` that tags its door (`<area>_ent<id>`), and the next id to give.
@@ -190,7 +205,8 @@ export class Area {
             const k = stack.pop();
             const x = k % n,
                 y = (k / n) | 0;
-            if (wet[k] || h[k] >= body.level || x < i0 || x > i1 || y < j0 || y > j1) continue;
+            // (water never runs into a chasm)
+            if (wet[k] || h[k] >= body.level || x < i0 || x > i1 || y < j0 || y > j1 || this.chasm?.[k]) continue;
             wet[k] = 1;
             if (x > 0) stack.push(k - 1);
             if (x + 1 < n) stack.push(k + 1);
@@ -282,6 +298,82 @@ export class Area {
         return { ceiling, shown };
     }
 
+    /** Whether sample (i, j) drops away into a chasm. */
+    isChasm(i, j) {
+        return !!this.chasm?.[j * this.nx + i];
+    }
+
+    /** Whether any sample is in a chasm. */
+    hasChasm() {
+        return !!this.chasm?.includes(1);
+    }
+
+    /**
+     * The chasm as it is drawn and exported (as landscaper's fit_chasm makes it), over `base` (the heights as drawn without it,
+     * the ceiling's cut rock in a cave): each chasm sample's rim is the height of the nearest sample that isn't chasm (breadth
+     * first, east, west, north, south in turn), and it lies CHASM_DEPTH under it. `shown` is the heights with the chasm dropped,
+     * `deep` each sample's depth under its rim over CHASM_DEPTH (0 out of the chasm, 1 in it). null with no chasm.
+     */
+    chasmFit(base = this.heights) {
+        if (!this.hasChasm()) return null;
+        const { nx, chasm } = this,
+            n = nx * this.ny;
+        if (this.chasmWork?.from.length !== n) this.chasmWork = { from: new Int32Array(n), queue: new Int32Array(n) };
+        const { from, queue } = this.chasmWork;
+        from.fill(-1);
+        let head = 0,
+            tail = 0;
+        for (let k = 0; k < n; k++)
+            if (!chasm[k]) {
+                from[k] = k;
+                queue[tail++] = k;
+            }
+        while (head < tail) {
+            const k = queue[head++],
+                i = k % nx,
+                f = from[k];
+            if (i + 1 < nx && from[k + 1] < 0) {
+                from[k + 1] = f;
+                queue[tail++] = k + 1;
+            }
+            if (i > 0 && from[k - 1] < 0) {
+                from[k - 1] = f;
+                queue[tail++] = k - 1;
+            }
+            if (k + nx < n && from[k + nx] < 0) {
+                from[k + nx] = f;
+                queue[tail++] = k + nx;
+            }
+            if (k >= nx && from[k - nx] < 0) {
+                from[k - nx] = f;
+                queue[tail++] = k - nx;
+            }
+        }
+        const shown = new Float32Array(base),
+            deep = new Float32Array(n);
+        for (let k = 0; k < n; k++) {
+            if (!chasm[k]) continue;
+            // (all of it chasm: no rim, so each sample its own)
+            shown[k] = (from[k] < 0 ? base[k] : base[from[k]]) - CHASM_DEPTH;
+            deep[k] = 1;
+        }
+        return { shown, deep };
+    }
+
+    /** The chasm as runs of samples, `[first, count]` each, for the engine (its header's `chasm`); null with none. */
+    chasmRuns() {
+        if (!this.hasChasm()) return null;
+        const runs = [],
+            c = this.chasm;
+        for (let k = 0; k < c.length; k++) {
+            if (!c[k]) continue;
+            const first = k;
+            while (k + 1 < c.length && c[k + 1]) k++;
+            runs.push([first, k - first + 1]);
+        }
+        return runs;
+    }
+
     /** A cave or an interior: dug out of a mass, its tops void, no sky. */
     enclosed() {
         return this.kind === 'underground' || this.kind === 'interior';
@@ -293,6 +385,11 @@ export class Area {
             h = this.heights,
             z = h[j * n + i];
         if (this.depth(i, j) > SHALLOW || this.void(i, j)) return false;
+        // In a chasm, or on its edge (the drop beside it is far steeper than MAX_RISE).
+        const c = this.chasm,
+            k = j * n + i;
+        if (c && (c[k] || (i > 0 && c[k - 1]) || (i < n - 1 && c[k + 1]) || (j > 0 && c[k - n]) || (j < this.ny - 1 && c[k + n])))
+            return false;
         if (i > 0 && Math.abs(h[j * n + i - 1] - z) > MAX_RISE) return false;
         if (i < n - 1 && Math.abs(h[j * n + i + 1] - z) > MAX_RISE) return false;
         if (j > 0 && Math.abs(h[(j - 1) * n + i] - z) > MAX_RISE) return false;
@@ -305,6 +402,7 @@ export class Area {
         return {
             h: this.heights.slice(),
             m: this.materials.slice(),
+            ch: this.chasm?.slice() ?? null,
             p: this.palette.slice(),
             w: this.water.map(b => ({ ...b })),
             e: this.entrances.map(e => ({ ...e })),
@@ -320,6 +418,8 @@ export class Area {
     restore(s) {
         this.heights.set(s.h);
         this.materials.set(s.m);
+        // (a snapshot from before chasms: none)
+        this.chasm = s.ch ? s.ch.slice() : null;
         this.palette = s.p.slice();
         this.water = s.w.map(b => ({ ...b }));
         this.entrances = s.e.map(e => ({ ...e }));
@@ -401,12 +501,16 @@ export class Area {
         };
         let rect = null,
             heights = null;
+        const c = this.chasm,
+            sc = s.ch ?? null;
         for (let k = 0; k < h.length; k++) {
-            if (h[k] === s.h[k] && m[k] === s.m[k]) continue;
+            const chasmed = (c?.[k] ?? 0) !== (sc?.[k] ?? 0);
+            if (h[k] === s.h[k] && m[k] === s.m[k] && !chasmed) continue;
             const i = k % nx,
                 j = (k - i) / nx;
             rect = grow(rect, i, j);
-            if (h[k] !== s.h[k]) heights = grow(heights, i, j);
+            // (a chasm opened or filled in moves the drawn ground, and so the shadows)
+            if (h[k] !== s.h[k] || chasmed) heights = grow(heights, i, j);
         }
         if ('c' in s && s.c !== this.clearance) rect = { i0: 0, i1: nx - 1, j0: 0, j1: this.ny - 1 };
         const key = e => JSON.stringify(e),
@@ -425,6 +529,7 @@ export class Area {
             tilesY: this.tilesY,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials),
+            chasm: this.hasChasm() ? toBase64(this.chasm) : null,
             palette: this.palette,
             atmosphere: this.atmosphere,
             water: this.water,
@@ -450,6 +555,10 @@ export class Area {
         const heights = new Float32Array(fromBase64(o.heights).buffer);
         const materials = o.materials ? fromBase64(o.materials) : undefined;
         const area = new Area(o.name, o.tiles, heights, materials, o.palette, o.tilesY ?? o.tiles);
+        if (typeof o.chasm === 'string' && o.chasm) {
+            const chasm = fromBase64(o.chasm);
+            if (chasm.length === area.nx * area.ny) area.chasm = chasm;
+        }
         if (o.atmosphere) area.atmosphere = o.atmosphere;
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
         if (o.entrances) area.entrances = o.entrances;

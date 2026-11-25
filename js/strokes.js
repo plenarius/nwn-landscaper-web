@@ -6,7 +6,7 @@
 // on a marker, the status line's position, and ?debug's pointer readout.
 
 import { TILE, DEFAULT_TEXTURE, SHALLOW, CAVE_ROCK } from './area.js';
-import { stamp, roomRect, cutRoom, rampPlan, cutRamp, descentPlan, cutDescent, DIG_MIN } from './tools.js';
+import { stamp, chasmStamp, chasmEdge, roomRect, cutRoom, rampPlan, cutRamp, descentPlan, cutDescent, DIG_MIN } from './tools.js';
 import { ask } from './ask.js';
 import { $, say } from './dom.js';
 import { models, transformer, selectObject, placeDown, placeDrag } from './place.js';
@@ -185,6 +185,22 @@ export function initStrokes(c) {
 
     canvas = ctx.view.renderer.domElement;
 
+    // The Chasm tool's "Along the whole edge": a chasm the brush size wide round the area.
+    $('chasmEdge').onclick = () => {
+        const a = ctx.area();
+        if (!a || ctx.readOnly() || currentStroke()) return;
+        if (a.enclosed()) {
+            say('Chasms are for outdoor areas.');
+            return;
+        }
+        a.beginStroke();
+        ctx.view.markDirty(chasmEdge(a, +ctx.sizeIn.value));
+        ctx.view.updateShade();
+        if (a.water.length) waterChanged();
+        saveSoon();
+        say(`A chasm ${ctx.sizeIn.value} m wide round the edge. Shift-drag fills parts of it in.`);
+    };
+
     canvas.addEventListener('pointerdown', e => {
         // Moving, turning or sizing the selected object: a click keeps it, a right click cancels.
         if (transformer.active) {
@@ -288,6 +304,17 @@ export function initStrokes(c) {
                 stroke = { water: w };
                 capture(e.pointerId);
             }
+            return;
+        }
+        if (ctx.tool() === 'chasm') {
+            if (ctx.area().enclosed()) {
+                say('Chasms are for outdoor areas: in a cave or an interior, dig and leave rock instead.');
+                return;
+            }
+            ctx.area().beginStroke();
+            // Shift fills it in. The brush stays at the level where it started (see View.pickLevel).
+            stroke = { tool: 'chasm', fill: e.shiftKey, level: p.z, last: performance.now() };
+            capture(e.pointerId);
             return;
         }
         // The eyedropper (its button, the I key, or Alt-click): one click picks the texture, no paint goes down.
@@ -467,7 +494,7 @@ export function initStrokes(c) {
     ctx.view.onFrame = () => {
         if (ctx.view.selected) transformer.place(ctx.view.selected);
         if (!ctx.area() || !mouse) return;
-        const p = ctx.view.pick(mouse.x, mouse.y);
+        const p = stroke?.tool === 'chasm' ? ctx.view.pickLevel(mouse.x, mouse.y, stroke.level) : ctx.view.pick(mouse.x, mouse.y);
         const radius = +ctx.sizeIn.value;
         ctx.view.setCursor(p, radius);
         if (p) {
@@ -476,14 +503,15 @@ export function initStrokes(c) {
             const { i, j } = ctx.area().sampleAt(p.x, p.y);
             const walk = ctx.area().walkable(i, j),
                 deep = ctx.area().depth(i, j);
-            const what =
-                deep > SHALLOW
-                    ? `water ${deep.toFixed(1)} m deep: too deep to walk`
-                    : deep > 0
-                      ? `shallow water ${deep.toFixed(1)} m: wading`
-                      : walk
-                        ? 'walkable'
-                        : 'too steep to walk';
+            const what = ctx.area().isChasm(i, j)
+                ? 'a chasm: nobody walks here'
+                : deep > SHALLOW
+                  ? `water ${deep.toFixed(1)} m deep: too deep to walk`
+                  : deep > 0
+                    ? `shallow water ${deep.toFixed(1)} m: wading`
+                    : walk
+                      ? 'walkable'
+                      : 'too steep to walk';
             $('statusPos').textContent =
                 `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
         }
@@ -497,7 +525,9 @@ export function initStrokes(c) {
             const dt = (now - stroke.last) / 1000;
             stroke.last = now;
             ctx.view.markDirty(
-                stamp(ctx.area(), stroke.tool, p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
+                stroke.tool === 'chasm'
+                    ? chasmStamp(ctx.area(), p.x, p.y, radius, stroke.fill)
+                    : stamp(ctx.area(), stroke.tool, p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
                 stroke.tool !== 'paint',
             );
             dbg.stamps++;

@@ -12,7 +12,8 @@ from the engine.
 What it does (*team* marks what only a team server offers, see nwn-landscaper's
 [TEAM-SERVER.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/TEAM-SERVER.md)):
 
-- **Sculpt** the ground: raise, lower, smooth, flatten; water; cave entrances; or start it from a greyscale heightmap image.
+- **Sculpt** the ground: raise, lower, smooth, flatten; water; bottomless chasms; cave entrances; or start it from a greyscale
+  heightmap image.
 - **Underlay**: lay a battlemat or a map under the area, scale it by two points a known distance apart, and trace over it.
 - **Paint** with a texture library the engine builds from your own game files, or pick a texture up from the ground.
 - **Caves and interiors**: cut rooms and passages out of rock, ramps and descending halls, a ceiling height.
@@ -88,7 +89,8 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   painted, lit and given its weather and sky box, and different every time. A name that an area already has asks before
   replacing that area. The engine saves your work to disk as you go; when it can't (no engine, or a failed save), the browser
   keeps the area until the engine is back and then hands it over.
-- **Tools** (big buttons; the key is under each): Raise `1`, Lower `2`, Smooth `3`, Flatten `4`, Paint `5`, Water `6`, Entrance `7`,
+- **Tools** (big buttons; the key is under each): Raise `1`, Lower `2`, Smooth `3`, Flatten `4`, Paint `5`, Water `6`, Chasm `c`,
+  Entrance `7`,
   Place `8`, Scatter `9`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r` (shown on every
   area). Brush size `[` `]`, strength slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel
   zooms; `F` reframes. Undo/redo with Ctrl+Z / Ctrl+Y.
@@ -105,6 +107,10 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   step down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See
   nwn-landscaper's [BUILDER-WORKFLOW.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/BUILDER-WORKFLOW.md) for the
   rules and the limits.
+- **Chasm** (`c`) opens a bottomless drop under the brush: the ground falls 20 m under its rim into the dark, and nobody walks into
+  it or across it. Shift-drag fills it in again, the ground as it was; *Along the whole edge* opens one all round the area, for
+  a plateau or an island over nothing. Leave a strip of ground at least 6 m wide over the middle of a tile's edge to cross one.
+  For outdoor areas; it needs an engine with chasms (nwn-landscaper's `chasm` header).
 - **Area > Import heightmap** replaces the open area's ground with a greyscale image (its top is north): the heights black
   and white stand for, stretched over the area or cropped to its shape. A 16-bit PNG is read at its full 65,536 levels; an
   8-bit image (JPEG, WebP, an 8-bit PNG) has 256, so *Smooth out steps* rounds off its terraces. Paint, water and things stay;

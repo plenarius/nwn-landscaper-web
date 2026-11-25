@@ -14,13 +14,14 @@ let ctx = null;
 
 /** The area open, as landscaper serve takes it: the query string has its name and simple settings (tiles, shadow, kind, roof,
  *  clearance, module); the body is its heights (f32 a sample), each sample's palette index (u8), then JSON with its lists and
- *  objects (palette, water, entrances, atmosphere, objects, things, settings, originals). */
+ *  objects (palette, water, chasm, entrances, atmosphere, objects, things, settings, originals). */
 export function areaRequest() {
     const a = ctx.area();
     const extra = new TextEncoder().encode(
         JSON.stringify({
             palette: a.palette,
             water: a.water,
+            chasm: a.chasmRuns(),
             entrances: a.entrances,
             atmosphere: a.atmosphere,
             objects: a.objects,

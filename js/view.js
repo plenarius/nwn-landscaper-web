@@ -11,7 +11,7 @@
 import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ } from './area.js';
+import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK } from './area.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
@@ -20,6 +20,10 @@ const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
 const ROCK = new THREE.Color(0x8a8378);
 const BLOCKED = new THREE.Color(0xc0503c);
+const WHITE = new THREE.Color(1, 1, 1);
+/** The rectangle (i0..i1, j0..j1) covering rectangles `a` and `b`, either of which may be none (null or false). */
+const union = (a, b) =>
+    a && b ? { i0: Math.min(a.i0, b.i0), i1: Math.max(a.i1, b.i1), j0: Math.min(a.j0, b.j0), j1: Math.max(a.j1, b.j1) } : a || b || null;
 // Multiplies the painted texture on ground too steep to walk.
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
 // Metres one texture repeat covers on the ground (landscaper's TEXTURE_METRES).
@@ -57,6 +61,8 @@ const SHADE_FRAGMENT = `
             diffuseColor.rgb *= pow(s, 2.2);
         }
         if (vGap <= ${VOID_BELOW.toFixed(2)}) diffuseColor.rgb = vec3(0.0);
+        // A chasm's walls fade to black going down, as landscaper's fade darkens them (chasmFade, in the game's colours).
+        if (vDeep > 0.0) diffuseColor.rgb *= pow(pow(max(0.0, 1.0 - vDeep / ${CHASM_DARK.toFixed(2)}), 1.6), 2.2);
     }`;
 
 // The underlay (underlay.js): a picture lying on the ground to trace over, blended over the ground's colour where it covers
@@ -74,6 +80,7 @@ const SPLAT_VERTEX = `
     vArea = vec2(transformed.x, uSize.y - transformed.z);
     vUp = transformed.y;
     vGap = aGap;
+    vDeep = aDeep;
     vNormalUp = normal.y;`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
@@ -308,12 +315,16 @@ export class View {
         this.water = null;
         this.lastPick = null;
         this.fit = null;
+        this.chasmFit = null;
+        this.drawn = null;
         const { nx, ny, sizeX, sizeY } = area;
         const geo = new THREE.PlaneGeometry(sizeX, sizeY, nx - 1, ny - 1);
         geo.rotateX(-Math.PI / 2);
         geo.translate(sizeX / 2, 0, sizeY / 2);
         // How far under its ceiling each sample is: the rock tops (0.3 or less) are void, drawn black.
         geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1e9), 1));
+        // How far down a chasm each sample is, over its depth: 0 out of one, 1 on its floor (drawn black, its walls fading).
+        geo.setAttribute('aDeep', new THREE.BufferAttribute(new Float32Array(nx * ny), 1));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
         this.uniforms.uMat.value?.dispose();
         const mat = new THREE.DataTexture(area.materials, nx, ny, THREE.RedFormat, THREE.UnsignedByteType);
@@ -355,13 +366,13 @@ export class View {
             shader.vertexShader = shader.vertexShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
+                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
                 )
                 .replace('#include <begin_vertex>', `#include <begin_vertex>${SPLAT_VERTEX}`);
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nvarying float vGap;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
+                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;',
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`);
         };
@@ -659,8 +670,10 @@ export class View {
         // A roof that follows the floor (a ceiling height) can move far from an edit: fitted again whole, then redrawn where
         // the fit changed as well (a whole redraw took 86 ms a Dig frame on a 32×32 cave).
         const fit = area.ceilingFit(),
-            moved = fit && this.fitChanged(this.fit, fit);
+            chasm = area.chasmFit(fit ? fit.shown : area.heights),
+            moved = union(fit && this.fitChanged(this.fit, fit), this.chasmChanged(this.chasmFit, chasm));
         this.fit = fit;
+        this.chasmFit = chasm;
         const r = moved
             ? { i0: Math.min(d.i0, moved.i0), i1: Math.max(d.i1, moved.i1), j0: Math.min(d.j0, moved.j0), j1: Math.max(d.j1, moved.j1) }
             : d;
@@ -670,7 +683,10 @@ export class View {
             j0 = Math.max(0, r.j0 - 1),
             j1 = Math.min(area.ny - 1, r.j1 + 1);
         const gap = this.mesh.geometry.attributes.aGap,
-            shownHeights = fit ? fit.shown : area.heights;
+            deep = this.mesh.geometry.attributes.aDeep,
+            shownHeights = chasm ? chasm.shown : fit ? fit.shown : area.heights;
+        // (the edge scenery carries these out)
+        this.drawn = shownHeights;
         // The colour range of the untextured ground (with the library's textures it isn't used).
         let lo = Infinity,
             hi = -Infinity;
@@ -688,9 +704,11 @@ export class View {
                     shown = shownHeights[j * n + i];
                 pos.setY(v, shown);
                 gap.setX(v, !area.enclosed() ? 1e9 : fit ? fit.ceiling[j * n + i] - shown : area.roof - shown);
-                // Under water the water shows it; no red tint.
+                deep.setX(v, chasm ? chasm.deep[j * n + i] : 0);
+                // Under water the water shows it; no red tint. (Nor in a chasm: it is dark.)
                 const wet = !Number.isNaN(area.waterLevel[j * n + i]);
-                if (this.textured) {
+                if (chasm?.deep[j * n + i]) c.copy(this.textured ? WHITE : ROCK);
+                else if (this.textured) {
                     // White leaves the painted texture as it is.
                     if (wet || area.walkable(i, j) || !this.showWalkability) c.setRGB(1, 1, 1);
                     else c.copy(BLOCKED_TINT);
@@ -704,6 +722,7 @@ export class View {
         }
         pos.needsUpdate = true;
         gap.needsUpdate = true;
+        deep.needsUpdate = true;
         col.needsUpdate = true;
         this.uniforms.uMat.value.needsUpdate = true;
         // Only what the change reaches: on a 32×32 area each of these over the whole mesh took most of a 245 ms frame.
@@ -725,6 +744,28 @@ export class View {
             j1 = -1;
         for (let k = 0; k < now.shown.length; k++) {
             if (was.shown[k] === now.shown[k] && was.ceiling[k] === now.ceiling[k]) continue;
+            const i = k % nx,
+                j = (k - i) / nx;
+            if (i < i0) i0 = i;
+            if (i > i1) i1 = i;
+            if (j < j0) j0 = j;
+            j1 = j;
+        }
+        return i1 < 0 ? null : { i0, i1, j0, j1 };
+    }
+
+    /** The samples whose drawn height differs between chasm fits `was` and `now` (i0..i1, j0..j1), null when none do: a chasm
+     *  sample's rim is the nearest ground's, which can be far from an edit. The whole area when a chasm came or went. */
+    chasmChanged(was, now) {
+        if (!was && !now) return null;
+        if (!was || !now || was.shown.length !== now.shown.length) return this.everything();
+        const { nx } = this.area;
+        let i0 = Infinity,
+            i1 = -1,
+            j0 = Infinity,
+            j1 = -1;
+        for (let k = 0; k < now.shown.length; k++) {
+            if (was.shown[k] === now.shown[k] && was.deep[k] === now.deep[k]) continue;
             const i = k % nx,
                 j = (k - i) / nx;
             if (i < i0) i0 = i;
@@ -1421,6 +1462,9 @@ export class View {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(verts * 3).fill(0.72), 3));
+        geo.setAttribute('aDeep', new THREE.BufferAttribute(new Float32Array(verts), 1));
+        // (no cave void out there: without it the shader read 0, under VOID_BELOW, and drew the edge scenery black)
+        geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(verts).fill(1e9), 1));
         const index = [];
         for (let s = 0; s < 4; s++) {
             for (let k = 0; k < strips[s] - 1; k++) {
@@ -1445,24 +1489,29 @@ export class View {
         if (!this.skirt) return;
         const area = this.area,
             { nx, ny, sizeX: sx, sizeY: sy } = area,
-            h = area.heights,
+            h = this.drawn ?? area.heights,
+            deep = this.chasmFit?.deep,
             D = 50;
-        const pos = this.skirt.geometry.attributes.position;
-        // Area point (x, y) at height z, as three.js wants it.
-        const put = (v, x, y, z) => pos.setXYZ(v, x, z, sy - y);
+        const pos = this.skirt.geometry.attributes.position,
+            dark = this.skirt.geometry.attributes.aDeep;
+        // Area point (x, y) at the height of sample k, as three.js wants it; a chasm on the boundary carries on out, dark as it.
+        const put = (v, x, y, k) => {
+            pos.setXYZ(v, x, h[k], sy - y);
+            dark.setX(v, deep ? deep[k] : 0);
+        };
         for (let k = 0; k < ny; k++) {
             const t = k * SPACING;
-            put(k * 2, -D, t, h[k * nx]);
-            put(k * 2 + 1, 0, t, h[k * nx]);
-            put((ny + k) * 2, sx, t, h[k * nx + nx - 1]);
-            put((ny + k) * 2 + 1, sx + D, t, h[k * nx + nx - 1]);
+            put(k * 2, -D, t, k * nx);
+            put(k * 2 + 1, 0, t, k * nx);
+            put((ny + k) * 2, sx, t, k * nx + nx - 1);
+            put((ny + k) * 2 + 1, sx + D, t, k * nx + nx - 1);
         }
         for (let k = 0; k < nx; k++) {
             const t = k * SPACING;
-            put((2 * ny + k) * 2, t, -D, h[k]);
-            put((2 * ny + k) * 2 + 1, t, 0, h[k]);
-            put((2 * ny + nx + k) * 2, t, sy, h[(ny - 1) * nx + k]);
-            put((2 * ny + nx + k) * 2 + 1, t, sy + D, h[(ny - 1) * nx + k]);
+            put((2 * ny + k) * 2, t, -D, k);
+            put((2 * ny + k) * 2 + 1, t, 0, k);
+            put((2 * ny + nx + k) * 2, t, sy, (ny - 1) * nx + k);
+            put((2 * ny + nx + k) * 2 + 1, t, sy + D, (ny - 1) * nx + k);
         }
         const first = 2 * (2 * ny + 2 * nx);
         const corners = [
@@ -1471,15 +1520,18 @@ export class View {
             [sx, 0, sx + D, -D],
             [sx, sy, sx + D, sy + D],
         ];
+        // (each corner flat at its corner sample's height)
+        const cornerSample = [0, (ny - 1) * nx, nx - 1, ny * nx - 1];
         corners.forEach(([x, y, fx, fy], c) => {
-            const z = area.heightAt(x, y),
+            const k = cornerSample[c],
                 a = first + c * 4;
-            put(a, x, y, z);
-            put(a + 1, fx, y, z);
-            put(a + 2, fx, fy, z);
-            put(a + 3, x, fy, z);
+            put(a, x, y, k);
+            put(a + 1, fx, y, k);
+            put(a + 2, fx, fy, k);
+            put(a + 3, x, fy, k);
         });
         pos.needsUpdate = true;
+        dark.needsUpdate = true;
         this.skirt.geometry.computeVertexNormals();
         this.skirt.geometry.computeBoundingSphere();
     }
@@ -1625,6 +1677,18 @@ export class View {
         }
         const p = this.lastPick.point;
         return p && { ...p };
+    }
+
+    /** Where the pointer at (clientX, clientY) meets the level `z` metres up (area metres, `z` that height), or null when it
+     *  points away from it. The Chasm tool's brush follows the rim's level this way: on the ground it would drop into the chasm
+     *  it opens, and away from where the pointer is. */
+    pickLevel(clientX, clientY, z) {
+        this.aim(clientX, clientY);
+        const { origin, direction } = this.raycaster.ray;
+        if (Math.abs(direction.y) < 1e-6) return null;
+        const t = (z - origin.y) / direction.y;
+        if (t <= 0) return null;
+        return { x: origin.x + direction.x * t, y: this.area.sizeY - (origin.z + direction.z * t), z };
     }
 
     /** Where the ray from `o` along `d` first meets the ground as drawn, in three.js's frame (or null). It walks the cells the
