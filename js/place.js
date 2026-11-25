@@ -4,7 +4,7 @@
 // The Place tool: placeables found by a search and put down one at a time (baked into the tiles or as game objects), and the
 // selected one moved, turned, sized or removed (G / R / S, the handles, the numbers in its panel).
 
-import { ModelLibrary } from './models.js';
+import { ModelLibrary, PAGE, GROUPS } from './models.js';
 import { Transformer } from './transform.js';
 import { engine, NEEDS_ENGINE } from './api.js';
 import { $, el, say } from './dom.js';
@@ -20,34 +20,86 @@ export let models = null;
 export let transformer = null;
 let placeModel = null;
 /** Searches offered as buttons over the Place and Scatter panels' results. */
-export const QUICK = ['rock', 'boulder', 'tree', 'bush', 'ruin', 'pillar', 'statue', 'fence'];
+export const QUICK = ['rock', 'boulder', 'tree', 'bush', 'cactus', ...Object.keys(GROUPS), 'ruin', 'pillar', 'statue', 'fence'];
 
-/** Search results as big swatches in `box`, each calling `pick(model)`. */
-export async function modelResults(box, query, pick) {
+/** A source as the panels name it: the game's own files, or the hak's name. */
+export const sourceName = source => (source === 'game' ? 'Game' : source);
+
+/** Search results as big swatches in `box`, a page at a time ("Show more" adds the next), each calling `pick(model)`; from
+ *  `source` alone when one is given, the models in `first` first. `count` (an element) says how many match; `shown()` runs
+ *  after each later page is in. */
+export async function modelResults(box, query, pick, { source = '', count = null, shown = () => {}, first = null } = {}) {
     await models.load();
     box.textContent = '';
-    if (!models.list.length) box.textContent = engine.up ? 'No placeables: the engine found none in the game.' : NEEDS_ENGINE;
-    for (const p of models.search(query)) {
-        const b = document.createElement('button');
-        b.className = 'swatch';
-        b.dataset.model = p.model;
-        b.title = `${p.name} (${p.model})`;
-        b.append(el('img', { className: 'thumb', alt: '' }), el('span', { textContent: p.name }));
-        b.onclick = () => pick(p.model);
-        box.appendChild(b);
-        models.thumbnail(p.model).then(url => {
-            if (url) b.querySelector('img').src = url;
-        });
+    if (count) count.textContent = '';
+    if (!models.list.length) {
+        box.textContent = engine.up ? 'No placeables: the engine found none in the game.' : NEEDS_ENGINE;
+        return;
     }
+    // A group's chip: the plants measured first (once).
+    if (GROUPS[query.trim().toLowerCase()]) await models.loadGroups();
+    const several = models.sources().length > 1;
+    const page = offset => {
+        const { results, total } = models.search(query, { offset, source, first });
+        if (count)
+            count.textContent = total ? `${total} found${total > PAGE ? `, ${Math.min(offset + results.length, total)} shown` : ''}` : '';
+        if (!total) box.textContent = `Nothing matches “${query}”${source ? ` in ${sourceName(source)}` : ''}.`;
+        for (const p of results) {
+            const b = document.createElement('button');
+            b.className = 'swatch';
+            b.dataset.model = p.model;
+            b.title = `${p.name} (${p.model}, ${sourceName(p.source ?? 'game')})`;
+            b.append(el('img', { className: 'thumb', alt: '' }), el('span', { textContent: p.name }));
+            // Where it comes from, when there is more than the game.
+            if (several) b.append(el('small', { className: 'source', textContent: sourceName(p.source ?? 'game') }));
+            b.onclick = () => pick(p.model);
+            box.appendChild(b);
+            models
+                .thumbnail(p.model, () => b.isConnected)
+                .then(url => {
+                    if (url) b.querySelector('img').src = url;
+                });
+        }
+        if (offset + results.length < total) {
+            const more = el('button', {
+                type: 'button',
+                className: 'more',
+                textContent: `Show more (${total - offset - results.length} left)`,
+            });
+            more.onclick = () => {
+                more.remove();
+                page(offset + results.length);
+                shown();
+            };
+            box.appendChild(more);
+        }
+    };
+    page(0);
+}
+
+/** Fills `select` with where the models come from (Anywhere, the game, each hak with its count), hidden when it is the game
+ *  alone; keeps what was chosen. */
+export function fillSources(select) {
+    const list = models.sources();
+    const was = select.value;
+    select.replaceChildren(new Option('From anywhere', ''), ...list.map(s => new Option(`${sourceName(s.source)} (${s.count})`, s.source)));
+    select.value = list.some(s => s.source === was) ? was : '';
+    select.hidden = list.length < 2;
 }
 
 let placeShown = null;
 /** Fills the Place panel with the placeables matching its search box (rocks when empty), unless they already show. */
 export async function showPlaceables() {
     const query = $('placeSearch').value.trim() || 'rock';
-    if (query === placeShown) return;
-    placeShown = query;
-    await modelResults($('placeResults'), query, selectPlaceable);
+    const source = $('placeFrom').value;
+    if (placeShown?.query === query && placeShown.source === source) return;
+    placeShown = { query, source };
+    await modelResults($('placeResults'), query, selectPlaceable, {
+        source,
+        count: $('placeCount'),
+        shown: () => selectPlaceable(placeModel),
+    });
+    fillSources($('placeFrom'));
     selectPlaceable(placeModel);
 }
 function selectPlaceable(model) {
@@ -250,6 +302,7 @@ export function initPlace(c) {
         $('placeChips').appendChild(b);
     }
     $('placeSearch').oninput = () => searchSoon(showPlaceables);
+    $('placeFrom').onchange = showPlaceables;
     // The selected object takes the size too: one undo step for a drag of the slider (each input event took one, and 40 of
     // them pushed every earlier step out of the history). `change` ends the drag (or one key press).
     let sizing = false;

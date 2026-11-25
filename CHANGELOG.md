@@ -6,6 +6,18 @@ of that release; before 1.0, a minor version may change the HTTP API between the
 
 ## Unreleased
 
+- **The module's haks' placeables in Place and Scatter.** With an engine that reads the module's haks, the panels offer their placeables
+  too (a module of 57 haks: 6,259 models where the game alone gives 1,304; "cactus" finds 52, "bush" 71). Each result names where it comes
+  from (the game or a hak), and a list under the search box picks one source alone. Results come 48 at a time with **Show more**, the
+  count above them. The list is indexed once (about 220 ms in Chromium, with its download); a search then takes under 1 ms, and results
+  show 50 to 90 ms after the typing pause. Rows whose model is nowhere (placeables.2da's `user01` placeholders) are no longer offered.
+- **Small plants and Large plants.** Two chips beside rock, tree, bush and the rest, and a new **cactus** chip. The engine finds the
+  plants by their names (bush, shrub, fern, flower, cactus, reed, grass, weed...; not trees, vases, planters or wall ivy) and sizes each
+  by its model's height: from 1.5 m a plant is large (with that module's haks, 274 small and 93 large). In Scatter a group's chip also
+  makes the mix: up to 12 of the group's models, a few of each kind in turn and spread across each kind, without cacti and reeds (they
+  grow in their own places: their chip or a search adds them). Needs the engine of the same release (`/api/placeable-groups`).
+- **Thumbnails don't pile up.** A search's pictures not drawn yet when the next search replaces its results are skipped, and the page
+  takes clicks and keys between two pictures.
 - **Get more textures** (the Paint panel): a dialog of the texture packs the engine offers (name, size, texture count, licence,
   credits and a few swatches) and those installed, with **Install** (its download, check and install shown on a progress bar,
   going on with the dialog closed) and **Remove** (refused, with the areas named, while one paints with the pack). After either,

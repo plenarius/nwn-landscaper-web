@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// The game's placeables, from landscaper serve (/api/placeables,
-// /api/model/<resref>, /api/texture/<name>): the list, each model as a
-// three.js group (its textured triangles, at rest), and small thumbnails.
+// The game's placeables, the module's haks' with them, from landscaper serve
+// (/api/placeables, /api/model/<resref>, /api/texture/<name>): the list to
+// search, each model as a three.js group (its textured triangles, at rest),
+// and small thumbnails.
 //
 // Models come in NWN axes (x east, y north, z up); a group has three.js's
 // (x, z, -y), so an object stands with position (x, height, size - y) and
@@ -13,40 +14,134 @@ import * as THREE from 'three';
 import { api, json } from './api.js';
 import { thumbnail } from './thumbnail.js';
 
+/** What a search shows at a time; "Show more" adds as many again. */
+export const PAGE = 48;
+
+/** The plant groups the engine measures (plants.rs), by the chip that shows each. */
+export const GROUPS = { 'small plants': 'small', 'large plants': 'large' };
+
+/** At most this many models in the mix a group's chip gives Scatter: enough variety, few enough to see and change. */
+export const MIX = 12;
+/** Kinds a group's mix leaves out: they grow in their own places (deserts, wet ground). Their chip or a search finds them. */
+const OWN_PLACES = new Set(['cactus', 'reed']);
+
 /** The game's placeable models from the engine: the list to search, each model's outline (`flat`), its 3D group, its textures
  *  and a thumbnail, each loaded once and kept. */
 export class ModelLibrary {
     constructor() {
-        this.list = null; // [{ row, label, name, model }]
+        this.list = null; // [{ row, label, name, model, source }]: source is a hak, `game`, or null for a model nowhere
+        this.index = []; // one entry a model there is, in the list's order: { p, text (lower case), source }
+        this.plants = null; // model -> { kind, height, width, large }, once asked for (loadGroups)
         this.flats = new Map(); // model -> Promise<flat JSON>
         this.groups = new Map(); // model -> Promise<THREE.Group>
         this.textures = new Map(); // name -> THREE.Texture
         this.loaded = new Map(); // name -> Promise (settles when the image is in)
-        this.thumbs = new Map(); // model -> Promise<data URL>
+        this.thumbs = new Map(); // model -> { url: Promise<data URL>, wants: [() => still wanted] }
     }
 
     /** The list, asked for until the engine gives it (so a search after it starts finds them). */
     async load() {
         if (this.list?.length) return this.list;
         const res = await api('/api/placeables');
-        this.list = res.ok ? ((await json(res)).placeables ?? []) : [];
+        this.setList(res.ok ? ((await json(res)).placeables ?? []) : []);
         return this.list;
     }
 
-    /** Placeables whose name, label or model has every word of `query`. */
-    search(query, limit = 48) {
-        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-        const out = [],
-            seen = new Set();
-        for (const p of this.list ?? []) {
-            const text = `${p.name} ${p.label} ${p.model}`.toLowerCase();
-            if (words.every(w => text.includes(w)) && !seen.has(p.model)) {
-                seen.add(p.model);
-                out.push(p);
-                if (out.length >= limit) break;
+    /** Takes the engine's list, and indexes it once for search: a module's haks give 21,201 rows, searched on every key. */
+    setList(list) {
+        this.list = list;
+        this.index = [];
+        const seen = new Set();
+        for (const p of list) {
+            // A row whose model is nowhere can't be drawn or baked (an engine before sources said none: all are there).
+            if (p.source === null || seen.has(p.model)) continue;
+            seen.add(p.model);
+            const source = p.source ?? 'game';
+            this.index.push({ p, source, text: `${p.name} ${p.label} ${p.model}`.toLowerCase() });
+        }
+    }
+
+    /** The plants, measured by the engine once (it reads each plant's model for its size): asked for when a group's chip is
+     *  first used, not at start. None from an engine without it. */
+    async loadGroups() {
+        if (this.plants) return this.plants;
+        this.groupsAsked ??= api('/api/placeable-groups')
+            .then(r => (r.ok ? json(r) : { plants: [] }))
+            .catch(() => ({ plants: [] }));
+        const { plants = [] } = await this.groupsAsked;
+        this.plants = new Map(plants.map(p => [p.model, p]));
+        return this.plants;
+    }
+
+    /** The group `group` (`small` or `large`) of model `model`, null when it is no plant (or the plants aren't loaded). */
+    groupOf(model) {
+        const p = this.plants?.get(model);
+        return p ? (p.large ? 'large' : 'small') : null;
+    }
+
+    /** A mix of group `group`'s models (from `source` alone when given) for Scatter: at most [`MIX`], a few of each kind in turn
+     *  (bushes, ferns, flowers, grass, other plants), spread across each kind's models rather than its first few (often one
+     *  model's variants side by side), without the kinds of [`OWN_PLACES`]. */
+    groupMix(group, source = '', most = MIX) {
+        const byKind = new Map();
+        for (const e of this.index) {
+            const p = this.plants?.get(e.p.model);
+            if (!p || this.groupOf(e.p.model) !== group || (source && e.source !== source) || OWN_PLACES.has(p.kind)) continue;
+            if (!byKind.has(p.kind)) byKind.set(p.kind, []);
+            byKind.get(p.kind).push(e.p.model);
+        }
+        // Each kind's share: one each in turn until the mix is full (a kind with few models leaves the rest to the others).
+        const kinds = [...byKind.values()];
+        const share = kinds.map(() => 0);
+        let n = 0;
+        while (n < most && share.some((c, i) => c < kinds[i].length)) {
+            for (let i = 0; i < kinds.length && n < most; i++) {
+                if (share[i] < kinds[i].length) {
+                    share[i]++;
+                    n++;
+                }
             }
         }
+        // Spread evenly over each kind's list, the kinds taken in turn.
+        const picks = kinds.map((k, i) => Array.from({ length: share[i] }, (_, j) => k[Math.floor((j * k.length) / share[i])]));
+        const out = [];
+        for (let j = 0; j < Math.max(0, ...share); j++) for (const p of picks) if (j < p.length) out.push(p[j]);
         return out;
+    }
+
+    /** Where the models come from, the game first, then each hak by how many it gives: [{ source, count }]. */
+    sources() {
+        const count = new Map();
+        for (const e of this.index) count.set(e.source, (count.get(e.source) ?? 0) + 1);
+        return [...count]
+            .map(([source, n]) => ({ source, count: n }))
+            .sort((a, b) => (a.source === 'game' ? -1 : b.source === 'game' ? 1 : b.count - a.count));
+    }
+
+    /** Placeables (one a model) whose name, label or model has every word of `query`, from `source` alone when one is
+     *  given: `{ results, total }`, `limit` of them from the `offset`th, and how many match in all. A group's chip name
+     *  (`small plants`) gives that group's models ([`GROUPS`]; loadGroups first). The models in `first` (a Set) come first. */
+    search(query, { offset = 0, limit = PAGE, source = '', first = null } = {}) {
+        const group = GROUPS[query.trim().toLowerCase()];
+        // (An underscore parts words, as a space does: "saguaro_cactus" finds the label Saguaro_Cactus and the name "Saguaro cactus".)
+        const words = group
+            ? []
+            : query
+                  .toLowerCase()
+                  .split(/[\s_]+/)
+                  .filter(Boolean);
+        const results = [];
+        let total = 0;
+        const order = first?.size
+            ? [...this.index.filter(e => first.has(e.p.model)), ...this.index.filter(e => !first.has(e.p.model))]
+            : this.index;
+        for (const e of order) {
+            if (source && e.source !== source) continue;
+            if (group ? this.groupOf(e.p.model) !== group : !words.every(w => e.text.includes(w))) continue;
+            if (total >= offset && results.length < limit) results.push(e.p);
+            total++;
+        }
+        return { results, total };
     }
 
     flat(model) {
@@ -129,13 +224,29 @@ export class ModelLibrary {
         return this.groups.get(model);
     }
 
-    /** A small picture of the model (a data URL), rendered once. */
-    thumbnail(model) {
-        if (!this.thumbs.has(model)) {
-            this.thumbQueue = (this.thumbQueue ?? Promise.resolve()).then(() => this.render(model)).catch(() => '');
-            this.thumbs.set(model, this.thumbQueue);
+    /** A small picture of the model (a data URL), rendered once, one at a time. `wanted()` says whether it is still wanted when
+     *  its turn comes: a search's results replaced by the next search's before their pictures were drawn are skipped ('', and
+     *  asked again next time), so a few searches through a module's thousands of placeables don't queue hundreds of pictures. */
+    thumbnail(model, wanted = () => true) {
+        const kept = this.thumbs.get(model);
+        if (kept) {
+            kept.wants.push(wanted);
+            return kept.url;
         }
-        return this.thumbs.get(model);
+        const entry = { wants: [wanted], url: null };
+        entry.url = this.thumbQueue = (this.thumbQueue ?? Promise.resolve())
+            .then(async () => {
+                if (!entry.wants.some(w => w())) {
+                    this.thumbs.delete(model);
+                    return '';
+                }
+                // (A turn of the event loop between pictures: the page answers clicks and keys while a page of them is drawn.)
+                await new Promise(r => setTimeout(r));
+                return this.render(model);
+            })
+            .catch(() => '');
+        this.thumbs.set(model, entry);
+        return entry.url;
     }
 
     async render(model) {

@@ -4,8 +4,9 @@
 // The Scatter tool: a mix of placeables, picked in its panel, strewn under the brush at a density and a range of sizes (Shift
 // clears them). The stroke itself is strokes.js's; this file stamps it.
 
-import { $ } from './dom.js';
-import { QUICK, modelResults, searchSoon, appearanceOf, groundUnder } from './place.js';
+import { $, say } from './dom.js';
+import { QUICK, models, modelResults, fillSources, searchSoon, appearanceOf, groundUnder } from './place.js';
+import { GROUPS } from './models.js';
 import { basePoints } from './footing.js';
 
 /** What app.js gives this file (initScatter): `area()` and `view`. */
@@ -18,13 +19,16 @@ let scatterShown = null;
 /** Fills the Scatter panel with the models matching its search box (rocks when empty), unless they already show. */
 export async function showScatterables() {
     const query = $('scatterSearch').value.trim() || 'rock';
-    if (query === scatterShown) return;
-    scatterShown = query;
-    await modelResults($('scatterResults'), query, model => {
+    const source = $('scatterFrom').value;
+    if (scatterShown?.query === query && scatterShown.source === source) return;
+    scatterShown = { query, source };
+    const pick = model => {
         if (scatterMix.has(model)) scatterMix.delete(model);
         else scatterMix.add(model);
         markMix();
-    });
+    };
+    await modelResults($('scatterResults'), query, pick, { source, count: $('scatterCount'), shown: markMix, first: scatterMix });
+    fillSources($('scatterFrom'));
     markMix();
 }
 function markMix() {
@@ -87,6 +91,18 @@ export function scatterStamp(p, radius, s) {
     }
 }
 
+/** A group's chip makes the mix: a few of each kind of the group's plants (models.js groupMix), in place of the mix there was; they
+ *  lead the results. */
+function mixGroup(chip) {
+    const mix = models.groupMix(GROUPS[chip], $('scatterFrom').value);
+    if (!mix.length) return;
+    scatterMix.clear();
+    for (const m of mix) scatterMix.add(m);
+    say(
+        `The mix: ${mix.length} ${chip}, a few of each kind (no cacti or reeds: their own chip or a search finds them). Click one to take it out or add another.`,
+    );
+}
+
 /** Sets up the Scatter panel. */
 export function initScatter(c) {
     ctx = c;
@@ -94,13 +110,21 @@ export function initScatter(c) {
         const b = document.createElement('button');
         b.type = 'button';
         b.textContent = q;
-        b.onclick = () => {
+        b.onclick = async () => {
             $('scatterSearch').value = q;
-            showScatterables();
+            if (GROUPS[q]) {
+                // The mix first, so its models lead the results.
+                await models.load();
+                await models.loadGroups();
+                mixGroup(q);
+                scatterShown = null;
+            }
+            await showScatterables();
         };
         $('scatterChips').appendChild(b);
     }
     $('scatterSearch').oninput = () => searchSoon(showScatterables);
+    $('scatterFrom').onchange = showScatterables;
     const showScatterSliders = () => {
         $('scatterDensityOut').textContent = `${$('scatterDensity').value} per 100 m²`;
         $('scatterMinOut').textContent = `${Math.round($('scatterMin').value * 100)}%`;
