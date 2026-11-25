@@ -28,6 +28,7 @@ import { $, el, session, store, say } from './dom.js';
 import { initImport, reimport } from './import.js';
 import { initSky, showAreaSky, refreshSky } from './sky.js';
 import { initMenus } from './menus.js';
+import { showVersion } from './version.js';
 import { initActivity } from './activity.js';
 import { initPublish } from './publish.js';
 import { initScripts } from './scripts.js';
@@ -594,6 +595,7 @@ async function loadMe() {
     viewing.user = me.viewing || null;
     showWho();
     showEngine();
+    showVersion(engine.up ? me.version : null);
 }
 
 /** Without the engine the page sculpts; the banner says so once, and Live stays off. The texture library comes from the engine:

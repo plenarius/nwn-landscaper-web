@@ -4,6 +4,13 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## Unreleased
+
+- **The version beside the title.** The top bar says which version is running, small, after *NWN Landscaper*: the engine's
+  (from its `/api/me`, which needs this release's engine) and this editor's (from the CHANGELOG.md next to it). A click shows
+  both and links to the release's notes. An engine and editor of different releases show both, in orange; a build from
+  `main` or `master` after a release says `+dev` after that release's version.
+
 ## 0.6.1
 
 - **No change to the editor.** Released with the engine's 0.6.1: no more dark teeth along river banks, and a signed Windows
