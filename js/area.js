@@ -29,6 +29,10 @@ export const VOID_BELOW = 0.3;
 export const CHASM_DEPTH = 20;
 export const CHASM_BELOW = 0.3;
 export const CHASM_DARK = 0.65;
+// Undo keeps this many steps.
+export const UNDO_STEPS = 40;
+// What undo brings back besides the ground's grids (heights, paint, chasm). Not `entranceNextId` (see the constructor).
+const UNDO_FIELDS = ['palette', 'water', 'entrances', 'objects', 'things', 'settings', 'originals', 'clearance', 'atmosphere', 'shadow'];
 
 /** How bright a chasm wall is `t` of the way down (0 at the rim, 1 at the floor), in the game's colours: the fade landscaper
  *  bakes into its walls (shared.rs, chasm_fade). */
@@ -98,8 +102,11 @@ export class Area {
         // its saved copy's, which is another area of the same name made since (from another tab or computer). null for an
         // area made before ids, or by the engine (an import).
         this.created = null;
+        // Undo and redo: steps of the old values of what each changed (beginStroke), and the grids and fields as they were
+        // when the last one began, to find what the next one changes (settle). null until the first step.
         this.undoStack = [];
         this.redoStack = [];
+        this.undoBase = null;
     }
 
     /** Palette index of a texture id, adding it if new. */
@@ -397,41 +404,10 @@ export class Area {
         return true;
     }
 
-    // Undo: a snapshot of heights and paint before each stroke.
+    /** The state outside the ground's grids that undo brings back, as a copy: `before` for beginStroke, for a change confirmed
+     *  later (a transform). The grids aren't copied: their changed rectangle is found when the step settles. */
     snapshot() {
-        return {
-            h: this.heights.slice(),
-            m: this.materials.slice(),
-            ch: this.chasm?.slice() ?? null,
-            p: this.palette.slice(),
-            w: this.water.map(b => ({ ...b })),
-            e: this.entrances.map(e => ({ ...e })),
-            o: this.objects.map(o => ({ ...o })),
-            t: structuredClone(this.things),
-            s: structuredClone(this.settings),
-            r: structuredClone(this.originals),
-            c: this.clearance,
-            a: structuredClone(this.atmosphere),
-            sh: this.shadow,
-        };
-    }
-    restore(s) {
-        this.heights.set(s.h);
-        this.materials.set(s.m);
-        // (a snapshot from before chasms: none)
-        this.chasm = s.ch ? s.ch.slice() : null;
-        this.palette = s.p.slice();
-        this.water = s.w.map(b => ({ ...b }));
-        this.entrances = s.e.map(e => ({ ...e }));
-        this.objects = s.o.map(o => ({ ...o }));
-        this.things = structuredClone(s.t ?? []);
-        this.settings = structuredClone(s.s ?? null);
-        this.originals = structuredClone(s.r ?? { removed: [], moved: {}, edited: {} });
-        // (the Descent tool sets the ceiling height with its floors)
-        if ('c' in s) this.clearance = s.c;
-        if (s.a) this.atmosphere = structuredClone(s.a);
-        if ('sh' in s) this.shadow = s.sh;
-        this.floodWater();
+        return { meta: structuredClone(pick(this, UNDO_FIELDS)) };
     }
 
     /**
@@ -462,63 +438,171 @@ export class Area {
         return `${this.name}_ent${e.id}`;
     }
 
-    /** One undo step: the area as it is now, or `before` (a snapshot() taken earlier, for a change confirmed later). */
-    beginStroke(before = this.snapshot()) {
-        this.undoStack.push(before);
-        if (this.undoStack.length > 40) this.undoStack.shift();
+    /**
+     * One undo step begins: from the area as it is now, or from `before` (a snapshot() taken earlier, for a change confirmed
+     * later; it holds only the state outside the grids, so the grids mustn't change between the two). A step keeps the old
+     * values of the rectangle of samples it changed and of the fields it changed, never a copy of the whole area: 40 whole
+     * copies of a 32×32 area held 63 MB. What it changed is found when the next step begins, or at undo (settle).
+     */
+    beginStroke(before = null) {
+        this.settle(this.undoStack.at(-1), before?.meta);
+        this.undoStack.push({ rect: null, h: null, m: null, ch: null, chNull: this.chasm === null, meta: {} });
+        if (this.undoStack.length > UNDO_STEPS) this.undoStack.shift();
         this.redoStack = [];
     }
 
     undo() {
-        if (!this.undoStack.length) return false;
-        this.redoStack.push(this.snapshot());
-        this.restore(this.noteChange(this.undoStack.pop()));
-        return true;
+        return this.step(this.undoStack, this.redoStack);
     }
 
     redo() {
-        if (!this.redoStack.length) return false;
-        this.undoStack.push(this.snapshot());
-        this.restore(this.noteChange(this.redoStack.pop()));
+        return this.step(this.redoStack, this.undoStack);
+    }
+
+    /** Takes the last step off `from`, goes back to the state it holds, and puts the way back on `to`. */
+    step(from, to) {
+        if (!from.length) return false;
+        this.settle(from.at(-1));
+        to.push(this.apply(from.pop()));
         return true;
     }
 
     /**
-     * What going back to snapshot `s` changes, in `lastChange`, for the view to redraw only that: `rect`, the samples whose
-     * height or paint differ (i0..i1, j0..j1; null when none do, the whole area when the ceiling height differs); `heights`,
-     * those whose height differs (the shadows follow the heights, not the paint); `entrances`, the ones added, taken out or
-     * changed (their dark mouths are in the shadows); and `shadow`, whether the shadows' strength differs. Returns `s`.
+     * Settles what changed since the undo base (`undoBase`: the grids and fields as they were when the last step began, or
+     * the last undo or redo) into step `into`, then moves the base up to now. `into` is the step still being made, or the
+     * last one when the change came without beginStroke: undo then takes it back with that step, as a whole snapshot did.
+     * `meta`: the fields to settle, a snapshot()'s, instead of the area's own (beginStroke's `before`).
      */
-    noteChange(s) {
-        const { nx, heights: h, materials: m } = this;
-        const grow = (r, i, j) => {
-            if (!r) return { i0: i, i1: i, j0: j, j1: j };
-            if (i < r.i0) r.i0 = i;
-            if (i > r.i1) r.i1 = i;
-            if (j < r.j0) r.j0 = j;
-            r.j1 = j;
-            return r;
-        };
+    settle(into, meta = null) {
+        const now = meta ?? this,
+            n = this.nx * this.ny;
+        const base = this.undoBase;
+        if (base?.h.length !== n) {
+            this.undoBase = {
+                h: this.heights.slice(),
+                m: this.materials.slice(),
+                ch: this.chasm?.slice() ?? new Uint8Array(n),
+                meta: structuredClone(pick(now, UNDO_FIELDS)),
+            };
+            return;
+        }
+        const rect = this.changedSince(base),
+            fields = UNDO_FIELDS.filter(f => !same(now[f], base.meta[f]));
+        if (into) {
+            if (rect) widen(into, rect, base, this.nx);
+            for (const f of fields) if (!(f in into.meta)) into.meta[f] = base.meta[f];
+        }
+        for (const f of fields) base.meta[f] = structuredClone(now[f]);
+        if (!rect) return;
+        const { nx } = this,
+            c = this.chasm;
+        for (let j = rect.j0; j <= rect.j1; j++) {
+            const a = j * nx + rect.i0,
+                b = j * nx + rect.i1 + 1;
+            base.h.set(this.heights.subarray(a, b), a);
+            base.m.set(this.materials.subarray(a, b), a);
+            if (c) base.ch.set(c.subarray(a, b), a);
+            else base.ch.fill(0, a, b);
+        }
+    }
+
+    /** The samples whose height, paint or chasm differ from undo base `base` (i0..i1, j0..j1), null when none do. Heights are
+     *  compared as bits, so a NaN is the same as itself. */
+    changedSince(base) {
+        const { nx, ny } = this,
+            h = bits(this.heights),
+            bh = bits(base.h),
+            m = this.materials,
+            bm = base.m,
+            c = this.chasm,
+            bc = base.ch;
+        let i0 = nx,
+            i1 = -1,
+            j0 = -1,
+            j1 = -1;
+        for (let j = 0, k = 0; j < ny; j++) {
+            let first = -1,
+                last = -1;
+            for (let i = 0; i < nx; i++, k++) {
+                if (h[k] === bh[k] && m[k] === bm[k] && (c ? c[k] : 0) === bc[k]) continue;
+                if (first < 0) first = i;
+                last = i;
+            }
+            if (first < 0) continue;
+            if (j0 < 0) j0 = j;
+            j1 = j;
+            if (first < i0) i0 = first;
+            if (last > i1) i1 = last;
+        }
+        return j0 < 0 ? null : { i0, i1, j0, j1 };
+    }
+
+    /**
+     * Goes back to the state step `s` holds, and returns the way back to now (a step of the same rectangle and fields). Notes
+     * what changed in `lastChange`, for the view to redraw only that: `rect`, the samples whose height, paint or chasm differ
+     * (i0..i1, j0..j1; null when none do, the whole area when the ceiling height differs); `heights`, those whose height or
+     * chasm differ (the shadows follow the drawn heights, not the paint); `entrances`, the ones added, taken out or changed
+     * (their dark mouths are in the shadows); and `shadow`, whether the shadows' strength differs.
+     */
+    apply(s) {
+        const base = this.undoBase,
+            { nx, ny } = this,
+            back = { rect: s.rect, h: null, m: null, ch: null, chNull: this.chasm === null, meta: {} };
         let rect = null,
             heights = null;
-        const c = this.chasm,
-            sc = s.ch ?? null;
-        for (let k = 0; k < h.length; k++) {
-            const chasmed = (c?.[k] ?? 0) !== (sc?.[k] ?? 0);
-            if (h[k] === s.h[k] && m[k] === s.m[k] && !chasmed) continue;
-            const i = k % nx,
-                j = (k - i) / nx;
-            rect = grow(rect, i, j);
-            // (a chasm opened or filled in moves the drawn ground, and so the shadows)
-            if (h[k] !== s.h[k] || chasmed) heights = grow(heights, i, j);
+        // (a state with a chasm array has one again, if only of zeros, as a whole snapshot gave it back)
+        if (s.rect || !s.chNull) this.chasm ??= new Uint8Array(nx * ny);
+        if (s.rect) {
+            const { i0, i1, j0, j1 } = s.rect,
+                size = (i1 - i0 + 1) * (j1 - j0 + 1);
+            back.h = new Float32Array(size);
+            back.m = new Uint8Array(size);
+            back.ch = new Uint8Array(size);
+            const h = this.heights,
+                m = this.materials,
+                c = this.chasm;
+            for (let j = j0, r = 0; j <= j1; j++)
+                for (let i = i0, k = j * nx + i0; i <= i1; i++, k++, r++) {
+                    const oh = h[k],
+                        om = m[k],
+                        oc = c[k],
+                        nh = s.h[r],
+                        nm = s.m[r],
+                        nc = s.ch[r];
+                    back.h[r] = oh;
+                    back.m[r] = om;
+                    back.ch[r] = oc;
+                    h[k] = base.h[k] = nh;
+                    m[k] = base.m[k] = nm;
+                    c[k] = base.ch[k] = nc;
+                    const moved = oh !== nh || oc !== nc;
+                    if (moved || om !== nm) rect = grow(rect, i, j);
+                    // (a chasm opened or filled in moves the drawn ground, and so the shadows)
+                    if (moved) heights = grow(heights, i, j);
+                }
         }
-        if ('c' in s && s.c !== this.clearance) rect = { i0: 0, i1: nx - 1, j0: 0, j1: this.ny - 1 };
-        const key = e => JSON.stringify(e),
-            was = new Set(s.e.map(key)),
-            now = new Set(this.entrances.map(key));
-        const entrances = [...s.e.filter(e => !now.has(key(e))), ...this.entrances.filter(e => !was.has(key(e)))];
-        this.lastChange = { rect, heights, entrances, shadow: 'sh' in s && s.sh !== this.shadow };
-        return s;
+        // (a state from before any chasm: none, once nothing is in one)
+        if (s.chNull && this.chasm && !this.chasm.includes(1)) this.chasm = null;
+        const was = this.entrances;
+        let entrances = [],
+            shadow = false;
+        for (const f in s.meta) {
+            if (f === 'clearance' && s.meta.clearance !== this.clearance) rect = { i0: 0, i1: nx - 1, j0: 0, j1: ny - 1 };
+            if (f === 'shadow') shadow = s.meta.shadow !== this.shadow;
+            if (f === 'entrances') {
+                const key = e => JSON.stringify(e),
+                    then = new Set(s.meta.entrances.map(key)),
+                    now = new Set(was.map(key));
+                entrances = [...s.meta.entrances.filter(e => !now.has(key(e))), ...was.filter(e => !then.has(key(e)))];
+            }
+            // (the base is a copy of now: it becomes the way back, and a new copy the base)
+            back.meta[f] = base.meta[f];
+            this[f] = s.meta[f];
+            base.meta[f] = structuredClone(s.meta[f]);
+        }
+        this.floodWater();
+        this.lastChange = { rect, heights, entrances, shadow };
+        return back;
     }
 
     // Saved in the browser between sessions.
@@ -597,4 +681,61 @@ function fromBase64(text) {
     const bytes = new Uint8Array(bin.length);
     for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
     return bytes;
+}
+
+/** Fields `fields` of `o`, as an object of their own (not copied). */
+function pick(o, fields) {
+    return Object.fromEntries(fields.map(f => [f, o[f]]));
+}
+
+/** Whether `a` and `b` hold the same data: the same primitives, or arrays and plain objects with the same keys and values. */
+function same(a, b) {
+    if (Object.is(a, b)) return true;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
+    const ka = Object.keys(a);
+    if (ka.length !== Object.keys(b).length) return false;
+    for (const k of ka) if (!Object.hasOwn(b, k) || !same(a[k], b[k])) return false;
+    return true;
+}
+
+/** Float32Array `a`'s bits, to compare samples exactly. */
+const bits = a => new Uint32Array(a.buffer, a.byteOffset, a.length);
+
+/** Rectangle `r` (null: none) grown to take in sample (i, j). */
+function grow(r, i, j) {
+    if (!r) return { i0: i, i1: i, j0: j, j1: j };
+    if (i < r.i0) r.i0 = i;
+    if (i > r.i1) r.i1 = i;
+    if (j < r.j0) r.j0 = j;
+    if (j > r.j1) r.j1 = j;
+    return r;
+}
+
+/** Undo step `s` widened to take in rectangle `r` of an area `nx` samples across: the samples it held keep its values, the
+ *  new ones take the undo base's `base` (the state before them, which the step never changed). */
+function widen(s, r, base, nx) {
+    const was = s.rect;
+    if (was && r.i0 >= was.i0 && r.i1 <= was.i1 && r.j0 >= was.j0 && r.j1 <= was.j1) return;
+    const u = was
+        ? { i0: Math.min(was.i0, r.i0), i1: Math.max(was.i1, r.i1), j0: Math.min(was.j0, r.j0), j1: Math.max(was.j1, r.j1) }
+        : { ...r };
+    const w = u.i1 - u.i0 + 1,
+        size = w * (u.j1 - u.j0 + 1),
+        h = new Float32Array(size),
+        m = new Uint8Array(size),
+        ch = new Uint8Array(size);
+    for (let j = u.j0, q = 0; j <= u.j1; j++, q += w) {
+        const a = j * nx + u.i0;
+        h.set(base.h.subarray(a, a + w), q);
+        m.set(base.m.subarray(a, a + w), q);
+        ch.set(base.ch.subarray(a, a + w), q);
+        if (!was || j < was.j0 || j > was.j1) continue;
+        const ww = was.i1 - was.i0 + 1,
+            p = (j - was.j0) * ww,
+            at = q + was.i0 - u.i0;
+        h.set(s.h.subarray(p, p + ww), at);
+        m.set(s.m.subarray(p, p + ww), at);
+        ch.set(s.ch.subarray(p, p + ww), at);
+    }
+    Object.assign(s, { rect: u, h, m, ch });
 }

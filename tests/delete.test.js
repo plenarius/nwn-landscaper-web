@@ -49,9 +49,10 @@ async function deleteOpen(answer) {
 
 const deletes = () => engine.log.filter(l => l.startsWith('DELETE'));
 
-beforeEach(() => {
+beforeEach(async () => {
     engine.reset();
     clearStorage();
+    await save.loadCopies();
     questions.asked = [];
     questions.answers = [];
     opened.length = 0;

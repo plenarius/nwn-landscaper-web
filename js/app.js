@@ -45,6 +45,7 @@ import {
     saveSoon,
     flushSave,
     moveBrowserAreas,
+    loadCopies,
     browserCopy,
     browserCopies,
     noteSaved,
@@ -874,6 +875,8 @@ let reviewArea = null;
         history.replaceState(null, '', location.pathname);
     }
 }
+// (the copies kept in this browser, read before anything asks for one)
+await loadCopies();
 if (!readOnly) await moveBrowserAreas();
 {
     const current = reviewArea ?? (readOnly ? null : lastOpen());
