@@ -27,7 +27,14 @@ export class TextureLibrary {
         } catch {
             return false;
         }
+        // (Loaded again after a texture pack came or went: a texture that left, or a pack's that may have changed, is read anew.)
+        const was = this.byId;
+        this.byId = new Map();
         for (const t of this.catalog) this.byId.set(t.id, t);
+        for (const id of [...this.pixels.keys()]) {
+            const t = this.byId.get(id);
+            if (!t || t.pack || JSON.stringify(t) !== JSON.stringify(was.get(id))) this.pixels.delete(id);
+        }
         return this.catalog.length > 0;
     }
 

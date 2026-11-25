@@ -108,3 +108,96 @@ dialog div:where(.dialog-buttons) button.primary {
     border: 1px solid var(--panel-2);
     image-rendering: pixelated;
 }
+
+/* Get more textures: a row a pack (swatches, what it is, its buttons), and the install's progress. */
+#packsDialog {
+    width: min(680px, 94vw);
+}
+.packs-list {
+    max-height: 58vh;
+    overflow-y: auto;
+}
+.pack-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pack-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px 14px;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 8px;
+}
+.pack-row.installed {
+    border-color: #2f4a35;
+}
+.pack-swatches {
+    display: grid;
+    grid-template-columns: repeat(3, 48px);
+    gap: 4px;
+}
+.pack-swatches img {
+    display: block;
+    border-radius: 4px;
+    background: #1d2228;
+}
+.pack-text {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+.pack-text h3 {
+    margin: 0 0 2px;
+    font-size: 15px;
+}
+.pack-text p {
+    margin: 2px 0;
+    font-size: 13px;
+}
+.pack-text .note,
+#packsDialog .note {
+    color: var(--muted);
+}
+#packsDialog .note.err {
+    color: var(--bad);
+}
+#packsDialog .note.ok {
+    color: #5cc46a;
+}
+.pack-credits {
+    font-style: italic;
+}
+.pack-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+}
+.pack-buttons button {
+    padding: 7px 14px;
+    background: var(--panel);
+    border: 1px solid #000;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+.pack-buttons button.primary {
+    background: var(--accent);
+    color: #1d1a12;
+    font-weight: 600;
+}
+#packsBar {
+    display: block;
+    width: 100%;
+    height: 8px;
+    margin: 12px 0 4px;
+    accent-color: var(--accent);
+}
+#packsBar[hidden] {
+    display: none;
+}

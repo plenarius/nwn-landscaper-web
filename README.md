@@ -105,6 +105,9 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 - **Texture categories**: click a category's heading in the Paint panel to fold its textures away, or use **Collapse all** and
   **Expand all**. A folded category still shows the texture you paint with, and picking a texture up opens its category. This
   browser remembers which are folded.
+- **Get more textures**: the Paint panel's button lists the texture packs the engine offers, with their licence, credits and a few
+  swatches. **Install** downloads one into the library (its progress shown as it goes) and its textures join their categories;
+  **Remove** takes it out again, unless an area still paints with it. On a team server only admins install or remove.
 - **Caves and interiors**: cut rooms and passages out of the rock with Room and Dig (passages about 6 m wide at least, along tile
   middles). Lay a Ramp between levels (a little wider than the passage), or drag a box with Descent to fill it with halls that
   step down, joined by ramps. **Area > Ceiling height** keeps the same headroom over the floor everywhere, so a descent stays tight. See
