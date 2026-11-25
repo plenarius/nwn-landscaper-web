@@ -4,6 +4,17 @@ All notable changes to the Landscaper's web editor. Versions follow [Semantic Ve
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
 
+## 0.4.0
+
+- **Chasm** (key `c`): a bottomless drop that blocks the way, for a cliff edge, a canyon rim, a gap between ledges or a
+  floating island. The brush opens one with a slightly ragged rim; Shift-drag fills it back in, the ground as it was.
+  *Along the whole edge* opens one the brush's width all round the area. The view draws its walls fading to black and its
+  floor black, as the game does; nothing walks in it or on its rim, and water stops at it. To cross one, leave ground at
+  least 6 m wide over the middle of a tile edge. Not in caves or interiors. Needs the engine of the same release: an older
+  one exports the ground there as it is.
+- **The ground beyond the area's edge is drawn as ground again.** The view drew it black on every outdoor area, as if it
+  were a cave's rock.
+
 ## 0.3.1
 
 - **No change to the editor.** Released with the engine's 0.3.1, whose exports of imported areas are quicker again.
