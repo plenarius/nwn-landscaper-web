@@ -92,7 +92,7 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   keeps the area until the engine is back and then hands it over.
 - **Tools** (big buttons; the key is under each): Raise `1`, Lower `2`, Smooth `3`, Flatten `4`, Paint `5`, Water `6`, Chasm `c`,
   Entrance `7`,
-  Place `8`, Scatter `9`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r` (shown on every
+  Place `8`, Scatter `9`, Ambience `a`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r` (shown on every
   area). Brush size `[` `]`, strength slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel
   zooms; `F` reframes. Undo/redo with Ctrl+Z / Ctrl+Y.
 - **Other keys**: `N` new area, `O` open, `L` sky & fog, `M` shows or hides the markers. The camera: the arrow keys move along
@@ -118,6 +118,13 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   it or across it. Shift-drag fills it in again, the ground as it was; *Along the whole edge* opens one all round the area, for
   a plateau or an island over nothing. Leave a strip of ground at least 6 m wide over the middle of a tile's edge to cross one.
   For outdoor areas; it needs an engine with chasms (nwn-landscaper's `chasm` header).
+- **Ambience** (`a`) places the particle pack's kinds (mist, spray, fireflies, leaves, motes, light shafts, sand, snow,
+  embers, ground fog), which the export bakes into the tiles. **Fill** puts the ticked kinds where the area calls for them: mist on
+  water (more where it is wide), spray where water drops, leaves under trees, fireflies on grass within 10 m of water, motes and
+  shafts in gaps in the trees and at cave mouths, sand on dune crests, snow on ridges, ground fog in hollows. The brush adds the
+  chosen kind; Shift-drag clears it. The panel counts the particles they keep alive against the area's cap of 1,500, and Fill and
+  the brush stop there. The view sketches them as moving points in each kind's colour, night-only kinds when it shows night. It
+  needs an engine with the particle pack (nwn-landscaper's `/api/particles` and `ambience` header).
 - **Area > Import heightmap** replaces the open area's ground with a greyscale image (its top is north): the heights black
   and white stand for, stretched over the area or cropped to its shape. A 16-bit PNG is read at its full 65,536 levels; an
   8-bit image (JPEG, WebP, an 8-bit PNG) has 256, so *Smooth out steps* rounds off its terraces. Paint, water and things stay;

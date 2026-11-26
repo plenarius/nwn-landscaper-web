@@ -34,7 +34,19 @@ export const CHASM_DARK = 0.65;
 // Undo keeps this many steps.
 export const UNDO_STEPS = 40;
 // What undo brings back besides the ground's grids (heights, paint, chasm). Not `entranceNextId` (see the constructor).
-const UNDO_FIELDS = ['palette', 'water', 'entrances', 'objects', 'things', 'settings', 'originals', 'clearance', 'atmosphere', 'shadow'];
+const UNDO_FIELDS = [
+    'palette',
+    'water',
+    'entrances',
+    'objects',
+    'things',
+    'settings',
+    'originals',
+    'clearance',
+    'atmosphere',
+    'shadow',
+    'ambience',
+];
 
 /** How bright a chasm wall is `t` of the way down (0 at the rim, 1 at the floor), in the game's colours: the fade landscaper
  *  bakes into its walls (shared.rs, chasm_fade). */
@@ -81,6 +93,8 @@ export class Area {
         // solid, baked }; baked: false is a real placeable (object mode).
         this.objects = [];
         this.nextObjectId = 1;
+        // Particles baked into the tiles on export (the Ambience tool, ambience.js): { kind, x, y, z, scale, seed, bearing }.
+        this.ambience = [];
         // Creatures, waypoints, triggers, sounds... (things.js): { id, kind, blueprint, x, y, bearing, outline, tag, name,
         // vars, fields }. And the area's own settings (scripts, weather, music...): null until set.
         this.things = [];
@@ -627,6 +641,7 @@ export class Area {
             entrances: this.entrances,
             objects: this.objects,
             nextObjectId: this.nextObjectId,
+            ambience: this.ambience,
             kind: this.kind,
             roof: this.roof,
             clearance: this.clearance,
@@ -654,6 +669,7 @@ export class Area {
         if (o.entrances) area.entrances = o.entrances;
         area.giveEntranceIds(o.entranceNextId);
         if (o.objects) area.objects = o.objects;
+        if (validAmbience(o.ambience)) area.ambience = o.ambience;
         if (o.kind) {
             area.kind = o.kind;
             area.roof = o.roof;
@@ -674,6 +690,12 @@ export class Area {
         }
         return area;
     }
+}
+
+/** Whether `v` is a list of particle placements as an area keeps them (ambience.js): each a kind and a point. */
+function validAmbience(v) {
+    const n = x => typeof x === 'number' && Number.isFinite(x);
+    return Array.isArray(v) && v.every(p => p && typeof p.kind === 'string' && p.kind && n(p.x) && n(p.y) && n(p.z));
 }
 
 function toBase64(bytes) {

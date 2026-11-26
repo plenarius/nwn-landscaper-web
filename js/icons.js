@@ -38,6 +38,10 @@ export const ICONS = {
     place: svg(
         '<path d="M6 40 C8 30 14 26 20 28 C24 22 34 22 36 30 C42 30 44 36 42 40 Z" fill="currentColor" fill-opacity="0.25"/><path d="M34 6 V18 M28 12 H40"/>',
     ),
+    // A drift of particles over a wave of mist.
+    ambience: svg(
+        '<path d="M4 34 C10 28 16 28 22 34 C28 40 34 40 44 32" /><path d="M4 42 C12 37 18 38 24 41 C30 44 38 43 44 40" stroke-opacity="0.6"/><circle cx="14" cy="16" r="2.5" fill="currentColor"/><circle cx="26" cy="9" r="2" fill="currentColor"/><circle cx="34" cy="20" r="3" fill="currentColor" fill-opacity="0.5"/><circle cx="22" cy="23" r="1.6" fill="currentColor"/><circle cx="40" cy="10" r="1.6" fill="currentColor"/>',
+    ),
     scatter: svg(
         '<circle cx="12" cy="30" r="5" fill="currentColor" fill-opacity="0.3"/><circle cx="26" cy="22" r="4" fill="currentColor" fill-opacity="0.3"/><circle cx="36" cy="34" r="6" fill="currentColor" fill-opacity="0.3"/><circle cx="22" cy="38" r="3" fill="currentColor" fill-opacity="0.3"/><path d="M38 6 L42 10 M40 6 V14 M36 10 H44" stroke-width="2"/>',
     ),
