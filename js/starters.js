@@ -325,12 +325,13 @@ function lakeValley(area, base, rand, library) {
 }
 
 /** The sample landscapes, by the New area dialog's `start` value: their size in tiles (across, up), how they are shaped, their
- *  light (a preset of atmosphere.js) and the area settings they change (sky box: the stock skyboxes.2da rows). */
+ *  light and sky (a preset of atmosphere.js; `skyRow`, the game's row when the preset's own sky isn't installed, if not the
+ *  preset's) and the area settings they change. */
 export const TERRAIN_STARTERS = {
-    canyon: { size: [16, 12], shape: canyon, light: 'golden', settings: { skyBox: 3, weather: { rain: 5, snow: 0, wind: 1 } } },
-    'snowy-pass': { size: [16, 14], shape: snowyPass, light: 'overcast', settings: { skyBox: 4, weather: { rain: 0, snow: 60, wind: 2 } } },
-    dunes: { size: [16, 16], shape: dunes, light: 'golden', settings: { skyBox: 3, weather: { rain: 0, snow: 0, wind: 1 } } },
-    'lake-valley': { size: [16, 16], shape: lakeValley, light: 'clear', settings: { skyBox: 1, weather: { rain: 20, snow: 0, wind: 1 } } },
+    canyon: { size: [16, 12], shape: canyon, light: 'golden', settings: { weather: { rain: 5, snow: 0, wind: 1 } } },
+    'snowy-pass': { size: [16, 14], shape: snowyPass, light: 'overcast', skyRow: 4, settings: { weather: { rain: 0, snow: 60, wind: 2 } } },
+    dunes: { size: [16, 16], shape: dunes, light: 'golden', settings: { weather: { rain: 0, snow: 0, wind: 1 } } },
+    'lake-valley': { size: [16, 16], shape: lakeValley, light: 'clear', settings: { weather: { rain: 20, snow: 0, wind: 1 } } },
 };
 
 /** Shapes and paints new flat `area` as the sample landscape `starter` (a value of TERRAIN_STARTERS), from `base` metres up.
@@ -346,6 +347,8 @@ export function seedTerrain(area, starter, base, library, seed = Math.floor(Math
     };
     starter.shape(area, base, rand, library);
     area.atmosphere = copyPreset(PRESETS.find(p => p.id === starter.light));
+    // (a snowy pass under the game's winter sky, not its storm)
+    if (starter.skyRow != null && area.atmosphere.skyRow != null) area.atmosphere.skyRow = starter.skyRow;
 }
 
 /** `settings` (an area's, from the project's template) with what `starter` changes in them. */

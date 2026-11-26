@@ -296,6 +296,18 @@ select.from[hidden] {
     background: #3d3a30;
     color: #fff;
 }
+/* The chosen sky's picture: the horizon all around (720 by 60 px). */
+.sky-strip {
+    display: block;
+    width: 100%;
+    aspect-ratio: 12;
+    margin: 0 0 6px;
+    border-radius: 6px;
+    background: var(--panel-2);
+}
+.sky-strip[hidden] {
+    display: none;
+}
 .radios {
     display: flex;
     flex-direction: column;
