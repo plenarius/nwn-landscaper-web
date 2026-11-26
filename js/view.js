@@ -1108,9 +1108,12 @@ export class View {
      * own objects (`ghosts`): each kind has its own colour and shape, standing on the ground with an arrow for the
      * way it faces; a trigger's or encounter's outline is a filled, draped polygon with a ribbon round it and a post
      * at each corner. The one selected (`selectedId`/`selectedKey`) is white. `draft` is an outline being drawn. `inert`:
-     * to look at only, nothing can be picked.
+     * to look at only, nothing can be picked. A door or placeable whose model is known (`thingModel(t)`, set by the Things tool)
+     * is drawn as that model instead (see thingModelAt).
      */
     setThings(things, selectedId = null, draft = null, ghosts = [], selectedKey = null, inert = false) {
+        this.lastThings = [things, selectedId, draft, ghosts, selectedKey, inert];
+        const models = this.beginThingModels();
         // An outline's fill and ribbon are kept while its shape, colour, selection and the ground stay the same: a drag
         // makes only the dragged one again (500 triggers took 72 ms a frame).
         const free = c => {
@@ -1133,6 +1136,7 @@ export class View {
         this.scene.add(group);
         if (!this.area) {
             for (const m of keep) free(m);
+            models.end();
             return;
         }
         const area = this.area,
@@ -1308,6 +1312,8 @@ export class View {
             const c = tone(t.kind, sel, ghost);
             const hasOutline = t.outline?.length >= 3;
             const p = hasOutline ? at(t.outline[0][0], t.outline[0][1]) : at(t.x, t.y);
+            // A door or placeable as its model, once it is in (its marker until then, and when it has none).
+            if (!hasOutline && models.put(t, id, p, sel, ghost)) return;
             marker(t.kind, p, c, sel, ghost, id);
             if (hasOutline) {
                 const key = `${this.groundVersion}|${id}|${sel}|${ghost}|${c.getHexString()}|${t.outline.join(';')}`;
@@ -1346,6 +1352,7 @@ export class View {
         };
         for (const g of ghosts) draw(g, g.key, g.key === selectedKey, true);
         for (const t of things) draw(t, t.id, t.id === selectedId, false);
+        models.end();
         // (the outlines that changed or went: their old meshes)
         for (const meshes of before.values()) for (const m of meshes) free(m);
         for (const { geo, ghost, items } of batches.values()) {
@@ -1395,6 +1402,109 @@ export class View {
         }
     }
 
+    /** Draws the things again as last given (a model they wait for has come in), once a frame however many come. */
+    redrawThings() {
+        if (this.thingsRedraw || !this.lastThings) return;
+        this.thingsRedraw = requestAnimationFrame(() => {
+            this.thingsRedraw = 0;
+            if (this.lastThings) this.setThings(...this.lastThings);
+        });
+    }
+
+    /** The model `name` as the library's group, or null while it comes in (setThings is drawn again then), if it can't be read, or
+     *  if it has nothing to draw (a tile door the tile itself shows: doortypes.2da's VisibleModel 0). Each model is read once,
+     *  however many doors have it. */
+    thingModelAt(name) {
+        this.thingLoaded ??= new Map();
+        if (!this.thingLoaded.has(name)) {
+            this.thingLoaded.set(name, null);
+            this.models?.group(name).then(
+                g => {
+                    if (!g.children.length) return;
+                    this.thingLoaded.set(name, g);
+                    this.redrawThings();
+                },
+                () => {},
+            );
+        }
+        return this.thingLoaded.get(name);
+    }
+
+    /**
+     * The things drawn as their models in one setThings: `put(t, id, p, sel, ghost)` stands thing `t`'s model at `p`, turned by
+     * its bearing (as the Place tool's objects: bearing 0 is the model as made), and is false when it has none to draw; `end()`
+     * takes away the ones not put again. Each thing keeps its copy between calls (a drag only moves it). A copy shares the
+     * library's geometry; an original's has the model's materials washed toward grey, as its marker is, made once a model. The
+     * selected one has a white box round it.
+     */
+    beginThingModels() {
+        if (!this.thingModelGroup) {
+            this.thingModelGroup = new THREE.Group();
+            this.scene.add(this.thingModelGroup);
+            this.thingCopies = new Map();
+            this.thingWashed = new Map();
+        }
+        const group = this.thingModelGroup,
+            copies = this.thingCopies,
+            used = new Set();
+        let selected = null;
+        const washed = (name, model) => {
+            if (!this.thingWashed.has(name))
+                this.thingWashed.set(
+                    name,
+                    model.children.map(m => {
+                        const w = m.material.clone();
+                        w.color.set(0xb4bac2);
+                        w.emissive = new THREE.Color(0x30353b);
+                        return w;
+                    }),
+                );
+            return this.thingWashed.get(name);
+        };
+        const put = (t, id, p, sel, ghost) => {
+            if (!this.area || !this.models) return false;
+            const name = this.thingModel?.(t);
+            const model = name ? this.thingModelAt(name) : null;
+            if (!model) return false;
+            const key = `${ghost ? 'o' : 't'}:${id}`;
+            let copy = copies.get(key);
+            if (copy && (copy.userData.model !== name || copy.userData.ghost !== ghost)) {
+                group.remove(copy);
+                copy = null;
+            }
+            if (!copy) {
+                const materials = ghost ? washed(name, model) : null;
+                copy = new THREE.Group();
+                for (const [i, m] of model.children.entries()) copy.add(new THREE.Mesh(m.geometry, materials?.[i] ?? m.material));
+                copy.userData = { model: name, ghost };
+                copies.set(key, copy);
+                group.add(copy);
+            }
+            for (const m of copy.children) m.userData.thing = id;
+            copy.position.copy(p);
+            copy.rotation.y = t.bearing ?? 0;
+            used.add(key);
+            if (sel) selected = copy;
+            return true;
+        };
+        const end = () => {
+            for (const [key, copy] of copies)
+                if (!used.has(key)) {
+                    group.remove(copy);
+                    copies.delete(key);
+                }
+            if (selected) {
+                selected.updateMatrixWorld(true);
+                this.thingBox ??= new THREE.BoxHelper(selected, 0xffffff);
+                this.thingBox.setFromObject(selected);
+                if (!this.thingBox.parent) this.scene.add(this.thingBox);
+            } else if (this.thingBox?.parent) {
+                this.scene.remove(this.thingBox);
+            }
+        };
+        return { put, end };
+    }
+
     /** Points the raycaster from the camera through the pointer at `clientX`, `clientY` (page pixels, as a pointer event gives
      *  them). */
     aim(clientX, clientY) {
@@ -1413,7 +1523,9 @@ export class View {
         this.raycaster.params.Line.threshold = 0.6;
         // (a marker in a batch picks as its copy's thing)
         const thing = h => h.object.userData.thing ?? h.object.userData.things?.[h.instanceId] ?? null;
-        const hit = this.raycaster.intersectObject(this.thingGroup, true).find(h => thing(h) != null);
+        const hit = this.raycaster
+            .intersectObjects([this.thingGroup, this.thingModelGroup].filter(Boolean), true)
+            .find(h => thing(h) != null);
         this.raycaster.params.Line.threshold = 1;
         return hit ? thing(hit) : null;
     }

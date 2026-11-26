@@ -50,6 +50,8 @@ function capture(pointerId) {
 
 /** The stroke under way (null between strokes). */
 export const currentStroke = () => stroke;
+/** The handles' move or turn under way, the Place tool's or the Things tool's, or null. */
+export const moving = () => (transformer.active ? transformer : ctx?.thingsTool.transformer.active ? ctx.thingsTool.transformer : null);
 
 function closeCtx() {
     const m = $('ctxMenu');
@@ -205,18 +207,26 @@ export function initStrokes(c) {
 
     canvas.addEventListener('pointerdown', e => {
         // Moving, turning or sizing the selected object: a click keeps it, a right click cancels.
-        if (transformer.active) {
+        const busy = moving();
+        if (busy) {
             e.preventDefault();
-            if (e.button === 0) transformer.confirm();
-            else if (e.button === 2) transformer.cancel();
+            if (e.button === 0) busy.confirm();
+            else if (e.button === 2) busy.cancel();
             return;
         }
-        if (e.button === 0 && ctx.area() && ctx.tool() === 'place' && ctx.view.selected) {
-            const h = transformer.pickHandle(e.clientX, e.clientY);
+        // Its handles: the Place tool's selected object, or the Things tool's door or placeable.
+        const handles =
+            ctx.tool() === 'place' && ctx.view.selected
+                ? transformer
+                : ctx.tool() === 'things' && !ctx.readOnly()
+                  ? ctx.thingsTool.transformer
+                  : null;
+        if (e.button === 0 && ctx.area() && handles) {
+            const h = handles.pickHandle(e.clientX, e.clientY);
             if (h) {
                 const p = ctx.view.pick(e.clientX, e.clientY);
-                transformer.last = { clientX: e.clientX, clientY: e.clientY };
-                if (transformer.begin(h.kind, h.axis, true, p ? { x: p.x, y: p.y } : null)) {
+                handles.last = { clientX: e.clientX, clientY: e.clientY };
+                if (handles.begin(h.kind, h.axis, true, p ? { x: p.x, y: p.y } : null)) {
                     capture(e.pointerId);
                 }
                 return;
@@ -443,17 +453,10 @@ export function initStrokes(c) {
     canvas.addEventListener('pointermove', e => {
         mouse = { x: e.clientX, y: e.clientY };
         // A marker you can click shows a pointer, whichever tool is on.
-        if (
-            ctx.tool() !== 'things' &&
-            ctx.tool() !== 'place' &&
-            !stroke &&
-            !transformer.active &&
-            ctx.area() &&
-            !ctx.readOnly() &&
-            e.buttons === 0
-        )
+        if (ctx.tool() !== 'things' && ctx.tool() !== 'place' && !stroke && !moving() && ctx.area() && !ctx.readOnly() && e.buttons === 0)
             canvas.style.cursor = ctx.view.pickThing(e.clientX, e.clientY, true) != null ? 'pointer' : '';
         transformer.move(e);
+        ctx.thingsTool.transformer.move(e);
         if (ctx.thingsTool.drag) {
             const p = ctx.view.pick(e.clientX, e.clientY);
             if (p) ctx.thingsTool.move(p);
@@ -500,15 +503,15 @@ export function initStrokes(c) {
         $('statusPos').textContent = '';
     });
     canvas.addEventListener('pointerup', () => {
-        if (transformer.active && transformer.held) {
-            transformer.confirm();
+        if (moving()?.held) {
+            moving().confirm();
             return;
         }
         endStroke();
     });
     canvas.addEventListener('pointercancel', () => {
-        if (transformer.active && transformer.held) {
-            transformer.cancel();
+        if (moving()?.held) {
+            moving().cancel();
             return;
         }
         endStroke();
@@ -516,6 +519,7 @@ export function initStrokes(c) {
 
     ctx.view.onFrame = () => {
         if (ctx.view.selected) transformer.place(ctx.view.selected);
+        ctx.thingsTool.frame();
         if (!ctx.area() || !mouse) return;
         const p = stroke?.tool === 'chasm' ? ctx.view.pickLevel(mouse.x, mouse.y, stroke.level) : ctx.view.pick(mouse.x, mouse.y);
         const radius = +ctx.sizeIn.value;

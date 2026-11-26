@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// Moving, turning and sizing the selected placeable, the way Blender does it.
+// Moving, turning and sizing the selected placeable, the way Blender does it. The Place tool has one for its objects; the Things
+// tool another for its doors and placeables, which have no size in the game (`sizes: false`: no S, no corner box).
 //
 // Keyboard (selected object, Place tool): G grab, R rotate, S scale, then move the mouse with no
 // button held; click or Enter confirms, Esc or right click cancels. X or Y locks a move to that
@@ -31,8 +32,14 @@ export class Transformer {
      * @param {(o, flat) => number} d.settle  an object's height on the ground
      * @param {(msg: string) => void} d.say  the status line
      * @param {(o) => void} d.changed  called after a change (panel, autosave)
+     * @param {() => object} [d.selected]  the object to move: the view's selected one unless given
+     * @param {(o) => void} [d.moved]  draws the object where it now is: the view's moveObject unless given
+     * @param {boolean} [d.sizes]  false: it moves and turns, but has no size (no S, no corner box)
      */
     constructor(d) {
+        this.selected = () => d.view.selected;
+        this.moved = o => d.view.moveObject(o);
+        this.sizes = true;
         Object.assign(this, d);
         this.mode = null;
         this.axis = null;
@@ -102,8 +109,10 @@ export class Transformer {
             null,
         );
         ringHit.rotation.x = -Math.PI / 2;
-        const box = add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), mat(0xe8e8e8)), 'scale', null);
-        box.position.set(0.95, 0, -0.95); // outside the ring, which would take the clicks
+        if (this.sizes) {
+            const box = add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), mat(0xe8e8e8)), 'scale', null);
+            box.position.set(0.95, 0, -0.95); // outside the ring, which would take the clicks
+        }
         view.scene.add(g);
         this.place(o);
     }
@@ -131,8 +140,8 @@ export class Transformer {
 
     /** Starts a transform of the selected object. `held`: from a handle, so releasing confirms. */
     begin(mode, axis = null, held = false, at = null) {
-        const o = this.view.selected;
-        if (!o || this.mode) return false;
+        const o = this.selected();
+        if (!o || this.mode || (mode === 'scale' && !this.sizes)) return false;
         this.mode = mode;
         this.axis = axis;
         this.typed = '';
@@ -210,7 +219,7 @@ export class Transformer {
     async refresh() {
         const o = this.o;
         o.z = this.settle(o, await this.flat(o));
-        this.view.moveObject(o);
+        this.moved(o);
         this.place(o);
         this.say(this.text());
         this.changed(o, false);
@@ -297,7 +306,7 @@ export class Transformer {
         this.finish();
         this.flat(o).then(f => {
             o.z = this.settle(o, f);
-            this.view.moveObject(o);
+            this.moved(o);
             this.place(o);
             this.changed(o, false);
         });

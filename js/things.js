@@ -7,9 +7,10 @@
 // area's GIT on export. Blueprints (what a creature, door or sound is) are searched on the server.
 
 import { THING_COLOURS, css } from './thingcolours.js';
-import { creaturePreview, itemPreview, modelPreview } from './preview.js';
+import { blueprintModel, creaturePreview, itemPreview, modelPreview } from './preview.js';
 import { api, failure, json } from './api.js';
 import { store } from './dom.js';
+import { Transformer } from './transform.js';
 
 const KINDS = [
     { id: 'creature', kind: 'creature', label: 'Creature', blueprint: true, bearing: true },
@@ -53,6 +54,9 @@ const KINDS = [
 /** Which kinds of thing show on the map out of the Things tool (the Show menu), kept in this browser. In the tool, all do. */
 const SHOW_KEY = 'landscaper.showThings';
 const SHOW_DEFAULT = ['creature', 'waypoint', 'trigger', 'sound', 'encounter', 'store', 'item', 'door'];
+/** Kinds drawn as their model (the view), moved and turned with the Place tool's handles and keys. Not sized: the game has no
+ *  size for them. */
+const MODEL_KINDS = new Set(['door', 'placeable']);
 
 /**
  * The Things tool: its panel, its markers on the map, and the forms of the thing selected.
@@ -78,6 +82,22 @@ export class ThingsTool {
         this.selectedKey = null;
         this.results = [];
         this.seq = 0;
+        // The selected door's or placeable's handles: what they move (`handle`, see syncHandle) and the Place tool's code for them.
+        this.handle = null;
+        this.handleFor = null;
+        this.modelNames = new Map();
+        ctx.view.thingModel = t => this.modelOf(t);
+        this.transformer = new Transformer({
+            view: ctx.view,
+            area: () => this.area(),
+            selected: () => this.handle,
+            flat: async () => null,
+            settle: o => this.area().heightAt(o.x, o.y),
+            moved: o => this.putHandle(o),
+            say: text => ctx.say(text),
+            changed: (_o, final) => final && this.changed(),
+            sizes: false,
+        });
         try {
             this.shown = new Set(JSON.parse(store.get(SHOW_KEY)) ?? SHOW_DEFAULT);
         } catch {
@@ -189,6 +209,66 @@ export class ThingsTool {
             });
     }
 
+    /** The model thing `t` (a door or placeable) is drawn as: an original's own (the engine reads it from the area's file), else
+     *  its blueprint's, asked for once a blueprint. Undefined while it is asked for (the view draws it once it is in), null when
+     *  it has none (its marker is drawn). */
+    modelOf(t) {
+        if (!MODEL_KINDS.has(t.kind)) return null;
+        if (t.model !== undefined) return t.model || null;
+        const resref = t.blueprint || t.resref;
+        if (!resref) return null;
+        const key = `${t.kind}:${resref}`;
+        if (!this.modelNames.has(key)) {
+            this.modelNames.set(key, undefined);
+            blueprintModel(t.kind, resref).then(m => {
+                // (the engine not there: asked again on the next redraw)
+                if (m === undefined) this.modelNames.delete(key);
+                else this.modelNames.set(key, m);
+                if (m) this.ctx.view.redrawThings?.();
+            });
+        }
+        return this.modelNames.get(key);
+    }
+
+    /** The selected door or placeable as the handles move it (`{ x, y, z, bearing, scale, id, key }`: the thing's id, or the
+     *  original's key), made again when another is selected; null when none is, or out of the tool. */
+    syncHandle() {
+        if (this.transformer.active) return;
+        const a = this.area();
+        const t = a && this.active && !this.draft && !this.ctx.readOnly?.() ? (this.selected() ?? this.selectedGhost()) : null;
+        const on = t && MODEL_KINDS.has(t.kind) && !(t.outline?.length >= 3) ? t : null;
+        const who = on ? (on.key ?? `#${on.id}`) : null;
+        const where = on && { x: on.x, y: on.y, z: a.heightAt(on.x, on.y), bearing: on.bearing ?? 0 };
+        if (who !== this.handleFor) {
+            this.handleFor = who;
+            this.handle = on ? { ...where, scale: 1, id: on.key ? null : on.id, key: on.key ?? null } : null;
+            this.transformer.show(this.handle);
+        } else if (this.handle) {
+            Object.assign(this.handle, where);
+            this.transformer.place(this.handle);
+        }
+    }
+
+    /** Each frame: the handles follow the selected one (dragged, turned with Q/E) and stay one size on screen. */
+    frame() {
+        if (!this.handle) return;
+        if (this.transformer.active) this.transformer.place(this.handle);
+        else this.syncHandle();
+    }
+
+    /** Writes where the handles put the selected one back to it: the thing, or the original's move. */
+    putHandle(o) {
+        const a = this.area();
+        const at = { x: round(o.x), y: round(o.y), bearing: round(o.bearing, 3) };
+        if (o.key) a.originals.moved[o.key] = { ...a.originals.moved[o.key], ...at };
+        else Object.assign(a.things.find(x => x.id === o.id) ?? {}, at);
+        this.refreshSoon();
+    }
+
+    selectedGhost() {
+        return this.selectedKey ? (this.ghosts().find(x => x.key === this.selectedKey) ?? null) : null;
+    }
+
     /** Ticks or unticks a kind of thing in the Show menu. */
     setShown(kind, on) {
         this.shown[on ? 'add' : 'delete'](kind);
@@ -220,6 +300,7 @@ export class ThingsTool {
     }
 
     hide() {
+        this.transformer.cancel();
         this.active = false;
         this.ctx.onActive?.();
         this.workOrig = null;
@@ -364,7 +445,7 @@ export class ThingsTool {
             this.drag = { orig: hit, from: p, x: g.x, y: g.y, bearing: g.bearing, outline };
             this.refresh();
             this.ctx.say(
-                `${g.name || g.tag || g.resref} (original ${g.kind}): drag to move · Q/E to turn · Delete takes it out${g.outline?.length ? ' · drag a corner, Alt+click an edge to add one, Shift+click a corner to remove it' : ''} · Esc to deselect`,
+                `${g.name || g.tag || g.resref} (original ${g.kind}): drag to move · ${turnKeys(g)} · Delete takes it out${g.outline?.length ? ' · drag a corner, Alt+click an edge to add one, Shift+click a corner to remove it' : ''} · Esc to deselect`,
             );
             return true;
         }
@@ -645,12 +726,22 @@ export class ThingsTool {
         const t = this.selected();
         if (t)
             this.ctx.say(
-                `${t.name || t.label || t.blueprint || t.tag || t.kind}: drag to move · Q/E to turn · Delete to remove${t.outline?.length ? ' · drag a corner, Alt+click an edge to add one, Shift+click a corner to remove it' : ''} · Esc to deselect`,
+                `${t.name || t.label || t.blueprint || t.tag || t.kind}: drag to move · ${turnKeys(t)} · Delete to remove${t.outline?.length ? ' · drag a corner, Alt+click an edge to add one, Shift+click a corner to remove it' : ''} · Esc to deselect`,
             );
     }
 
     /** Keys: true when handled. */
     key(e) {
+        // Moving or turning with the handles' keys takes every key until it is kept or cancelled, as in the Place tool.
+        if (this.transformer.active) {
+            this.transformer.key(e);
+            return true;
+        }
+        const mode = { g: 'move', r: 'rotate' }[e.key.toLowerCase()];
+        if (mode && this.handle && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            this.transformer.begin(mode);
+            return true;
+        }
         const t = this.selected();
         if (this.selectedKey && !this.draft) {
             const g = this.ghosts().find(x => x.key === this.selectedKey);
@@ -781,8 +872,8 @@ export class ThingsTool {
     refresh() {
         const a = this.area();
         if (!a) return;
-        // Out of the Things tool, the kinds ticked in the Show menu: the editor's own and the original's, as plain markers
-        // (nothing to grab, no selection, no panel).
+        // Out of the Things tool, the kinds ticked in the Show menu: the editor's own and the original's, as plain markers (doors
+        // and placeables as their models), with nothing to grab, no selection, no panel.
         if (!this.active) {
             this.ctx.view.setThings(
                 a.things.filter(t => this.shown.has(t.kind)),
@@ -792,9 +883,11 @@ export class ThingsTool {
                 null,
                 true,
             );
+            this.syncHandle();
             return;
         }
         this.ctx.view.setThings(a.things, this.selectedId, this.draft, this.ghosts(), this.selectedKey);
+        this.syncHandle();
         this.renderProps();
         this.renderOriginals();
         this.ctx.$('thingFinish').hidden = !this.draft;
@@ -813,6 +906,10 @@ export class ThingsTool {
 }
 
 const round = (v, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
+
+/** The keys that turn `t`, for the status line: a door or placeable has the Place tool's handles too. */
+const turnKeys = t =>
+    MODEL_KINDS.has(t.kind) && !(t.outline?.length >= 3) ? 'G move · R turn (or the handles) · Q/E turn 15°' : 'Q/E to turn';
 
 /** What goes to the server: the area's things, without the editor's own `label`. */
 export function thingsForExport(things) {

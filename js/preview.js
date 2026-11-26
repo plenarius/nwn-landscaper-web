@@ -111,15 +111,32 @@ export function creaturePreview(resref) {
     return cache.get(resref);
 }
 
+// Each placeable's or door's blueprint's model, asked for once: kind:resref -> Promise<name or null>.
+const blueprintModels = new Map();
+
+/** The model a placeable's or door's blueprint `resref` names (its appearance's): a name, null when it names none or the engine
+ *  has no such blueprint, undefined when the engine couldn't be asked (asked again next time). Asked once a blueprint: the
+ *  list's pictures and an area's hundreds of doors share it. */
+export function blueprintModel(kind, resref) {
+    const key = `${kind}:${resref}`;
+    if (!blueprintModels.has(key))
+        blueprintModels.set(
+            key,
+            api(`/api/blueprint-model?kind=${kind}&resref=${encodeURIComponent(resref)}`)
+                .then(r => (r.ok ? r.json().then(j => j.model || null) : r.status < 500 ? null : Promise.reject(new Error())))
+                .catch(() => {
+                    blueprintModels.delete(key);
+                    return undefined;
+                }),
+        );
+    return blueprintModels.get(key);
+}
+
 /** What a placeable's or door's blueprint looks like: the model its appearance names, drawn by the model cache (the
  *  same small picture the Place tool's list has). `models` is the view's ModelCache. Null if it names none. */
 export async function modelPreview(models, kind, resref) {
-    try {
-        const { model } = await api(`/api/blueprint-model?kind=${kind}&resref=${encodeURIComponent(resref)}`).then(okJson);
-        return model ? (await models.thumbnail(model)) || null : null;
-    } catch {
-        return null;
-    }
+    const model = await blueprintModel(kind, resref);
+    return model ? (await models.thumbnail(model)) || null : null;
 }
 
 // Each item's icon, asked for once.
