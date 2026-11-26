@@ -11,6 +11,7 @@ import { ask } from './ask.js';
 import { $, say } from './dom.js';
 import { models, transformer, selectObject, placeDown, placeDrag } from './place.js';
 import { scatterMix, scatterStamp } from './scatter.js';
+import { ambienceBrush, ambienceReady } from './ambiencetool.js';
 import { mixPlan, mixStamp } from './mix.js';
 import { waterDown, waterDrag, waterChanged } from './water.js';
 import { entranceDown } from './entrancetool.js';
@@ -149,10 +150,12 @@ export const endStroke = () => {
         ctx.view.syncPalette();
         say(stroke.bare ? `The room's floor isn't painted: ${FULL_PALETTE}.` : '');
     }
-    // The ground moved: its shadows too.
-    if (!stroke.water && !stroke.place && !stroke.scatter && stroke.tool !== 'paint') ctx.view.updateShade();
+    // The ground moved: its shadows too, and the particles standing on it.
+    const still = stroke.tool === 'paint' || !!stroke.ambience;
+    if (!stroke.water && !stroke.place && !stroke.scatter && !still) ctx.view.updateShade();
     // Sculpting may have flooded or drained hollows.
-    if (!stroke.water && ctx.area().water.length && stroke.tool !== 'paint') waterChanged();
+    if (!stroke.water && ctx.area().water.length && !still) waterChanged();
+    if (!still && !stroke.place && !stroke.scatter && ctx.area().ambience.length) ctx.view.updateAmbience();
     if (stroke.water) say('');
     stroke = null;
     saveSoon();
@@ -294,6 +297,14 @@ export function initStrokes(c) {
             ).then(list => {
                 scatter.flats = list.filter(Boolean);
             });
+            capture(e.pointerId);
+            return;
+        }
+        if (ctx.tool() === 'ambience') {
+            if (!ambienceReady()) return;
+            ctx.area().beginStroke();
+            // Shift clears the chosen kind.
+            stroke = { ambience: { erase: e.shiftKey } };
             capture(e.pointerId);
             return;
         }
@@ -544,6 +555,11 @@ export function initStrokes(c) {
         }
         if (stroke?.scatter && p) {
             scatterStamp(p, radius, stroke.scatter);
+            dbg.stamps++;
+            return;
+        }
+        if (stroke?.ambience && p) {
+            ambienceBrush(p, radius, stroke.ambience.erase);
             dbg.stamps++;
             return;
         }

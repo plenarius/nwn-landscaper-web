@@ -16,6 +16,7 @@ import { fogRange } from './atmosphere.js';
 import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
 import { triplanarGlsl } from './triplanar.js';
+import { AmbienceLayer } from './ambienceview.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
@@ -232,6 +233,12 @@ export class View {
         // Counts the ground's changes and redraws, so a kept pick (lastPick) or outline (setThings) knows the ground moved.
         this.groundVersion = 0;
         this.lastPick = null;
+        // The Ambience tool's placements (updateAmbience): the pack's kinds by id, whether the view shows night, and whether the
+        // placements out of their hours show as dots (while the tool is open).
+        this.ambience = new AmbienceLayer(this.scene);
+        this.ambienceKinds = new Map();
+        this.night = false;
+        this.ambienceMarking = false;
         new ResizeObserver(() => this.resize()).observe(container);
         const loop = () => {
             requestAnimationFrame(loop);
@@ -239,6 +246,8 @@ export class View {
             if (this.dirty) this.flush();
             this.controls.update();
             this.updateFog();
+            const px = this.renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
+            this.ambience.frame(performance.now() / 1000, px);
             this.renderer.render(this.scene, this.camera);
         };
         requestAnimationFrame(loop);
@@ -252,6 +261,11 @@ export class View {
         const on = !!atmosphere;
         this.workSun.visible = this.workSky.visible = !on;
         this.areaSun.visible = this.areaAmbient.visible = on;
+        // (the particles' night look and night-only kinds, as the game shows them)
+        if (this.night !== (on && !!night)) {
+            this.night = on && !!night;
+            this.updateAmbience();
+        }
         if (!on) {
             this.fog = null;
             this.scene.fog = null;
@@ -354,8 +368,21 @@ export class View {
         this.updateWater();
         this.updateEntrances();
         this.updateObjects();
+        this.updateAmbience();
         this.frame();
         this.syncPalette();
+    }
+
+    /** Draws the Ambience tool's placements again (the tool, an undo, the ground moved, the light changed). */
+    updateAmbience() {
+        this.ambience.set(this.area, this.ambienceKinds, this.night, this.ambienceMarking);
+    }
+
+    /** The particle pack's kinds (ambience.js kindsOf), and whether the placements out of their hours show as dots. */
+    setAmbienceKinds(kinds, marking = this.ambienceMarking) {
+        this.ambienceKinds = new Map(kinds.map(k => [k.id, k]));
+        this.ambienceMarking = marking;
+        this.updateAmbience();
     }
 
     splatMaterial() {

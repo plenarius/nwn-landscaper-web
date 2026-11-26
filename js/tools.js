@@ -30,6 +30,11 @@ export const TOOLS = {
     },
     place: { label: 'Place', key: '8', hint: 'Place rocks, trees and other placeables, baked into the terrain' },
     scatter: { label: 'Scatter', key: '9', hint: 'Paint rocks, trees and bushes; Shift-drag to erase' },
+    ambience: {
+        label: 'Ambience',
+        key: 'a',
+        hint: 'Particles baked into the tiles (mist, spray, fireflies, leaves...): Fill proposes them, drag adds the chosen kind, Shift-drag clears it',
+    },
     things: {
         label: 'Things',
         key: 't',

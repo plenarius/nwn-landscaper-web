@@ -5,6 +5,7 @@
 // area sent to the engine, its report shown.
 
 import { thingsForExport } from './things.js';
+import { ambienceForExport } from './ambience.js';
 import { api, engine, failure } from './api.js';
 import { $, say } from './dom.js';
 import { showReport, showError } from './report.js';
@@ -14,7 +15,7 @@ let ctx = null;
 
 /** The area open, as landscaper serve takes it: the query string has its name and simple settings (tiles, shadow, kind, roof,
  *  clearance, module); the body is its heights (f32 a sample), each sample's palette index (u8), then JSON with its lists and
- *  objects (palette, water, chasm, entrances, atmosphere, objects, things, settings, originals). */
+ *  objects (palette, water, chasm, entrances, atmosphere, objects, things, settings, originals, ambience). */
 export function areaRequest() {
     const a = ctx.area();
     const extra = new TextEncoder().encode(
@@ -28,6 +29,7 @@ export function areaRequest() {
             things: thingsForExport(a.things),
             settings: a.settings,
             originals: a.originals,
+            ambience: ambienceForExport(a),
         }),
     );
     const heights = new Uint8Array(a.heights.buffer, a.heights.byteOffset, a.heights.byteLength);

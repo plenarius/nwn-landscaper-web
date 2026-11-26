@@ -36,8 +36,9 @@ import { initReport, showError } from './report.js';
 import { initNewArea } from './newarea.js';
 import { initHeightmap } from './heightmap.js';
 import { initUnderlay, underlayAreaChanged, underlayEscape, toggleUnderlay, showUnderlay, hideUnderlay } from './underlay.js';
-import { initPlace, selectObject, removeObject, changeSelected, transformer, showPlaceables } from './place.js';
+import { initPlace, selectObject, removeObject, changeSelected, transformer, showPlaceables, models } from './place.js';
 import { initScatter, showScatterables } from './scatter.js';
+import { initAmbienceTool, setAmbienceOpen, showAmbienceTool, loadParticles } from './ambiencetool.js';
 import { initWater } from './water.js';
 import { initEntranceTool, showEntrances } from './entrancetool.js';
 import { initStrokes, currentStroke, endStroke, moving } from './strokes.js';
@@ -140,6 +141,8 @@ function updatePanels() {
     if (tool === 'entrance' && !over) showEntrances();
     $('scatterPanel').hidden = over || tool !== 'scatter';
     if (tool === 'scatter' && !over) showScatterables();
+    $('ambiencePanel').hidden = over || tool !== 'ambience';
+    setAmbienceOpen(tool === 'ambience' && !over);
     if (tool !== 'place' && view.selected) selectObject(null);
     if (tool === 'place' && !over) showPlaceables();
     $('thingsPanel').hidden = over || tool !== 'things';
@@ -459,6 +462,7 @@ async function openArea(a, settle = true) {
 }
 
 initScatter(editor);
+initAmbienceTool({ ...editor, models: () => models, library, saveSoon: () => saveSoon(), say });
 
 initSky({ ...editor, saveSoon });
 initUnderlay({ ...editor, saveSoon });
@@ -572,6 +576,7 @@ function setArea(a, blank = false) {
     $('report').hidden = true;
     showAreaSky(a);
     if (tool === 'entrance' && !skyOpen) showEntrances();
+    if (tool === 'ambience' && !skyOpen) showAmbienceTool();
     if (!blank) checkSoon();
     underlayAreaChanged();
 }
@@ -677,6 +682,8 @@ function refreshAll() {
     thingsTool.refreshAll();
     // (its rows hold the entrances they were drawn for, which undo and redo replace with copies)
     if (tool === 'entrance' && !skyOpen) showEntrances();
+    view.updateAmbience();
+    if (tool === 'ambience' && !skyOpen) showAmbienceTool();
     refreshSky();
     saveSoon();
 }
@@ -860,6 +867,8 @@ window.addEventListener('keydown', e => {
 // The area last open: from landscaper, or this browser if it couldn't take it.
 // (loadMe loads the texture library when the engine answers: showEngine)
 await loadMe();
+// (the particle pack's kinds draw the area's placements in their colours)
+if (engine.up) loadParticles();
 // A reviewer's link (?review=<builder>/<area>, in a pull request): an admin looks at that builder's area, read-only.
 let reviewArea = null;
 {
