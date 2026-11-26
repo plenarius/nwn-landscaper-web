@@ -6,6 +6,11 @@ of that release; before 1.0, a minor version may change the HTTP API between the
 
 ## Unreleased
 
+- **Doors look like doors.** In the Things tool a door, and a placeable placed from a blueprint, is drawn as its model, with
+  its textures, turned the way it faces and standing on the ground, instead of a coloured box that never turned; an imported
+  area's own doors too, a little greyed as their markers were. The selected one has the Place tool's handles and keys: drag,
+  G to move, R to turn, Q/E, the arrows and the ring (no size: the game has none for doors). A door the tile itself draws,
+  or one whose model can't be found, keeps its marker.
 - **The version beside the title.** The top bar says which version is running, small, after *NWN Landscaper*: the engine's
   (from its `/api/me`, which needs this release's engine) and this editor's (from the CHANGELOG.md next to it). A click shows
   both and links to the release's notes. An engine and editor of different releases show both, in orange; a build from

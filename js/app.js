@@ -40,7 +40,7 @@ import { initPlace, selectObject, removeObject, changeSelected, transformer, sho
 import { initScatter, showScatterables } from './scatter.js';
 import { initWater } from './water.js';
 import { initEntranceTool, showEntrances } from './entrancetool.js';
-import { initStrokes, currentStroke, endStroke } from './strokes.js';
+import { initStrokes, currentStroke, endStroke, moving } from './strokes.js';
 import {
     initSave,
     saveSoon,
@@ -775,7 +775,7 @@ window.addEventListener('keydown', e => {
     // Letters work with Caps Lock on: the shortcuts compare lower case (Ctrl+Shift+Z still reads e.key's capital).
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     // The camera: arrows move along the ground, Shift+arrows turn the view, + and - zoom, Home looks straight down (F frames).
-    if (!transformer.active && !e.ctrlKey && !e.metaKey && !e.altKey && cameraKey(e)) {
+    if (!moving() && !e.ctrlKey && !e.metaKey && !e.altKey && cameraKey(e)) {
         e.preventDefault();
         return;
     }
