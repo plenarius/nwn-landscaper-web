@@ -142,7 +142,9 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 - **Export to NWN** builds the hak (into your NWN `hak/` folder) and module (into `modules/`, ready
   to play), then simulates NWN's pathfinding on random routes. Red markers: a route stops short.
   Orange: a tile whose walkable ground is too winding for NWN's in-tile search; straighten or widen
-  the passage.
+  the passage. A route too long for one click (NWN gives up when the way is about 20 tiles longer
+  than going straight there, as across a long descent) that shorter clicks complete is not blocked:
+  the report counts it apart, with how many clicks.
 - **Autosave** writes each change to the engine a moment later, and at once before another area opens or the page is hidden
   (another tab, a minimised window, the tab closed or reloaded).
   A copy the engine didn't get (no engine, a failed save, a tab closed before its save finished) stays in the browser, per
