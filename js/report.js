@@ -4,12 +4,16 @@
 // The report box over the view: what an export or a path check found, or why something failed.
 
 import { $, el } from './dom.js';
+import { clickCount } from './routes.js';
 
 /** Shows what an export or a path check (`checkOnly`) found in the report box: `r` is the engine's report. */
 export function showReport(r, checkOnly = false) {
     const failed = r.warnings.filter(w => w.kind === 'failed_route').length;
     const closed = r.warnings.filter(w => w.kind === 'closed_passage').length;
     const winding = r.warnings.length - failed - closed;
+    // Routes too long for one click that shorter clicks complete (newer engines): no fault, said apart.
+    const long = r.routes.long ?? 0,
+        clicks = (r.long_routes ?? []).map(w => w.clicks);
     const level = failed ? 'bad' : r.warnings.length ? 'warn' : 'good';
     const explain = text =>
         el('details', {}, el('summary', { textContent: 'What this means' }), el('p', { className: 'note', textContent: text }));
@@ -17,8 +21,19 @@ export function showReport(r, checkOnly = false) {
     $('reportBody').replaceChildren(
         ...[
             el('h3', { textContent: checkOnly ? 'Path check' : `Exported ${r.name}` }),
-            el('div', { className: `big ${level}`, textContent: `${r.routes.ok} of ${r.routes.total} routes work` }),
+            el('div', { className: `big ${level}`, textContent: `${r.routes.ok + long} of ${r.routes.total} routes work` }),
             p('', "NWN's pathfinding, simulated on random routes between places your ground joins."),
+            ...(long
+                ? [
+                      p(
+                          '',
+                          `● ${long} of them ${long > 1 ? 'are' : 'is'} too long for one click: ${clickCount(clicks)} shorter clicks get there.`,
+                      ),
+                      explain(
+                          `NWN's pathfinding gives up when the way is about 20 tiles (200 m) longer than going straight across the tiles between its ends, as from one end of a long descent to the other: a player who clicks that far walks a few metres and stops. Clicking part of the way, or walking with the keys, gets there; the ground is fine. Shorten the way (fewer or shorter halls) only if players should cross it in one click.`,
+                      ),
+                  ]
+                : []),
             ...(failed
                 ? [
                       p('bad', `● ${failed} route(s) stop short: red markers, where the walker stops.`),

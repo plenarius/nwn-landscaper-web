@@ -7,6 +7,7 @@ import { api, engine, NEEDS_ENGINE } from './api.js';
 import { $, store } from './dom.js';
 import { showError } from './report.js';
 import { sendArea } from './export.js';
+import { liveState } from './routes.js';
 
 /** What app.js gives this file (initLive): `area()`, `readOnly()`, `view`, `stroke()` (the stroke under way, if any) and
  *  `showEngine()` (the banner when the engine is not running). */
@@ -74,17 +75,7 @@ async function liveCheck() {
         return;
     }
     ctx.view.setMarkers(report.warnings || []);
-    const { ok, total } = report.routes;
-    const failed = total - ok,
-        others = report.warnings.length - report.warnings.filter(w => w.kind === 'failed_route').length;
-    if (failed) showLive('bad', `${failed} blocked`, `${ok} of ${total} test routes reach their goal; red pillars mark where they stop.`);
-    else if (others)
-        showLive(
-            'warn',
-            `${others} spot${others > 1 ? 's' : ''}`,
-            `All ${total} test routes work; orange pillars mark ${others} spot(s) to look at (Check paths explains).`,
-        );
-    else showLive('ok', 'Paths OK', `All ${total} test routes work.`);
+    showLive(...liveState(report));
 }
 
 // The markers on the map: shown or hidden (M), remembered; the checks go on.
