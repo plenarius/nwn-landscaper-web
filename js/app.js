@@ -29,6 +29,7 @@ import { initImport, reimport } from './import.js';
 import { initSky, showAreaSky, refreshSky, skyShowsNight } from './sky.js';
 import { initLightTool, showLightTool, lightPair } from './lighttool.js';
 import { initMenus } from './menus.js';
+import { initDesktop } from './help.js';
 import { showVersion } from './version.js';
 import { initActivity } from './activity.js';
 import { initPublish } from './publish.js';
@@ -71,6 +72,9 @@ function setIcon(e, name) {
 for (const e of document.querySelectorAll('[data-icon]')) setIcon(e, e.dataset.icon);
 // A dialog's Close button names its dialog (`data-close`): the page's Content-Security-Policy runs no inline `onclick`.
 for (const b of document.querySelectorAll('[data-close]')) b.onclick = () => $(b.dataset.close).close();
+
+// The desktop app's items and words (help.js), before anything below can stop the page.
+initDesktop();
 
 // No WebGL: say why instead of showing a blank page.
 const probe = document.createElement('canvas');
@@ -895,7 +899,9 @@ let reviewArea = null;
         }
         session.remove('landscaper.review');
         if (me.viewing === who) reviewArea = name;
-        history.replaceState(null, '', location.pathname);
+        const rest = new URLSearchParams(location.search);
+        rest.delete('review');
+        history.replaceState(null, '', `${location.pathname}${rest.size ? `?${rest}` : ''}`);
     }
 }
 // (the copies kept in this browser, read before anything asks for one)

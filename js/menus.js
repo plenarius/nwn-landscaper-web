@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// The top bar's menus (File, Area, Show, Share, and the version beside the title): one open at a time, closed by a pick, a click elsewhere or Escape.
+// The top bar's menus (File, Area, Show, Share, Help in the desktop app, and the version beside the title): one open at a time, closed by a pick, a click elsewhere or Escape.
 // From the keyboard: Enter, Space or the down arrow opens one at its first item, the arrows (and Home, End) move through
 // its items, Escape closes it and gives the focus back to its button, and Tab out of it closes it.
 function closeMenus() {

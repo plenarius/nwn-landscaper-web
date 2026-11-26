@@ -40,6 +40,8 @@
                 <div class="menu-list" hidden>
                     <div class="menu-note version-lines" id="versionLines" data-stay></div>
                     <div id="versionLinks"></div>
+                    <!-- In the app: "Update to X.Y.Z", from the app's updater (DESIGN-desktop-app.md, question 6) -->
+                    <div id="appUpdate" hidden></div>
                 </div>
             </div>
         </div>
@@ -61,6 +63,7 @@
                 <button type="button" class="menu-item" id="btnSky" title="Light and fog of the area (L)"><span class="icon" data-icon="sky"></span><span>Sky &amp; fog</span><kbd>L</kbd></button>
                 <button type="button" class="menu-item" id="btnCeiling" hidden title="How high the ceiling stays over the floor in a cave or interior"><span>Ceiling height…</span></button>
                 <button type="button" class="menu-item" id="btnSettings" title="Name, tag, scripts, weather, music... of this area"><span>Area settings…</span></button>
+                <button type="button" class="menu-item" id="btnFolders" hidden title="Where the game and its user folder are: the app asks again"><span>Game folders…</span></button>
                 <button type="button" class="menu-item" id="btnHeightmap" title="Replace this area's ground with a greyscale heightmap image"><span>Import heightmap…</span></button>
                 <button type="button" class="menu-item" id="btnUnderlay" title="A picture under the ground to trace over: a battlemat or a map"><span>Underlay…</span></button>
             </div>
@@ -98,6 +101,15 @@
             <button class="top-btn menu-btn" type="button" aria-haspopup="true" aria-expanded="false">Share</button>
             <div class="menu-list" hidden>
                 <button type="button" class="menu-item" id="btnPublish" hidden title="Send your last export to the team for review as pull requests (or, where there is no review service, build a package of its files to download)"><span>Publish to the team…</span></button>
+            </div>
+        </div>
+        <div class="menu menu-right" id="menuHelp" hidden>
+            <button class="top-btn menu-btn" type="button" aria-haspopup="true" aria-expanded="false">Help</button>
+            <div class="menu-list" hidden>
+                <a class="menu-item" href="https://plenarius.github.io/nwn-landscaper/" target="_blank" rel="noopener">Handbook</a>
+                <hr class="menu-sep">
+                <button type="button" class="menu-item" id="helpData" title="Your areas, workspaces, texture library and exports"><span>Open the data folder</span></button>
+                <button type="button" class="menu-item" id="helpLog" title="What the engine wrote in this start and the one before: landscaper.log in the data folder"><span>Open the log</span></button>
             </div>
         </div>
     </header>
@@ -329,8 +341,8 @@
 
     <div id="noEngine" role="status" hidden>
         <b>No engine: sculpting only.</b>
-        <span>The Landscaper engine (<code>landscaper serve</code>) isn't running, so importing, exporting, the path check, the texture library and the game's models and blueprints are off. Sculpting works, and the browser keeps your area.</span>
-        <a href="https://github.com/plenarius/nwn-landscaper-web#run" target="_blank" rel="noopener">How to start the engine</a>
+        <span id="noEngineWhy">The Landscaper engine (<code>landscaper serve</code>) isn't running, so importing, exporting, the path check, the texture library and the game's models and blueprints are off. Sculpting works, and the browser keeps your area.</span>
+        <a id="noEngineHow" href="https://github.com/plenarius/nwn-landscaper-web#run" target="_blank" rel="noopener">How to start the engine</a>
         <button type="button" id="noEngineClose" title="Hide this" aria-label="Hide this">×</button>
     </div>
 
@@ -542,11 +554,19 @@
     <div id="ctxMenu" class="menu-list ctx" hidden></div>
 
     <div id="nowebgl" hidden>
-        <h2>This browser isn't giving the page 3D graphics (WebGL)</h2>
-        <p>Common on remote desktops without a GPU. Either turn on hardware acceleration
-        (<code>chrome://settings/system</code>, or <code>brave://settings/system</code> in Brave, then relaunch),
-        or start a separate window with software rendering:</p>
-        <pre>google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshader --ignore-gpu-blocklist URL</pre>
+        <div id="nowebglBrowser">
+            <h2>This browser isn't giving the page 3D graphics (WebGL)</h2>
+            <p>Common on remote desktops without a GPU. Either turn on hardware acceleration
+            (<code>chrome://settings/system</code>, or <code>brave://settings/system</code> in Brave, then relaunch),
+            or start a separate window with software rendering:</p>
+            <pre>google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshader --ignore-gpu-blocklist URL</pre>
+        </div>
+        <div id="nowebglApp" hidden>
+            <h2>The app's window isn't getting 3D graphics (WebGL)</h2>
+            <p>On Linux, start the app with <code>LANDSCAPER_WEBVIEW_SAFE=1</code> set, which turns off the parts of the window's
+            drawing that fail with some graphics drivers. If it still shows nothing, start the program alone (the release's
+            archive for your system) and open the editor in a browser.</p>
+        </div>
     </div>
 
     <script type="module" src="js/app.js"></script>
