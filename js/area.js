@@ -35,6 +35,8 @@ export const CHASM_DARK = 0.65;
 export const MAX_LIGHT = 31;
 // Undo keeps this many steps.
 export const UNDO_STEPS = 40;
+/** Rough hills' patches of too steep ground smaller than this many samples (about 16 m²) are smoothed away (Area.easeSpecks). */
+const SPECK = 40;
 // What undo brings back besides the ground's grids (heights, paint, chasm). Not `entranceNextId` (see the constructor).
 const UNDO_FIELDS = [
     'palette',
@@ -186,8 +188,69 @@ export class Area {
             });
             const amplitude = rough ? 14 : 6;
             for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) area.heights[j * nx + i] = base + noise[j * nx + i] * amplitude;
+            if (rough) {
+                // Smoothed, then stretched back to the hills' whole height (the smoothing can take the top off a peak).
+                area.easeSpecks(SPECK);
+                const h = area.heights,
+                    low = h.reduce((m, v) => Math.min(m, v), Infinity),
+                    high = h.reduce((m, v) => Math.max(m, v), -Infinity);
+                for (let k = 0; k < h.length; k++) h[k] = base + ((h[k] - low) / (high - low)) * amplitude;
+            }
         }
         return area;
+    }
+
+    /** Smooths away each patch of ground too steep to walk smaller than `most` samples, and the ground round it, until none is
+     *  left: rough noise scatters them over walkable slopes, and NWN's route search gets lost among the holes they leave in the
+     *  walkmesh (the path check's "too winding" tiles and blocked routes). Larger steep ground stays as it is. */
+    easeSpecks(most) {
+        const { nx, ny, heights: h } = this;
+        for (let pass = 0; pass < 12; pass++) {
+            const seen = new Uint8Array(nx * ny),
+                ease = new Uint8Array(nx * ny);
+            let any = false;
+            for (let start = 0; start < nx * ny; start++) {
+                if (seen[start] || this.walkable(start % nx, Math.floor(start / nx))) continue;
+                const patch = [start],
+                    stack = [start];
+                seen[start] = 1;
+                while (stack.length) {
+                    const k = stack.pop(),
+                        i = k % nx,
+                        j = (k - i) / nx;
+                    for (const q of [i > 0 && k - 1, i < nx - 1 && k + 1, j > 0 && k - nx, j < ny - 1 && k + nx]) {
+                        if (q === false || seen[q] || this.walkable(q % nx, Math.floor(q / nx))) continue;
+                        seen[q] = 1;
+                        patch.push(q);
+                        stack.push(q);
+                    }
+                }
+                if (patch.length >= most) continue;
+                any = true;
+                for (const k of patch) {
+                    const i = k % nx,
+                        j = (k - i) / nx;
+                    for (let dj = -1; dj <= 1; dj++)
+                        for (let di = -1; di <= 1; di++)
+                            if (i + di >= 0 && i + di < nx && j + dj >= 0 && j + dj < ny) ease[k + dj * nx + di] = 1;
+                }
+            }
+            if (!any) return;
+            const before = h.slice();
+            for (let k = 0; k < nx * ny; k++) {
+                if (!ease[k]) continue;
+                const i = k % nx,
+                    j = (k - i) / nx;
+                let sum = 0,
+                    n = 0;
+                for (const q of [i > 0 && k - 1, i < nx - 1 && k + 1, j > 0 && k - nx, j < ny - 1 && k + nx])
+                    if (q !== false) {
+                        sum += before[q];
+                        n++;
+                    }
+                h[k] = 0.5 * before[k] + (0.5 * sum) / n;
+            }
+        }
     }
 
     /** The sample nearest to area metres `x`, `y`: `{ i, j }`, clamped to the area. */
