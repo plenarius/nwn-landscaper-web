@@ -161,6 +161,12 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 There is no build step: edit the files and reload the page. `scripts/check.sh` runs every check the way CI does (Biome,
 html-validate, spelling, writing, Markdown, links, licences, secrets); [STYLE.md](STYLE.md) is the standard it checks.
 
+A changelog entry is a file of its own in `changelog.d/`, not an edit to CHANGELOG.md, so pull requests don't conflict
+there ([CONTRIBUTING.md](CONTRIBUTING.md)). A release's pull request folds them into the version's section with
+`scripts/changelog.sh release X.Y.Z`, as the engine's does; the engine's README ("Releases") has the rest of a release.
+Between releases the editor says `+dev` after the last release's version beside its title while `changelog.d/` holds an entry
+(the engine lists them at `/changelog.d/`) or CHANGELOG.md starts with `## Unreleased`.
+
 `node --test 'tests/*.test.js'` (Node 24) runs the tests, without a browser: `tests/browser.js` gives the page's modules a
 stand-in for the page, the browser's storage and the engine, and swaps the modules that draw or ask for the stubs in
 `tests/stubs/`; `tests/importmap.js` resolves the vendored packages through `index.html`'s import map, as the browser does.

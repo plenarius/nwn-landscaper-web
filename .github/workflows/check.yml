@@ -55,6 +55,10 @@ jobs:
         run: scripts/shared-files.sh --online
       - name: Tests
         run: node --test 'tests/*.test.js'
+      # The changelog's fragments (changelog.d/): bullets, `## Unreleased` while they wait, and the fold's own test. In a pull
+      # request it warns when entries go into CHANGELOG.md instead of a fragment.
+      - name: scripts/changelog.sh check, tests/changelog.sh
+        run: scripts/changelog.sh check && tests/changelog.sh
       - name: scripts/check.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

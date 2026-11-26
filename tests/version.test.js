@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changelogVersion, describe } from '../js/version.js';
+import { changelogVersion, describe, hasEntries } from '../js/version.js';
 
 test('a changelog says its last release, with +dev while changes wait under Unreleased', () => {
     const released = '# Changelog\n\nIntro.\n\n## 0.6.1\n\n- A fix.\n\n## 0.6.0\n';
@@ -15,6 +15,18 @@ test('a changelog says its last release, with +dev while changes wait under Unre
     assert.equal(changelogVersion('# Changelog\n'), null);
     assert.equal(changelogVersion('<!doctype html><title>Not found</title>'), null);
     assert.equal(changelogVersion(null), null);
+});
+
+test('a changelog says +dev while entries wait in changelog.d/, which the engine lists', () => {
+    const released = '# Changelog\n\n## 0.6.1\n\n- A fix.\n';
+    assert.equal(changelogVersion(released, true), '0.6.1+dev');
+    assert.equal(changelogVersion(released, false), '0.6.1');
+    assert.equal(changelogVersion('# Changelog\n', true), null);
+    assert.equal(hasEntries({ fragments: ['dig-edge.md'] }), true);
+    assert.equal(hasEntries({ fragments: [] }), false);
+    // An older engine (no such answer) or a plain file server's page of the folder: none.
+    assert.equal(hasEntries({}), false);
+    assert.equal(hasEntries(null), false);
 });
 
 test('one release shows one version and its notes', () => {

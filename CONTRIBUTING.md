@@ -15,6 +15,12 @@ Issues and pull requests are welcome. For a change to how areas are built, expor
 - Run the tests: `node --test 'tests/*.test.js'` (Node 24; CI runs them too). They cover what runs without the browser's
   drawing: the area, its undo and JSON, the save queue and the requests to the engine. A change to that logic comes with a
   test; for the rest, say in the pull request what you tried in the browser, against which engine.
+- A change that users would notice gets a changelog entry as a file of its own, `changelog.d/<short-name>.md`, holding the
+  bullet (or bullets) it would have put under `## Unreleased` in [CHANGELOG.md](CHANGELOG.md), in the same style, with links to
+  our files written from `changelog.d/` (`../docs/X.md`). Don't edit
+  CHANGELOG.md itself: each pull request's own file means two of them never conflict there. The release folds the files into
+  its section (`scripts/changelog.sh release X.Y.Z`); `scripts/changelog.sh preview` shows them as that section, and
+  `scripts/changelog.sh check` (run by CI) checks them.
 - Don't change `STYLE.md` or the other shared files listed in it here alone: they are identical in every repository that
   follows it, and nwn-bake's copy is the master. `scripts/shared-files.sh` checks ours against nwn-bake's at the release
   pinned in `scripts/shared-files.sha256` (CI runs it with `--online`, which also checks the pins against nwn-bake). To take a
