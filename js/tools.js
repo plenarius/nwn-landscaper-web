@@ -139,33 +139,103 @@ export function stamp(area, tool, x, y, radius, strength, dt, flattenTo, paintIn
     return { i0, i1, j0, j1 };
 }
 
+// Outdoors a dug edge is a bank this steep (rise over run, about 63 degrees: a cliff nobody walks), not a drop straight down
+// from one 0.625 m sample to the next, which follows the grid's steps as a saw-tooth. A cave keeps its walls straight down.
+const DIG_BANK = 2;
+
 /**
  * Digs a cave out: ground within the brush (its edge a little ragged, so
- * walls aren't smooth arcs) down to `floor`, painted `paintIndex`.
+ * walls aren't smooth arcs) down to `floor`, painted `paintIndex`. Outdoors
+ * the ground beyond the edge slopes up from the floor at DIG_BANK.
  */
 function dig(area, x, y, radius, floor, paintIndex) {
     const n = area.nx,
         h = area.heights,
-        reach = radius * 1.2;
-    const i0 = Math.max(0, Math.floor((x - reach) / SPACING)),
-        i1 = Math.min(n - 1, Math.ceil((x + reach) / SPACING));
-    const j0 = Math.max(0, Math.floor((y - reach) / SPACING)),
-        j1 = Math.min(area.ny - 1, Math.ceil((y + reach) / SPACING));
-    if (i0 > i1 || j0 > j1) return null;
-    for (let j = j0; j <= j1; j++) {
-        for (let i = i0; i <= i1; i++) {
-            const px = i * SPACING,
-                py = j * SPACING;
-            if (Math.hypot(px - x, py - y) <= radius * rough(Math.atan2(py - y, px - x), px, py)) {
-                const k = j * n + i;
-                if (h[k] > floor) {
-                    h[k] = floor;
-                    if (paintIndex !== undefined) area.materials[k] = paintIndex;
-                }
-            }
+        edge = radius * 1.2;
+    const box = r => ({
+        i0: Math.max(0, Math.floor((x - r) / SPACING)),
+        i1: Math.min(n - 1, Math.ceil((x + r) / SPACING)),
+        j0: Math.max(0, Math.floor((y - r) / SPACING)),
+        j1: Math.min(area.ny - 1, Math.ceil((y + r) / SPACING)),
+    });
+    let b = box(edge);
+    if (b.i0 > b.i1 || b.j0 > b.j1) return null;
+    const bank = !area.enclosed();
+    if (bank) {
+        // The bank reaches out as far as the ground stands over the floor (again for ground that rises beyond the first box).
+        for (let pass = 0; pass < 2; pass++) {
+            let top = floor;
+            for (let j = b.j0; j <= b.j1; j++) for (let i = b.i0; i <= b.i1; i++) top = Math.max(top, h[j * n + i]);
+            b = box(edge + (top - floor) / DIG_BANK + SPACING);
         }
     }
-    return { i0, i1, j0, j1 };
+    const w = b.i1 - b.i0 + 1,
+        rows = b.j1 - b.j0 + 1;
+    // Samples from the brush's edge, for the bank: 0 inside it, and within 1.5 samples outside it, how far out the edge is, so
+    // the foot of the bank runs between samples and not along the grid's steps.
+    const far = bank ? new Float32Array(w * rows).fill(Infinity) : null;
+    for (let j = b.j0; j <= b.j1; j++) {
+        for (let i = b.i0; i <= b.i1; i++) {
+            const px = i * SPACING,
+                py = j * SPACING;
+            const d = Math.hypot(px - x, py - y);
+            if (d > edge + 2 * SPACING) continue;
+            const out = d - radius * rough(Math.atan2(py - y, px - x), px, py);
+            if (out > 0) {
+                if (far && out < 1.5 * SPACING) far[(j - b.j0) * w + (i - b.i0)] = out / SPACING;
+                continue;
+            }
+            const k = j * n + i;
+            if (h[k] > floor) {
+                h[k] = floor;
+                if (paintIndex !== undefined) area.materials[k] = paintIndex;
+            }
+            if (far) far[(j - b.j0) * w + (i - b.i0)] = 0;
+        }
+    }
+    if (!far) return b;
+    chamfer(far, w, rows);
+    // (only ever lowered, so strokes and passes in any order cut the same bank)
+    const rise = SPACING * DIG_BANK;
+    for (let j = b.j0; j <= b.j1; j++) {
+        for (let i = b.i0; i <= b.i1; i++) {
+            const k = j * n + i;
+            h[k] = Math.min(h[k], floor + far[(j - b.j0) * w + (i - b.i0)] * rise);
+        }
+    }
+    return b;
+}
+
+/** Turns `d` (a `w` by `rows` grid: 0 at the sources, Infinity elsewhere) into each cell's distance in cells to the nearest
+ *  source, near enough (a two-pass chamfer: a step costs 1, a diagonal step the square root of 2). */
+function chamfer(d, w, rows) {
+    const D = Math.SQRT2;
+    for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < w; i++) {
+            const k = j * w + i;
+            let v = d[k];
+            if (i > 0) v = Math.min(v, d[k - 1] + 1);
+            if (j > 0) {
+                v = Math.min(v, d[k - w] + 1);
+                if (i > 0) v = Math.min(v, d[k - w - 1] + D);
+                if (i < w - 1) v = Math.min(v, d[k - w + 1] + D);
+            }
+            d[k] = v;
+        }
+    }
+    for (let j = rows - 1; j >= 0; j--) {
+        for (let i = w - 1; i >= 0; i--) {
+            const k = j * w + i;
+            let v = d[k];
+            if (i < w - 1) v = Math.min(v, d[k + 1] + 1);
+            if (j < rows - 1) {
+                v = Math.min(v, d[k + w] + 1);
+                if (i < w - 1) v = Math.min(v, d[k + w + 1] + D);
+                if (i > 0) v = Math.min(v, d[k + w - 1] + D);
+            }
+            d[k] = v;
+        }
+    }
 }
 
 /** The rough edge a brush cuts at sample (px, py), `a` radians round from its middle: the same wherever the brush passes (noise
