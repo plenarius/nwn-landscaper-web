@@ -3,6 +3,7 @@
 
 // The Water tool: bodies of water, each filling the hollow around the point it was started at up to its level.
 
+import { WET_DEPTH } from './area.js';
 import { say } from './dom.js';
 import { saveSoon } from './save.js';
 
@@ -39,7 +40,7 @@ export function waterDown(e, p) {
 
 /** Dragging up or down sets the body's level. `w` is what waterDown() gave. */
 export function waterDrag(e, w) {
-    const level = Math.max(w.ground + 0.05, w.startLevel + (w.startY - e.clientY) * LEVEL_PER_PIXEL);
+    const level = Math.max(w.ground + WET_DEPTH + 0.05, w.startLevel + (w.startY - e.clientY) * LEVEL_PER_PIXEL);
     if (!w.stepped) {
         if (level === w.body.level) return;
         ctx.area().beginStroke();
