@@ -262,7 +262,9 @@ function dunes(area, base, rand, library) {
 }
 
 /** A low valley ringed by wooded hills, with a lake in its hollow; the valley floor is `base`. Its body of water is filled
- *  30 cm under the lowest ground round the lake, so it stays in its hollow. */
+ *  30 cm under the lowest ground round the lake, so it stays in its hollow. The hills are lower in an area under 16 tiles
+ *  across: they rise over a share of its width, and at full height an 8 by 8 area's ring was a cliff with gaps the game can't
+ *  path through. */
 function lakeValley(area, base, rand, library) {
     const { nx, ny, heights: h, sizeX, sizeY } = area;
     const hills = noise(area, rand() * 1e5, 55, 3),
@@ -275,6 +277,8 @@ function lakeValley(area, base, rand, library) {
         ry = sizeY * 0.16,
         turn = rand() * Math.PI;
     const lake = new Float32Array(nx * ny);
+    // The hills' height for the area's size: as steep as on 16 by 16 tiles, never steeper.
+    const tall = Math.min(1, Math.min(sizeX, sizeY) / 160);
     for (let j = 0; j < ny; j++) {
         for (let i = 0; i < nx; i++) {
             const k = j * nx + i,
@@ -282,7 +286,7 @@ function lakeValley(area, base, rand, library) {
                 y = j * SPACING;
             // 0 in the middle of the area, 1 at the middle of an edge.
             const r = Math.hypot((x - sizeX / 2) / (sizeX / 2), (y - sizeY / 2) / (sizeY / 2)) + 0.12 * (hills[k] - 0.5);
-            const ring = 15 * smoothstep(0.5, 1.15, r) ** 1.5 + 5 * hills[k] * smoothstep(0.35, 0.9, r);
+            const ring = tall * (15 * smoothstep(0.5, 1.15, r) ** 1.5 + 5 * hills[k] * smoothstep(0.35, 0.9, r));
             const dx = x - lx,
                 dy = y - ly;
             const a = (dx * Math.cos(turn) + dy * Math.sin(turn)) / rx,
@@ -318,8 +322,8 @@ function lakeValley(area, base, rand, library) {
             if (h[k] < level) return 'bed';
             if (h[k] < level + 0.6) return 'shore';
             const up = h[k] - base;
-            if (up > 7) return 'wood';
-            return meadow[k] > 0.55 && up < 3 ? 'meadow' : 'grass';
+            if (up > 7 * tall) return 'wood';
+            return meadow[k] > 0.55 && up < 3 * tall ? 'meadow' : 'grass';
         },
     );
 }
