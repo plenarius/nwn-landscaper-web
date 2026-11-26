@@ -12,6 +12,7 @@ import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK } from './area.js';
+import { REACH, groundNormals } from './normals.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
@@ -31,7 +32,8 @@ const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
 // a texture (an index into the area palette, stored in uMat); a point
 // blends its four surrounding samples' textures bilinearly, so painted
 // edges soften over one 0.625 m sample. Ground too steep to walk takes the
-// nearest sample's texture alone. Every texture is drawn from three sides by
+// texture that weighs most in that blend, as landscaper cuts steep faces
+// (its split.rs; in a tie, the lower palette index). Every texture is drawn from three sides by
 // the ground's slope (triplanar.js), as the game's shader and landscaper's
 // bake draw it, so it keeps its size on every slope.
 // Baked shadows over the lit ground, as the game's shadow-map shader
@@ -80,7 +82,7 @@ const SPLAT_VERTEX = `
     vUp = transformed.y;
     vGap = aGap;
     vDeep = aDeep;
-    vNormalUp = normal.y;
+    vNormalUp = aUp;
     vNormalArea = vec3(normal.x, -normal.z, normal.y);`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
@@ -108,8 +110,18 @@ ${triplanarGlsl('vNormalArea', 'vArea', 'vUp')}
         vec4 imported = texture2D(uImport, folded / uSize);
         vec4 splat;
         if (vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
-            float nearest = t.x < 0.5 ? (t.y < 0.5 ? m00 : m01) : (t.y < 0.5 ? m10 : m11);
-            splat = nearest == uImportLayer ? imported : TRIPLANAR(nearest);
+            float wq[4] = float[4]((1.0 - t.x) * (1.0 - t.y), t.x * (1.0 - t.y), (1.0 - t.x) * t.y, t.x * t.y);
+            float mq[4] = float[4](m00, m10, m01, m11);
+            float heaviest = m00, most = -1.0;
+            for (int a = 0; a < 4; a++) {
+                float w = 0.0;
+                for (int b = 0; b < 4; b++) w += mq[b] == mq[a] ? wq[b] : 0.0;
+                if (w > most || (w == most && mq[a] < heaviest)) {
+                    most = w;
+                    heaviest = mq[a];
+                }
+            }
+            splat = heaviest == uImportLayer ? imported : TRIPLANAR(heaviest);
         } else {
             splat = (m00 == uImportLayer ? imported : TRIPLANAR(m00)) * (1.0 - t.x) * (1.0 - t.y)
                   + (m10 == uImportLayer ? imported : TRIPLANAR(m10)) * t.x * (1.0 - t.y)
@@ -324,6 +336,8 @@ export class View {
         geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1e9), 1));
         // How far down a chasm each sample is, over its depth: 0 out of one, 1 on its floor (drawn black, its walls fading).
         geo.setAttribute('aDeep', new THREE.BufferAttribute(new Float32Array(nx * ny), 1));
+        // Each sample's own slope's up part: whether it is too steep to walk (its normal, steep ground's taken wider, isn't).
+        geo.setAttribute('aUp', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1), 1));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
         this.uniforms.uMat.value?.dispose();
         const mat = new THREE.DataTexture(area.materials, nx, ny, THREE.RedFormat, THREE.UnsignedByteType);
@@ -365,7 +379,7 @@ export class View {
             shader.vertexShader = shader.vertexShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
+                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nattribute float aUp;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
                 )
                 .replace('#include <begin_vertex>', `#include <begin_vertex>${SPLAT_VERTEX}`);
             shader.fragmentShader = shader.fragmentShader
@@ -722,7 +736,7 @@ export class View {
         for (const a of [pos, gap, deep, col]) this.uploadRows(a, i0, i1, j0, j1);
         this.uploadPaint(i0, i1, j0, j1);
         // Only what the change reaches: on a 32×32 area each of these over the whole mesh took most of a 245 ms frame.
-        this.updateNormals(i0 - 1, i1 + 1, j0 - 1, j1 + 1);
+        this.updateNormals(i0 - REACH, i1 + REACH, j0 - REACH, j1 + REACH);
         this.updateBounds(i0, i1, j0, j1);
         this.updateGrid({ i0, i1, j0, j1 });
         // (the edge scenery carries the outer rows and columns out: a fifth of a stroke's redraw, for a stroke far from them)
@@ -808,28 +822,32 @@ export class View {
         return i1 < 0 ? null : { i0, i1, j0, j1 };
     }
 
-    /** The ground's normals at samples i0..i1, j0..j1 (clamped to the area), from its drawn heights: each sample's slope
-     *  between its neighbours, as a regular grid's averaged triangle normals give it. */
+    /** The ground's normals at samples i0..i1, j0..j1 (clamped to the area), from its drawn heights, as landscaper gives them to
+     *  the game (normals.js), and each sample's own slope's up part for the steep test (aUp). */
     updateNormals(i0, i1, j0, j1) {
         const { nx, ny } = this.area,
             geo = this.mesh.geometry,
             y = geo.attributes.position.array,
-            nor = geo.attributes.normal;
-        const h = (i, j) => y[this.vertex(i, j) * 3 + 1];
-        for (let j = Math.max(0, j0); j <= Math.min(ny - 1, j1); j++) {
-            for (let i = Math.max(0, i0); i <= Math.min(nx - 1, i1); i++) {
-                const w = Math.max(i - 1, 0),
-                    e = Math.min(i + 1, nx - 1),
-                    s = Math.max(j - 1, 0),
-                    n = Math.min(j + 1, ny - 1);
-                // Rise per metre east and north; three.js's z runs south, so north's rise turns the normal towards +z.
-                const east = (h(e, j) - h(w, j)) / ((e - w) * SPACING),
-                    north = (h(i, n) - h(i, s)) / ((n - s) * SPACING);
-                const len = Math.hypot(east, 1, north);
-                nor.setXYZ(this.vertex(i, j), -east / len, 1 / len, north / len);
-            }
-        }
+            nor = geo.attributes.normal,
+            up = geo.attributes.aUp;
+        // (three.js's y is up and its z runs south)
+        groundNormals(
+            (i, j) => y[this.vertex(i, j) * 3 + 1],
+            nx,
+            ny,
+            SPACING,
+            i0,
+            i1,
+            j0,
+            j1,
+            (i, j, n, near) => {
+                const v = this.vertex(i, j);
+                nor.setXYZ(v, n[0], n[2], -n[1]);
+                up.setX(v, near[2]);
+            },
+        );
         this.uploadRows(nor, i0, i1, j0, j1);
+        this.uploadRows(up, i0, i1, j0, j1);
     }
 
     /** The ground's bounds (for picking): worked out whole when everything changed, else grown to the changed heights. A
@@ -1609,6 +1627,7 @@ export class View {
         geo.setAttribute('aDeep', new THREE.BufferAttribute(new Float32Array(verts), 1));
         // (no cave void out there: without it the shader read 0, under VOID_BELOW, and drew the edge scenery black)
         geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(verts).fill(1e9), 1));
+        geo.setAttribute('aUp', new THREE.BufferAttribute(new Float32Array(verts).fill(1), 1));
         const index = [];
         for (let s = 0; s < 4; s++) {
             for (let k = 0; k < strips[s] - 1; k++) {
@@ -1677,6 +1696,11 @@ export class View {
         pos.needsUpdate = true;
         dark.needsUpdate = true;
         this.skirt.geometry.computeVertexNormals();
+        // (its steep test from its own normals)
+        const nor = this.skirt.geometry.attributes.normal,
+            up = this.skirt.geometry.attributes.aUp;
+        for (let v = 0; v < up.count; v++) up.setX(v, nor.getY(v));
+        up.needsUpdate = true;
         this.skirt.geometry.computeBoundingSphere();
     }
 
