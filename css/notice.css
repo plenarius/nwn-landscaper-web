@@ -43,3 +43,23 @@
     font-size: 22px;
     color: var(--muted);
 }
+
+/* A panel that needs the game, on a page without it (the web demo): its notice instead of its lists and settings. */
+.needs-game {
+    margin: 8px 0 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--warn);
+    border-radius: 8px;
+    background: rgba(38, 44, 52, 0.6);
+    font-size: 13px;
+}
+.needs-game p {
+    margin: 0 0 8px;
+}
+/* (By id, so it outweighs the panels' own rules for their lists.) */
+:is(#placePanel, #scatterPanel, #thingsPanel).no-game > :not(h3, .panel-close, .needs-game),
+:is(#scriptDialog, #importDialog).no-game > :not(h2, .needs-game, .dialog-buttons, form),
+:is(#scriptDialog, #importDialog).no-game > form > :not(h2, .needs-game, .dialog-buttons),
+:is(#scriptDialog, #importDialog).no-game .dialog-buttons > :not([data-close], [value="cancel"]) {
+    display: none;
+}

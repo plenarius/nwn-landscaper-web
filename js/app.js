@@ -25,6 +25,7 @@ import { THING_COLOURS, css } from './thingcolours.js';
 import { openSettings } from './settings.js';
 import { api, engine, json, NEEDS_ENGINE, viewing } from './api.js';
 import { $, el, session, store, say } from './dom.js';
+import { showNoGame } from './nogame.js';
 import { initImport, reimport } from './import.js';
 import { initSky, showAreaSky, refreshSky, skyShowsNight } from './sky.js';
 import { initLightTool, showLightTool, lightPair } from './lighttool.js';
@@ -610,6 +611,7 @@ async function loadMe() {
     viewing.user = me.viewing || null;
     showWho();
     showEngine();
+    showNoGame(engine.up && me.game === false);
     showVersion(engine.up ? me.version : null);
 }
 
