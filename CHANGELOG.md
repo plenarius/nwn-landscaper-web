@@ -2,7 +2,8 @@
 
 All notable changes to the Landscaper's web editor. Versions follow [Semantic Versioning](https://semver.org/). Each release is
 tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.com/plenarius/nwn-landscaper), and works with the engine
-of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog.
+of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
+not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
 ## Unreleased
 
