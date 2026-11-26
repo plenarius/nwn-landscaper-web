@@ -157,9 +157,9 @@ html-validate, spelling, writing, Markdown, links, licences, secrets); [STYLE.md
 
 A changelog entry is a file of its own in `changelog.d/`, not an edit to CHANGELOG.md, so pull requests don't conflict
 there ([CONTRIBUTING.md](CONTRIBUTING.md)). A release's pull request folds them into the version's section with
-`scripts/changelog.sh release X.Y.Z`, as the engine's does; the engine's README ("Releases") has the rest of a release. Between
-releases CHANGELOG.md starts with `## Unreleased`, by which the editor says `+dev` beside its title: the first pull request
-after a release puts the heading back, empty (`scripts/changelog.sh check` asks for it).
+`scripts/changelog.sh release X.Y.Z`, as the engine's does; the engine's README ("Releases") has the rest of a release.
+Between releases the editor says `+dev` after the last release's version beside its title while `changelog.d/` holds an entry
+(the engine lists them at `/changelog.d/`) or CHANGELOG.md starts with `## Unreleased`.
 
 `node --test 'tests/*.test.js'` (Node 24) runs the tests, without a browser: `tests/browser.js` gives the page's modules a
 stand-in for the page, the browser's storage and the engine, and swaps the modules that draw or ask for the stubs in

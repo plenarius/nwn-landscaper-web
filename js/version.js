@@ -3,20 +3,24 @@
 
 // The version beside the title in the top bar: the engine's (from /api/me) and this editor's (from the CHANGELOG.md served
 // next to it), the same on a release; a click shows both and a link to the release's notes. A build between releases says
-// `+dev` after the last release's version: its changelog starts with `## Unreleased`.
+// `+dev` after the last release's version: changelog.d/ holds an entry for the next one (the engine lists them), or its
+// changelog starts with `## Unreleased`.
 
-import { api } from './api.js';
+import { api, json } from './api.js';
 
 const RELEASES = 'https://github.com/plenarius/nwn-landscaper/releases/tag/';
 
-/** The version a CHANGELOG.md says: its first `## X.Y.Z` heading, with `+dev` when `## Unreleased` comes before it; null without. */
-export function changelogVersion(text) {
+/**
+ * The version a CHANGELOG.md says: its first `## X.Y.Z` heading, with `+dev` when `## Unreleased` comes before it or changes are
+ * `waiting` in changelog.d/; null without.
+ */
+export function changelogVersion(text, waiting = false) {
     let unreleased = false;
     for (const line of String(text ?? '').split('\n')) {
         const heading = line.match(/^## +(.+?)\s*$/)?.[1];
         if (!heading) continue;
         if (/^unreleased$/i.test(heading)) unreleased = true;
-        else if (/^\d+\.\d+\.\d+$/.test(heading)) return unreleased ? `${heading}+dev` : heading;
+        else if (/^\d+\.\d+\.\d+$/.test(heading)) return unreleased || waiting ? `${heading}+dev` : heading;
     }
     return null;
 }
@@ -51,11 +55,24 @@ export function describe(engine, editor) {
     };
 }
 
-/** This editor's version, from its CHANGELOG.md; null when it can't be read (a copy without it). */
+/** This editor's version, from its CHANGELOG.md and changelog.d/; null when it can't be read (a copy without it). */
 async function editorVersion() {
-    const res = await api('CHANGELOG.md', { cache: 'no-cache' });
-    return res.ok ? changelogVersion(await res.text()) : null;
+    const [res, more] = await Promise.all([api('CHANGELOG.md', { cache: 'no-cache' }), waiting()]);
+    return res.ok ? changelogVersion(await res.text(), more) : null;
 }
+
+/** Whether changelog.d/ beside the page holds entries for the next release: the engine lists them (an older one doesn't). */
+async function waiting() {
+    try {
+        const res = await api('changelog.d/', { cache: 'no-cache' });
+        return res.ok && hasEntries(await json(res));
+    } catch {
+        return false;
+    }
+}
+
+/** Whether the engine's `/changelog.d/` answer lists any entry (anything else, a page of a plain file server, lists none). */
+export const hasEntries = answer => Array.isArray(answer?.fragments) && answer.fragments.length > 0;
 
 /** Shows the versions beside the title; `engine` is /api/me's `version` (missing: an older engine, or none). */
 export async function showVersion(engine) {

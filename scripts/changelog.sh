@@ -12,9 +12,8 @@
 #                  top, and the fragments are deleted. Fails when there is nothing to release.
 #   unreleased     folds the fragments into `## Unreleased` (made if missing) and deletes them, to read them in place
 #   preview        prints `## Unreleased` as the fold would make it, and changes nothing
-#   check          each fragment is a bullet list, and CHANGELOG.md starts with `## Unreleased` while fragments wait (builds
-#                  between releases say +dev by that heading). In a pull request's CI (GITHUB_BASE_REF), warns when the pull
-#                  request adds entries to CHANGELOG.md's `## Unreleased` instead of a fragment.
+#   check          each fragment is a bullet list whose links start from changelog.d/. In a pull request's CI
+#                  (GITHUB_BASE_REF), warns when the pull request adds entries to CHANGELOG.md's `## Unreleased` instead.
 # Fragments fold in the order of their names (byte order), above the entries `## Unreleased` already has.
 # Exit status: 0 when it worked or the check passed, 1 otherwise, 2 for a wrong command.
 
@@ -32,12 +31,12 @@ fragments() {
     for f in "$DIR"/*.md; do [[ -f "$f" ]] && printf '%s\n' "$f"; done | LC_ALL=C sort
 }
 
-# Every fragment's lines, one after the other: a single list, without a fragment's trailing blank lines, and its links to our
-# own files made relative to CHANGELOG.md.
+# Every fragment's lines, one after the other: a single list, without a fragment's trailing blank lines or its markdownlint
+# comments (`<!-- markdownlint-disable-file MD041 -->`), and its links to our own files made relative to CHANGELOG.md.
 entries() {
     local f
     while IFS= read -r f; do
-        sed -e 's/\r$//' -e 's/](\.\.\//](/g' "$f" |
+        sed -e 's/\r$//' -e '/^[[:space:]]*<!--[[:space:]]*markdownlint-[^>]*-->[[:space:]]*$/d' -e 's/](\.\.\//](/g' "$f" |
             awk '/^[[:space:]]*$/ {blank++; next} {if (seen) for (; blank > 0; blank--) print ""; blank = 0; seen = 1; print}'
     done < <(fragments)
 }
@@ -63,9 +62,6 @@ fold() {
 
 # The lines of the `## Unreleased` section of a changelog (stdin), without its heading.
 unreleased_section() { awk '/^## / {f = (tolower($0) ~ /^## +unreleased *$/); next} f'; }
-
-# The first `## ` heading's text.
-top() { awk '/^## / {sub(/^## +/, ""); sub(/ +$/, ""); print; exit}' "$LOG"; }
 
 cmd=${1:-}
 case "$cmd" in
@@ -98,7 +94,7 @@ case "$cmd" in
     check)
         bad=0
         while IFS= read -r f; do
-            first=$(grep -m1 -v '^[[:space:]]*$' "$f")
+            first=$(grep -v '^[[:space:]]*<!--[[:space:]]*markdownlint-' "$f" | grep -m1 -v '^[[:space:]]*$')
             if [[ "$first" != "- "* ]]; then echo "$f: a fragment is the changelog's bullet list: start it with '- '" >&2; bad=1; fi
             if grep -q '^#' "$f"; then echo "$f: no headings in a fragment: the fold gives the section's" >&2; bad=1; fi
             if grep -qE '\]\(([^.#)h]|h[^t]|\.[^.])' "$f"; then
@@ -106,11 +102,6 @@ case "$cmd" in
                 bad=1
             fi
         done < <(fragments)
-        if [[ -n "$(fragments)" && "$(top)" != [Uu]nreleased ]]; then
-            echo "$LOG: $DIR/ has entries, so $LOG must start with '## Unreleased' (a build between releases says +dev by it):" \
-                "add that heading, empty, above '## $(top)'" >&2
-            bad=1
-        fi
         base=${GITHUB_BASE_REF:-}
         if [[ -n "$base" ]] && git rev-parse -q --verify "origin/$base" > /dev/null; then
             from=$(git merge-base HEAD "origin/$base")

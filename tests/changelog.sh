@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: MIT
 #
 # Tests scripts/changelog.sh in a scratch folder: two fragments fold into a release's section, in the order of their names,
-# above the entries `## Unreleased` had, their links made relative to CHANGELOG.md, and none is left behind; and what
-# `unreleased` and `check` do. CI runs it (check.yml).
+# above the entries `## Unreleased` had, their links made relative to CHANGELOG.md and markdownlint comments dropped, and none
+# is left behind; and what `unreleased` and `check` do. CI runs it (check.yml).
 # Usage: tests/changelog.sh   Exit status: 0 when every case passes.
 
 set -uo pipefail
@@ -19,7 +19,8 @@ setup() {
     rm -rf "$tmp/r" && mkdir -p "$tmp/r/scripts" "$tmp/r/changelog.d"
     cp "$here/scripts/changelog.sh" "$tmp/r/scripts/"
     printf '{ "MD041": false }\n' > "$tmp/r/changelog.d/.markdownlint.jsonc"
-    printf '%s\n' '- **Second.** From b.md,' '  over two lines.' '' > "$tmp/r/changelog.d/b-second.md"
+    printf '%s\n' '<!-- markdownlint-disable-file MD041 -->' '- **Second.** From b.md,' '  over two lines.' '' \
+        > "$tmp/r/changelog.d/b-second.md"
     printf '%s\n' '- **First.** From a.md ([docs](../docs/X.md)).' > "$tmp/r/changelog.d/a-first.md"
     printf '%s\n' "$@" > "$tmp/r/CHANGELOG.md"
 }
@@ -82,6 +83,6 @@ setup '# Changelog' '' '## Unreleased' '' '## 0.6.1'
 printf '%s\n' '- See [docs](docs/X.md).' > "$tmp/r/changelog.d/c.md"
 run check && { echo "FAIL $name: passes a link from CHANGELOG.md's folder"; failed=1; } || echo "ok   $name: a link from the top fails"
 setup '# Changelog' '' '## 0.6.1' '' '- A fix.'
-run check && { echo "FAIL $name: passes fragments without ## Unreleased"; failed=1; } || echo "ok   $name: no Unreleased fails"
+run check && echo "ok   $name: entries wait without ## Unreleased" || { echo "FAIL $name: wants ## Unreleased"; failed=1; }
 
 exit "$failed"
