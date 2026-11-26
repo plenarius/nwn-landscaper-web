@@ -122,10 +122,10 @@ test('the base turns with the bearing and grows with the scale', () => {
 });
 
 test("Scatter's water test looks under the base's corners, not only its middle", () => {
-    // Ground rising gently east from 4 m (0.05 m a metre), water at 4.5 m: the shore is at x = 10.
+    // Ground rising east from 4 m (0.2 m a metre), water at 6 m: the shore (WET_DEPTH deep) is at x = 9.25.
     const a = Area.create('shore', 3, 'flat', 5);
-    for (let j = 0; j < a.ny; j++) for (let i = 0; i < a.nx; i++) a.heights[j * a.nx + i] = 4 + i * SPACING * 0.05;
-    a.water = [{ i: 0, j: 24, level: 4.5 }];
+    for (let j = 0; j < a.ny; j++) for (let i = 0; i < a.nx; i++) a.heights[j * a.nx + i] = 4 + i * SPACING * 0.2;
+    a.water = [{ i: 0, j: 24, level: 6 }];
     a.floodWater();
     const rock = {
         positions: quad(-2, 2, 0, 0, 1),
@@ -134,7 +134,7 @@ test("Scatter's water test looks under the base's corners, not only its middle",
         max: [2, 0, 1],
     };
     // Its middle on dry ground, 1.5 m from the shore; 2 m to the west, its edge is in the water.
-    const o = { x: 11.5, y: 15, bearing: 0, scale: 1 };
+    const o = { x: 10.75, y: 15, bearing: 0, scale: 1 };
     const { i, j } = a.sampleAt(o.x, o.y);
     assert.ok(a.walkable(i, j) && a.depth(i, j) === 0);
     assert.equal(groundSuits(a, o, rock), false);

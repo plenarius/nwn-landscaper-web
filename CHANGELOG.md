@@ -6,6 +6,10 @@ of that release; before 1.0, a minor version may change the HTTP API between the
 
 ## Unreleased
 
+- **Water too shallow to see is drawn dry.** Ground under less than 15 cm of water shows as dry ground, as the engine now
+  exports it and the game shows it: the game draws water that shallow almost clear. A click there starts a new body of water
+  instead of taking the one around it, and a body's level can't be dragged below 20 cm over the ground clicked. Needs the
+  engine of this release.
 - **Doors look like doors.** In the Things tool a door, and a placeable placed from a blueprint, is drawn as its model, with
   its textures, turned the way it faces and standing on the ground, instead of a coloured box that never turned; an imported
   area's own doors too, a little greyed as their markers were. The selected one has the Place tool's handles and keys: drag,

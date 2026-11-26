@@ -19,6 +19,8 @@ export const WALKABLE_NZ = 0.64;
 export const MAX_RISE = (SPACING * Math.sqrt(1 - WALKABLE_NZ * WALKABLE_NZ)) / WALKABLE_NZ;
 // Water deeper than this can't be walked (landscaper's SHALLOW).
 export const SHALLOW = 0.5;
+// Water shallower than this is dry ground (landscaper's WET_DEPTH): the game draws it almost clear, so it reads as dry.
+export const WET_DEPTH = 0.15;
 // A cave starts as rock this high over its floor; its tops (from VOID_BELOW
 // under the roof up) are void, drawn black (landscaper's VOID_BELOW).
 export const CAVE_ROCK = 6;
@@ -223,20 +225,24 @@ export class Area {
         return wet;
     }
 
-    /** Recomputes waterLevel from the bodies (after the ground or water changed). */
+    /** Recomputes waterLevel from the bodies (after the ground or water changed); a sample under less than WET_DEPTH is
+     *  dry, as landscaper exports it. */
     floodWater() {
-        const level = this.waterLevel.fill(NaN);
+        const level = this.waterLevel.fill(NaN),
+            h = this.heights;
         for (const b of this.water) {
             const wet = this.flood(b);
             for (let k = 0; k < wet.length; k++) {
                 if (wet[k] && !(level[k] >= b.level)) level[k] = b.level;
             }
         }
+        for (let k = 0; k < level.length; k++) if (level[k] - h[k] < WET_DEPTH) level[k] = NaN;
     }
 
-    /** The body of water over sample (i, j), if any (the highest). */
+    /** The body of water over sample (i, j), if any (the highest); none where it is too shallow to show. */
     bodyAt(i, j) {
         const k = j * this.nx + i;
+        if (Number.isNaN(this.waterLevel[k])) return null;
         let best = null;
         for (const b of this.water) if (this.flood(b)[k] && (!best || b.level > best.level)) best = b;
         return best;
