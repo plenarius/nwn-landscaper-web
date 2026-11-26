@@ -41,6 +41,7 @@ import { initPlace, selectObject, removeObject, changeSelected, transformer, sho
 import { initScatter, showScatterables } from './scatter.js';
 import { initAmbienceTool, setAmbienceOpen, showAmbienceTool, loadParticles } from './ambiencetool.js';
 import { initWater } from './water.js';
+import { keyBelongsTo } from './keys.js';
 import { initEntranceTool, showEntrances } from './entrancetool.js';
 import { initStrokes, currentStroke, endStroke, moving } from './strokes.js';
 import {
@@ -111,6 +112,8 @@ function showStrengthName() {
 
 function selectTool(id) {
     tool = id;
+    // (Sky & fog lies over the tool's panel.)
+    skyOpen = false;
     showStrengthName();
     for (const c of document.querySelectorAll('canvas')) c.style.cursor = '';
     picking = false;
@@ -785,8 +788,8 @@ window.addEventListener('keydown', e => {
         flushSave().then(() => location.reload());
         return;
     }
-    // Not while typing or choosing (a box, a list, a text area, an editor, a dialog).
-    if (e.target.closest?.('input, select, textarea, dialog, [contenteditable]:not([contenteditable="false"])')) return;
+    // Not while typing or choosing (a box, a list, a text area, an editor, a dialog; a slider's or radio button's own keys).
+    if (keyBelongsTo(e.target, e)) return;
     // Letters work with Caps Lock on: the shortcuts compare lower case (Ctrl+Shift+Z still reads e.key's capital).
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     // The camera: arrows move along the ground, Shift+arrows turn the view, + and - zoom, Home looks straight down (F frames).
