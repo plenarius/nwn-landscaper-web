@@ -123,3 +123,28 @@ test('the colours are lightcolor.2da rows 0 to 31, and every preset suits some k
     assert.ok(suits(kind('surface', false, 'night')).includes('village'));
     assert.ok(suits(kind('underground')).includes('cave'));
 });
+
+test('lights and particles in one area: each keeps its own undo step, save and export', async () => {
+    const a = Area.create('lb', 3, 'flat', 5);
+    a.beginStroke();
+    lightFill(a, WARM);
+    a.beginStroke();
+    a.ambience = [{ kind: 'fireflies', x: 12, y: 14, z: 5, scale: 1, seed: 3 }];
+    // Undo takes the particles away and leaves the lights; redo brings them back.
+    a.undo();
+    assert.equal(a.ambience.length, 0);
+    assert.equal(litTiles(a), 9);
+    a.redo();
+    assert.equal(a.ambience.length, 1);
+    const back = Area.fromJSON(JSON.parse(JSON.stringify(a.toJSON())));
+    assert.deepEqual([back.lights, back.ambience], [a.lights, a.ambience]);
+    open = a;
+    engine.reset();
+    await sendArea('check');
+    const json = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(a.heights.byteLength + a.materials.byteLength)));
+    assert.equal(json.lights.length, 9);
+    assert.deepEqual(
+        json.ambience.map(p => p.kind),
+        ['fireflies'],
+    );
+});
