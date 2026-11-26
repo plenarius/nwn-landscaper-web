@@ -10,6 +10,7 @@ import './importmap.js';
 
 const { Area, SPACING } = await import('../js/area.js');
 const mixjs = await import('../js/mix.js');
+const { stamp } = await import('../js/tools.js');
 const { newMix, withTexture, withWeight, toggledTexture, shiftAdded, shares, readMix, writeMix, keptTextures, mixPlan, mixStamp } = mixjs;
 
 /** A mix of `ids` (weights `weights`, equal by default) with `opts`, painted on a flat area `tiles` a side: the area, its
@@ -227,9 +228,31 @@ test('the mix kept in the browser reads back, without textures the library lost,
 
 test('a large brush paints quickly', () => {
     const { area, plan } = setup(['grassLong', 'sand', 'snow', 'dirt'], { patch: 4, tiles: 16 });
-    const t0 = performance.now();
-    for (let k = 0; k < 10; k++) mixStamp(area, 80, 80, 30, 1, plan);
-    const ms = (performance.now() - t0) / 10;
-    // A 30 m brush is about 7,200 samples; a frame has 16 ms.
-    assert.ok(ms < 16, `${ms.toFixed(1)} ms a dab`);
+    const sand = area.materialIndex('sand');
+    // Against the plain Paint brush over the same 7,200 samples (a 30 m brush), each the best of 15 taken in turn and in the
+    // process's CPU time, so a slow or busy machine slows both alike and time spent waiting for a core counts for neither: wall
+    // time alone failed whenever other work shared the machine. The mix costs about 20 to 29 plain dabs (each patch is a
+    // nearest-cell search and two hashes); past 60 it has got slower than it should, toward a frame's 16 ms on a slow machine.
+    const time = f => {
+        const c0 = process.cpuUsage();
+        f();
+        const c = process.cpuUsage(c0);
+        return (c.user + c.system) / 1000;
+    };
+    let mix = Infinity,
+        plain = Infinity;
+    for (let k = 0; k < 15; k++) {
+        mix = Math.min(
+            mix,
+            time(() => mixStamp(area, 80, 80, 30, 1, plan)),
+        );
+        // (ten plain dabs a measurement: one is under a millisecond, near the timer's grain)
+        plain = Math.min(
+            plain,
+            time(() => {
+                for (let r = 0; r < 10; r++) stamp(area, 'paint', 80, 80, 30, 1, 1 / 60, undefined, sand);
+            }) / 10,
+        );
+    }
+    assert.ok(mix < 60 * plain, `a mix dab ${mix.toFixed(1)} ms, ${(mix / plain).toFixed(0)} plain dabs`);
 });

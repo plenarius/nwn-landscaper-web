@@ -99,10 +99,36 @@ test('an engine that gives no sources: every row is the game’s, searched as be
 
 test('a search of 21,201 rows takes a few milliseconds, not a freeze', () => {
     const m = library(big());
-    const start = performance.now();
-    for (const q of ['c', 'cactus', 'bush green', 'tree oak 1', 'nothing at all']) m.search(q);
-    const each = (performance.now() - start) / 5;
-    assert.ok(each < 50, `${each.toFixed(1)} ms a search`);
+    const queries = ['c', 'cactus', 'bush green', 'tree oak 1', 'nothing at all'];
+    // Against a plain scan of the same rows for the same words, each the best of 10 taken in turn and in the process's CPU
+    // time, so a slow or busy machine slows both alike: 50 ms of wall time failed whenever other work shared the machine. A
+    // search costs about 3 to 5 scans (a few milliseconds); past 20, something does more work a row than it should.
+    const time = f => {
+        const c0 = process.cpuUsage();
+        f();
+        const c = process.cpuUsage(c0);
+        return (c.user + c.system) / 1000;
+    };
+    let search = Infinity,
+        scan = Infinity;
+    for (let k = 0; k < 10; k++) {
+        search = Math.min(
+            search,
+            time(() => {
+                for (const q of queries) m.search(q);
+            }),
+        );
+        scan = Math.min(
+            scan,
+            time(() => {
+                for (const q of queries) {
+                    const words = q.split(' ');
+                    m.index.filter(e => words.every(w => e.text.includes(w)));
+                }
+            }),
+        );
+    }
+    assert.ok(search < 20 * scan, `${(search / 5).toFixed(1)} ms a search, ${(search / scan).toFixed(1)} scans`);
 });
 
 /** A library with plants measured as the engine gives them (plants.rs): `kinds` is [kind, small count, large count]. */
