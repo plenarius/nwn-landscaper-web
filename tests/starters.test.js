@@ -209,6 +209,18 @@ test("the valley's lake fills its hollow and stays off the area's edges", () => 
     }
 });
 
+test("the valley's hills can be walked at any size: a small area gets lower hills, not a cliff", () => {
+    for (const tiles of [4, 8, 12, 16]) {
+        for (const seed of SEEDS) {
+            const a = Area.create('aa', tiles, 'flat', 5);
+            seedTerrain(a, TERRAIN_STARTERS['lake-valley'], 5, library, seed);
+            const dry = share(a, (i, j) => !(a.depth(i, j) > 0)),
+                steep = share(a, (i, j) => !(a.depth(i, j) > 0) && !a.walkable(i, j));
+            assert.ok(steep / dry < 0.002, `${tiles}x${tiles} lake ${seed}: ${steep / dry}`);
+        }
+    }
+});
+
 test("a sample landscape's settings change only the weather it names", () => {
     const template = { tag: 'aa', skyBox: 0, weather: { rain: 40, snow: 0, lightning: 5, wind: 0 }, music: { day: 3 } };
     const s = starterSettings(template, TERRAIN_STARTERS['snowy-pass']);
