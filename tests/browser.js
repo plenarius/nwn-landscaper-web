@@ -65,12 +65,24 @@ function element(id, tag = 'div') {
     };
 }
 const elements = new Map();
+// The document's event listeners (`visibilitychange`), for hide() to call.
+const listeners = [];
 globalThis.document = {
     getElementById: id => elements.get(id) ?? elements.set(id, element(id)).get(id),
     createElement: tag => element(null, tag),
-    addEventListener() {},
+    addEventListener(type, f) {
+        listeners.push({ type, f });
+    },
     visibilityState: 'visible',
 };
+
+/** The tab goes to the background (another tab or window in front), as `visibilitychange` says, then comes back. */
+export function hide() {
+    document.visibilityState = 'hidden';
+    for (const l of listeners.filter(l => l.type === 'visibilitychange')) l.f({ type: 'visibilitychange' });
+    document.visibilityState = 'visible';
+    for (const l of listeners.filter(l => l.type === 'visibilitychange')) l.f({ type: 'visibilitychange' });
+}
 
 /** The controls under element `e` (inputs, text areas, selects and buttons) a builder could use: not disabled themselves,
  *  nor in a disabled `<fieldset>`. */

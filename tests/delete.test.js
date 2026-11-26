@@ -6,12 +6,13 @@
 
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { engine, clearStorage, status, otherTab } from './browser.js';
+import { engine, clearStorage, status, otherTab, hide } from './browser.js';
 import { questions } from './stubs/ask.js';
 
 const { Area } = await import('../js/area.js');
 const save = await import('../js/save.js');
 const { viewing } = await import('../js/api.js');
+const { initExport, sendArea } = await import('../js/export.js');
 
 // What app.js gives save.js: the area open, who is signed in, read-only or not, Open, and the blank area.
 let open = null;
@@ -19,19 +20,22 @@ let me = { team: false, user: 'local' };
 let readOnly = false;
 const opened = [];
 let blanks = 0;
-save.initSave({
+/** What app.js gives page `s` (save.js). */
+const wiring = s => ({
     area: () => open,
     me: () => me,
     readOnly: () => readOnly,
     open: async name => {
         opened.push(name);
-        open = await save.loadArea(name, false);
+        open = await s.loadArea(name, false);
     },
     blank: () => {
         blanks++;
         open = Area.create('untitled', 3, 'flat');
     },
 });
+save.initSave(wiring(save));
+initExport({ area: () => open, readOnly: () => false, view: { setMarkers() {} } });
 
 /** A new area called `name` on the engine, as New makes it (saved once), and open. */
 async function made(name) {
@@ -156,4 +160,80 @@ test('an area only in this browser (the engine never took it) goes from the brow
     assert.deepEqual(deletes(), ['DELETE /api/area?name=cc&base=none']);
     assert.equal(save.browserCopy('cc'), null);
     assert.equal(blanks, 1);
+});
+
+test('an area changed, its tab hidden while its save is on its way and back, is deleted after Check paths and Export', async () => {
+    const a = await made('duny');
+    engine.saveDelay = 20;
+    a.atmosphere.preset = 'golden';
+    save.saveSoon();
+    hide();
+    a.atmosphere.preset = 'night';
+    save.saveSoon();
+    hide();
+    await save.flushSave();
+    engine.saveDelay = 0;
+    await sendArea('check');
+    await sendArea('export');
+    const version = engine.version('duny');
+    await deleteOpen(true);
+    assert.deepEqual(deletes(), [`DELETE /api/area?name=duny&base=${version}`]);
+    assert.equal(engine.areas.has('duny'), false);
+    assert.equal(save.browserCopy('duny'), null);
+});
+
+// The tests below reload the page: each gets a page of its own, so they come last.
+
+let reloads = 0;
+/** The page reloads (F5, or the browser reloads a tab it put to sleep): a new page with nothing of this one's but this
+ *  browser's storage, which opens the area last open as app.js does. */
+async function reload() {
+    await save.flushSave();
+    const page = await import(`../js/save.js?page=${++reloads}`);
+    page.initSave(wiring(page));
+    await page.loadCopies();
+    await page.moveBrowserAreas();
+    const last = page.lastOpen();
+    open = await page.openAtStart(last, page.browserCopy(last));
+    return page;
+}
+
+test('the area the page opens at its start is deleted after Check paths and Export', async () => {
+    const a = await made('duny');
+    a.atmosphere.preset = 'golden';
+    save.saveSoon();
+    hide();
+    await save.flushSave();
+    await reload();
+    assert.equal(open.name, 'duny');
+    await sendArea('check');
+    await sendArea('export');
+    const version = engine.version('duny');
+    await deleteOpen(true);
+    assert.deepEqual(deletes(), [`DELETE /api/area?name=duny&base=${version}`]);
+    assert.equal(engine.areas.has('duny'), false);
+    assert.match(status(), /Deleted duny/);
+});
+
+test('the area the page opens at its start is not deleted when another tab saved it since', async () => {
+    await made('duny');
+    await reload();
+    const other = Area.fromJSON(JSON.parse(engine.areas.get('duny')));
+    other.atmosphere.preset = 'night';
+    await otherTab(other);
+    await deleteOpen(true);
+    assert.equal(deletes().length, 1);
+    assert.equal(engine.areas.has('duny'), true);
+    assert.match(status(), /duny wasn't deleted: another tab or computer saved it/);
+});
+
+test('the area the page opens at its start saves over its own version, not unchecked', async () => {
+    await made('duny');
+    const page = await reload();
+    open.atmosphere.preset = 'night';
+    page.saveSoon();
+    await page.flushSave();
+    const [put] = engine.log.filter(l => l.startsWith('PUT')).slice(-1);
+    assert.match(put, /&base=/);
+    assert.match(JSON.parse(engine.areas.get('duny')).atmosphere.preset, /night/);
 });
