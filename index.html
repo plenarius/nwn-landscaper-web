@@ -258,6 +258,21 @@
             <p class="note">A chasm on the area's edge carries on beyond it, so a plateau or an island seems to stand over nothing. To cross one, leave a strip of ground across it (Shift-drag one back): a land bridge at least 6 m wide, over the middle of a tile's edge, where NWN's pathfinding crosses from tile to tile.</p>
             <button type="button" id="chasmEdge" title="A chasm as wide as the brush size all round the area">Along the whole edge</button>
         </section>
+        <section id="lightPanel" class="side-panel" hidden>
+            <h3>Light</h3>
+            <p class="note">Drag to give the tiles under the brush these two lights; Shift-drag turns them off. Each tile has two, over its middle, reaching 14 m: a broad wash of colour (warm pools in a village at night, a cold glow in a cave), not a lamp. For a lamp or a torch, place a placeable that gives light.</p>
+            <h4>Looks <small>(outlined: for this kind of area)</small></h4>
+            <div class="presets" id="lightPresets"></div>
+            <h4>Colours</h4>
+            <label>First light <span class="light-swatch" id="light1Swatch"></span><select id="light1"></select></label>
+            <label>Second light <span class="light-swatch" id="light2Swatch"></span><select id="light2"></select></label>
+            <div class="underlay-row">
+                <button type="button" id="lightFill" title="Every tile of the area gets these two lights">Whole area</button>
+                <button type="button" id="lightClear" title="Every tile's lights off">All off</button>
+            </div>
+            <p class="note" id="lightCount"></p>
+            <p class="note">The game lights with them by day too: outdoors by day, leave them off. The view shows them under the area's light (Sky &amp; fog, Show in the view).</p>
+        </section>
         <section id="rampPanel" class="side-panel" hidden>
             <h3>Ramp</h3>
             <p class="note">Drag from one level to another. The brush size sets the width (at least 6 m: narrower passages defeat NWN's pathfinding). It rises to where you let go, unless you set a rise.</p>

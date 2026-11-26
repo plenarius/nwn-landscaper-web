@@ -26,7 +26,8 @@ import { openSettings } from './settings.js';
 import { api, engine, json, NEEDS_ENGINE, viewing } from './api.js';
 import { $, el, session, store, say } from './dom.js';
 import { initImport, reimport } from './import.js';
-import { initSky, showAreaSky, refreshSky } from './sky.js';
+import { initSky, showAreaSky, refreshSky, skyShowsNight } from './sky.js';
+import { initLightTool, showLightTool, lightPair } from './lighttool.js';
 import { initMenus } from './menus.js';
 import { showVersion } from './version.js';
 import { initActivity } from './activity.js';
@@ -136,6 +137,8 @@ function updatePanels() {
     $('placePanel').hidden = over || tool !== 'place';
     $('rampPanel').hidden = over || tool !== 'ramp';
     $('chasmPanel').hidden = over || tool !== 'chasm';
+    $('lightPanel').hidden = over || tool !== 'light';
+    if (tool === 'light' && !over) showLightTool();
     $('descentPanel').hidden = over || tool !== 'descent';
     $('entrancePanel').hidden = over || tool !== 'entrance';
     if (tool === 'entrance' && !over) showEntrances();
@@ -502,7 +505,9 @@ initStrokes({
     library,
     sizeIn,
     strengthIn,
+    lightPair,
 });
+initLightTool({ ...editor, night: skyShowsNight, saveSoon: () => saveSoon(), say });
 
 // The Show menu: which kinds of thing are on the map out of the Things tool.
 {
@@ -577,6 +582,7 @@ function setArea(a, blank = false) {
     showAreaSky(a);
     if (tool === 'entrance' && !skyOpen) showEntrances();
     if (tool === 'ambience' && !skyOpen) showAmbienceTool();
+    if (tool === 'light' && !skyOpen) showLightTool();
     if (!blank) checkSoon();
     underlayAreaChanged();
 }
@@ -684,6 +690,8 @@ function refreshAll() {
     if (tool === 'entrance' && !skyOpen) showEntrances();
     view.updateAmbience();
     if (tool === 'ambience' && !skyOpen) showAmbienceTool();
+    view.updateLights();
+    if (tool === 'light' && !skyOpen) showLightTool();
     refreshSky();
     saveSoon();
 }

@@ -15,6 +15,7 @@ import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK } from './area.js';
 import { REACH, groundNormals } from './normals.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
+import { lightTexels, LIGHT_HEIGHT, LIGHT_RADIUS } from './lights.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
 import { triplanarGlsl } from './triplanar.js';
 import { AmbienceLayer } from './ambienceview.js';
@@ -65,6 +66,31 @@ const SHADE_FRAGMENT = `
         if (vGap <= ${VOID_BELOW.toFixed(2)}) diffuseColor.rgb = vec3(0.0);
         // A chasm's walls fade to black going down, as landscaper's fade darkens them (chasmFade, in the game's colours).
         if (vDeep > 0.0) diffuseColor.rgb *= pow(pow(max(0.0, 1.0 - vDeep / ${CHASM_DARK.toFixed(2)}), 1.6), 2.2);
+    }`;
+
+// The tiles' own lights (the Light tool, lights.js): each tile's two hang LIGHT_HEIGHT m over its middle and reach LIGHT_RADIUS m,
+// so a point takes light from its tile and the eight round it (two tiles off is more than LIGHT_RADIUS away). uLights is one texel
+// a tile, the two lights' colours added. Added after the sun's and the sky's light, so the baked shade (already in diffuseColor)
+// darkens it as the game's shader does today. The lights hang over the point's own height, not the tile's: on a slope the game's
+// pool sits a little higher or lower.
+const LIGHTS_FRAGMENT = `
+    // (only over the area: the edge scenery's models are not the tiles')
+    if (uLightsOn && all(greaterThanEqual(vArea, vec2(0.0))) && all(lessThanEqual(vArea, uSize))) {
+        ivec2 at = ivec2(floor(vArea / ${TILE.toFixed(1)}));
+        vec3 wash = vec3(0.0);
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                ivec2 t = at + ivec2(dx, dy);
+                if (any(lessThan(t, ivec2(0))) || any(greaterThanEqual(t, ivec2(uLightTiles)))) continue;
+                vec3 c = texelFetch(uLights, t, 0).rgb;
+                if (c == vec3(0.0)) continue;
+                vec3 to = vec3((vec2(t) + 0.5) * ${TILE.toFixed(1)} - vArea, ${LIGHT_HEIGHT.toFixed(1)});
+                float d = length(to);
+                float fall = max(0.0, 1.0 - d / ${LIGHT_RADIUS.toFixed(1)});
+                wash += c * fall * fall * max(0.0, dot(normalize(vNormalArea), to / d));
+            }
+        }
+        reflectedLight.directDiffuse += diffuseColor.rgb * wash;
     }`;
 
 // The underlay (underlay.js): a picture lying on the ground to trace over, blended over the ground's colour where it covers
@@ -237,6 +263,10 @@ export class View {
             uUnder: { value: new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1) },
             uUnderM: { value: new THREE.Matrix3() },
             uUnderOpacity: { value: 0 },
+            // The tiles' lights (updateLights): one texel a tile, and whether any is lit.
+            uLights: { value: new THREE.DataTexture(new Float32Array(4), 1, 1, THREE.RGBAFormat, THREE.FloatType) },
+            uLightTiles: { value: new THREE.Vector2(1, 1) },
+            uLightsOn: { value: false },
         };
         this.uniforms.uUnder.value.needsUpdate = true;
         this.uniforms.uTex.value.needsUpdate = true;
@@ -383,6 +413,7 @@ export class View {
         this.updateEntrances();
         this.updateObjects();
         this.updateAmbience();
+        this.updateLights();
         this.frame();
         this.syncPalette();
     }
@@ -412,12 +443,33 @@ export class View {
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
+                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
                 )
-                .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`);
+                .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`)
+                .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${LIGHTS_FRAGMENT}`);
         };
         material.customProgramCacheKey = () => 'landscaper-splat';
         return material;
+    }
+
+    /** Draws the tiles' lights again (the Light tool, an undo, another area). */
+    updateLights() {
+        const a = this.area;
+        const texels = a && lightTexels(a);
+        this.uniforms.uLightsOn.value = !!texels;
+        if (!texels) return;
+        const old = this.uniforms.uLights.value;
+        if (old.image.width === a.tiles && old.image.height === a.tilesY) {
+            old.image.data.set(texels);
+            old.needsUpdate = true;
+            return;
+        }
+        const tex = new THREE.DataTexture(texels, a.tiles, a.tilesY, THREE.RGBAFormat, THREE.FloatType);
+        tex.minFilter = tex.magFilter = THREE.NearestFilter;
+        tex.needsUpdate = true;
+        old.dispose();
+        this.uniforms.uLights.value = tex;
+        this.uniforms.uLightTiles.value.set(a.tiles, a.tilesY);
     }
 
     /** Bakes the shadows again after the ground changed: where the changes since the last bake (markDirty) can reach.
