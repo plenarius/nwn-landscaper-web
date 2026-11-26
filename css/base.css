@@ -74,7 +74,14 @@ body {
 .spacer {
     flex: 1;
 }
+/* At most two lines, cut short where the bar is short of room (the app's Help menu, a narrow window); its title has it all. */
 #areaInfo {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    min-width: 60px;
+    line-clamp: 2;
+    overflow: hidden;
     color: var(--muted);
 }
 

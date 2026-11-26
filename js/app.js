@@ -586,6 +586,7 @@ function setArea(a, blank = false) {
     if (!blank) thingsTool.loadOriginals();
     thingsTool.refresh();
     $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
+    $('areaInfo').title = $('areaInfo').textContent;
     $('report').hidden = true;
     showAreaSky(a);
     if (tool === 'entrance' && !skyOpen) showEntrances();
