@@ -181,6 +181,54 @@ test('the canyon floor and the mountain pass can be walked from the west edge to
     }
 });
 
+/** The sizes, in samples, of the 4-connected pieces of ground that can be walked (`walk`) or can't. */
+function pieces(a, walk) {
+    const { nx, ny } = a,
+        seen = new Uint8Array(nx * ny),
+        out = [];
+    const is = k => a.walkable(k % nx, Math.floor(k / nx)) === walk;
+    for (let start = 0; start < nx * ny; start++) {
+        if (seen[start] || !is(start)) continue;
+        let n = 0;
+        const stack = [start];
+        seen[start] = 1;
+        while (stack.length) {
+            const k = stack.pop(),
+                i = k % nx,
+                j = (k - i) / nx;
+            n++;
+            for (const q of [i > 0 && k - 1, i < nx - 1 && k + 1, j > 0 && k - nx, j < ny - 1 && k + nx])
+                if (q !== false && !seen[q] && is(q)) {
+                    seen[q] = 1;
+                    stack.push(q);
+                }
+        }
+        out.push(n);
+    }
+    return out;
+}
+
+test("the pass's cliffs have no ledges: the game can't path onto one", () => {
+    for (const seed of SEEDS) {
+        const a = make('snowy-pass', seed);
+        // A piece of walkable ground over 40 m² but far smaller than the path or the tops is a ledge in a cliff.
+        const ledges = pieces(a, true).filter(n => n >= 100 && n < 1500);
+        assert.deepEqual(ledges, [], `pass ${seed}`);
+    }
+});
+
+test('rough hills have no specks of ground too steep to walk, only steep slopes', () => {
+    const random = Math.random;
+    for (const seed of SEEDS) {
+        // Rough hills take their noise's seed from Math.random: the same each run here.
+        Math.random = () => seed / 10;
+        const a = Area.create('aa', 8, 'rough', 5);
+        Math.random = random;
+        const specks = pieces(a, false).filter(n => n < 40);
+        assert.ok(specks.length < 5, `rough ${seed}: ${specks.length} specks`);
+    }
+});
+
 test('the canyon has walls too steep to climb, and the pass has rock', () => {
     const a = make('canyon', 3);
     assert.ok(share(a, (i, j) => !a.walkable(i, j)) > 0.05);

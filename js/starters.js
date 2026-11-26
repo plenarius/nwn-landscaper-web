@@ -177,6 +177,9 @@ function canyon(area, base, rand, library) {
 
 /** A pass between two snowy massifs: a path from the west edge up to a saddle 10 m higher and down to the east, rock where the
  *  mountains are too steep to climb. The path's ends are at `base`. */
+/** The width of the snowy pass's cliffs, metres. */
+const CLIFF = 16;
+
 function snowyPass(area, base, rand, library) {
     const { nx, ny, heights: h } = area;
     const line = westToEast(area, rand, area.sizeY * 0.1, 1.1);
@@ -194,11 +197,15 @@ function snowyPass(area, base, rand, library) {
             foot = 4 + 8 * bay[k];
         // Rounded tops: a ridged noise's sharp creases would cut thin steep lines through them.
         const ridged = 1 - (2 * peaks[k] - 1) ** 2;
+        // The cliff rises half straight, half eased, over 16 m: too steep to climb from its foot to its top. Over 26 m and eased
+        // alone, a 30 m cliff was little steeper than walkable ground but in its middle, and the shoulder's wandering width
+        // flattened ledges into it that the game can't path onto (the path check's blocked routes).
+        const up = (out - foot) / CLIFF;
         h[k] =
             path +
             1.2 * smoothstep(0, foot, out) +
-            (30 + 16 * mass[k]) * smoothstep(foot, foot + 26, out) +
-            8 * ridged * smoothstep(foot + 25, foot + 55, out) +
+            (30 + 16 * mass[k]) * (0.5 * Math.min(1, Math.max(0, up)) + 0.5 * smoothstep(0, 1, up)) +
+            8 * ridged * smoothstep(foot + CLIFF - 1, foot + CLIFF + 29, out) +
             0.6 * drift[k] * smoothstep(0, 6, out);
     }
     roughen(area, noise(area, rand() * 1e5, 8, 3), 1.5);
