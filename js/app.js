@@ -55,6 +55,7 @@ import {
     noteSaved,
     loadArea,
     openCopy,
+    openAtStart,
     noteOpen,
     lastOpen,
     unsaved,
@@ -903,22 +904,9 @@ if (!readOnly) await moveBrowserAreas();
 {
     const current = reviewArea ?? (readOnly ? null : lastOpen());
     const local = !reviewArea && current && browserCopy(current);
-    let opened = null;
-    // The engine's copy when it has one: a copy still in this browser is one the builder didn't decide on (moveBrowserAreas
-    // asks again at the next start), or the engine isn't there.
-    if (current) {
-        try {
-            const res = await api(`/api/area?name=${encodeURIComponent(current)}`);
-            if (res.ok) opened = Area.fromJSON(await res.json());
-        } catch {
-            /* not served */
-        }
-    }
-    try {
-        opened ??= local ? openCopy(current) : null;
-    } catch {
-        opened = null;
-    }
+    // The engine's copy when it has one, with its version: without it, Delete took the area for one saved from another tab
+    // since, and its next save went unchecked.
+    const opened = current ? await openAtStart(current, local) : null;
     if (opened) setArea(opened);
     else showBlank();
 }

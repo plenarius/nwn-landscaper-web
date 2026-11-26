@@ -90,6 +90,24 @@ export async function loadArea(name, settle = true) {
     return Area.fromJSON(await res.json());
 }
 
+/**
+ * The area the page opens at its start, `name` (the one last open, or a reviewer's): the engine's copy, with its version as
+ * loadArea notes it, else this user's copy in this browser when `local`, else null. A copy still in this browser is one the
+ * builder didn't decide on (moveBrowserAreas asks again at the next start), so it stays as it is.
+ */
+export async function openAtStart(name, local) {
+    try {
+        return await loadArea(name, false);
+    } catch {
+        // (not served: the copy in this browser, when there is one)
+    }
+    try {
+        return local ? openCopy(name) : null;
+    } catch {
+        return null;
+    }
+}
+
 /** Area `name` from this user's copy in this browser (an area only there); a save of it then replaces the copy. */
 export function openCopy(name) {
     const copy = copyOf(key(name));
