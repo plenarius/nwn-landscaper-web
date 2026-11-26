@@ -1,0 +1,7 @@
+// SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
+// SPDX-License-Identifier: MIT
+// Changelog fragments: each file holds one pull request's bullets for CHANGELOG.md's Unreleased, so none starts with a heading.
+{
+    "extends": "../.markdownlint.jsonc",
+    "MD041": false
+}
