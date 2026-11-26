@@ -28,6 +28,11 @@ export const TOOLS = {
         key: '7',
         hint: 'Click a slope to carve a cave entrance (a door to link in the toolset); brush size is its width; Shift-click one to remove it',
     },
+    light: {
+        label: 'Light',
+        key: 'b',
+        hint: "Paint each tile's two lights (a broad wash: a tile is 10 m); Shift-drag turns them off",
+    },
     place: { label: 'Place', key: '8', hint: 'Place rocks, trees and other placeables, baked into the terrain' },
     scatter: { label: 'Scatter', key: '9', hint: 'Paint rocks, trees and bushes; Shift-drag to erase' },
     ambience: {

@@ -12,6 +12,9 @@ let ctx = null;
 
 let skyNight = false;
 
+/** Whether the Sky & fog panel shows the area's light by night. */
+export const skyShowsNight = () => skyNight;
+
 /** The sun's settings by day, the moon's by night. */
 const currentSky = () => (skyNight ? ctx.area().atmosphere.moon : ctx.area().atmosphere.sun);
 

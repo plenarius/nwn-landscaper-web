@@ -505,3 +505,24 @@ input[type="color"] {
 #ambienceLive.warn {
     color: #f0a040;
 }
+/* The Light tool: a swatch of each light's colour beside its list, and the presets that suit the area outlined. */
+.light-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin: 0 6px;
+    vertical-align: middle;
+    border: 1px solid #0008;
+    border-radius: 3px;
+}
+#lightPanel select {
+    display: block;
+    width: 100%;
+    margin: 4px 0 8px;
+}
+#lightPresets .look {
+    align-self: stretch;
+}
+#lightPresets .preset.suits:not(.active) {
+    border-color: #6d7a8c;
+}

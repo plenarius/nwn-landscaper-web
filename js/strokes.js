@@ -16,12 +16,14 @@ import { mixPlan, mixStamp } from './mix.js';
 import { waterDown, waterDrag, waterChanged } from './water.js';
 import { entranceDown } from './entrancetool.js';
 import { live } from './live.js';
+import { lightStamp } from './lights.js';
+import { showLightTool } from './lighttool.js';
 import { saveSoon } from './save.js';
 
 /** What app.js gives this file (initStrokes): `area()`, `tool()`, `readOnly()`, `view`, the Things tool (`thingsTool`),
  *  `selectTool(id)`, the Paint tool's `paintTexture()`, `mixOn()`, `currentMix()`, `picking()`, `setPicking(on)` and
  *  `pickTexture(p, add)`, the texture
- *  `library`, and the brush's `sizeIn` and `strengthIn` sliders. */
+ *  `library`, the brush's `sizeIn` and `strengthIn` sliders, and the Light tool's `lightPair()`. */
 let ctx = null;
 
 // ?debug: show what the pointer is doing (to diagnose input on other machines).
@@ -150,8 +152,8 @@ export const endStroke = () => {
         ctx.view.syncPalette();
         say(stroke.bare ? `The room's floor isn't painted: ${FULL_PALETTE}.` : '');
     }
-    // The ground moved: its shadows too, and the particles standing on it.
-    const still = stroke.tool === 'paint' || !!stroke.ambience;
+    // The ground moved: its shadows too, and the particles standing on it. (Paint, light and particles leave it where it was.)
+    const still = stroke.tool === 'paint' || stroke.tool === 'light' || !!stroke.ambience;
     if (!stroke.water && !stroke.place && !stroke.scatter && !still) ctx.view.updateShade();
     // Sculpting may have flooded or drained hollows.
     if (!stroke.water && ctx.area().water.length && !still) waterChanged();
@@ -327,6 +329,13 @@ export function initStrokes(c) {
                 stroke = { water: w };
                 capture(e.pointerId);
             }
+            return;
+        }
+        if (ctx.tool() === 'light') {
+            ctx.area().beginStroke();
+            // Shift turns the lights off.
+            stroke = { tool: 'light', pair: e.shiftKey ? [0, 0] : [...ctx.lightPair()], last: performance.now() };
+            capture(e.pointerId);
             return;
         }
         if (ctx.tool() === 'chasm') {
@@ -552,6 +561,14 @@ export function initStrokes(c) {
                       : 'too steep to walk';
             $('statusPos').textContent =
                 `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
+        }
+        if (stroke?.tool === 'light' && p) {
+            if (lightStamp(ctx.area(), p.x, p.y, radius, stroke.pair)) {
+                ctx.view.updateLights();
+                showLightTool();
+            }
+            dbg.stamps++;
+            return;
         }
         if (stroke?.scatter && p) {
             scatterStamp(p, radius, stroke.scatter);

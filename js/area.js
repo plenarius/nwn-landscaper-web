@@ -31,6 +31,8 @@ export const VOID_BELOW = 0.3;
 export const CHASM_DEPTH = 20;
 export const CHASM_BELOW = 0.3;
 export const CHASM_DARK = 0.65;
+// A tile's main lights are rows 0 to MAX_LIGHT of lightcolor.2da (the game's TILE_MAIN_LIGHT_COLOR_*; lights.js).
+export const MAX_LIGHT = 31;
 // Undo keeps this many steps.
 export const UNDO_STEPS = 40;
 // What undo brings back besides the ground's grids (heights, paint, chasm). Not `entranceNextId` (see the constructor).
@@ -46,6 +48,7 @@ const UNDO_FIELDS = [
     'atmosphere',
     'shadow',
     'ambience',
+    'lights',
 ];
 
 /** How bright a chasm wall is `t` of the way down (0 at the rim, 1 at the floor), in the game's colours: the fade landscaper
@@ -83,6 +86,9 @@ export class Area {
         this.chasm = null;
         // Baked shadows' strength, 0 (none) to 1.
         this.shadow = 0.6;
+        // Each tile's two main lights (the Light tool, lights.js): [light1, light2], rows of lightcolor.2da, tiles in rows from
+        // the south, each west to east; null: all off (black).
+        this.lights = null;
         // Cave entrances (entrance.js), each with an `id` that tags its door (`<area>_ent<id>`), and the next id to give.
         // An id is never given twice or changed: transitions and scripts name the door by its tag (the engine refuses an
         // export that reuses a taken-out entrance's id). So the counter only goes up: undo puts entrances back with their
@@ -453,6 +459,26 @@ export class Area {
         return this.entranceNextId++;
     }
 
+    /** Tile (tx, ty)'s two main lights, [light1, light2] (0: off). */
+    lightAt(tx, ty) {
+        return this.lights?.[ty * this.tiles + tx] ?? [0, 0];
+    }
+
+    /** Gives tile (tx, ty) the lights `pair`. Returns whether they changed. */
+    setLight(tx, ty, pair) {
+        const k = ty * this.tiles + tx,
+            was = this.lightAt(tx, ty);
+        if (was[0] === pair[0] && was[1] === pair[1]) return false;
+        this.lights ??= Array.from({ length: this.tiles * this.tilesY }, () => [0, 0]);
+        this.lights[k] = [pair[0], pair[1]];
+        return true;
+    }
+
+    /** The tiles' lights as the engine takes them (its header's `lights`), null when every tile's are off. */
+    lightsForExport() {
+        return this.lights?.some(p => p[0] || p[1]) ? this.lights.map(p => [p[0], p[1]]) : null;
+    }
+
     /** The tag of entrance `e`'s door, as the engine tags it (`entrance::door_tag`). */
     doorTag(e) {
         return `${this.name}_ent${e.id}`;
@@ -638,6 +664,7 @@ export class Area {
             atmosphere: this.atmosphere,
             water: this.water,
             shadow: this.shadow,
+            lights: this.lightsForExport(),
             entrances: this.entrances,
             objects: this.objects,
             nextObjectId: this.nextObjectId,
@@ -666,6 +693,7 @@ export class Area {
         }
         if (o.atmosphere) area.atmosphere = o.atmosphere;
         if (typeof o.shadow === 'number') area.shadow = o.shadow;
+        if (validLights(o.lights, area.tiles * area.tilesY)) area.lights = o.lights;
         if (o.entrances) area.entrances = o.entrances;
         area.giveEntranceIds(o.entranceNextId);
         if (o.objects) area.objects = o.objects;
@@ -696,6 +724,12 @@ export class Area {
 function validAmbience(v) {
     const n = x => typeof x === 'number' && Number.isFinite(x);
     return Array.isArray(v) && v.every(p => p && typeof p.kind === 'string' && p.kind && n(p.x) && n(p.y) && n(p.z));
+}
+
+/** Whether `v` is a whole area's tile lights: `tiles` pairs of rows of lightcolor.2da. */
+function validLights(v, tiles) {
+    const row = c => Number.isInteger(c) && c >= 0 && c <= MAX_LIGHT;
+    return Array.isArray(v) && v.length === tiles && v.every(p => Array.isArray(p) && p.length === 2 && row(p[0]) && row(p[1]));
 }
 
 function toBase64(bytes) {

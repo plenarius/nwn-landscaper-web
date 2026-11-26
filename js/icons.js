@@ -25,6 +25,10 @@ export const ICONS = {
     sky: svg(
         '<circle cx="18" cy="16" r="7"/><path d="M18 3 V5 M5 16 H7 M8.8 6.8 L10.2 8.2 M27.2 6.8 L25.8 8.2"/><path d="M14 38 H38 A7 7 0 0 0 36 24.4 A9 9 0 0 0 19 26 A6 6 0 0 0 14 38 Z" fill="currentColor" fill-opacity="0.25"/>',
     ),
+    // A lamp's bulb and its rays.
+    light: svg(
+        '<path d="M24 8 A10 10 0 0 0 17 26 C19 28 19 30 19 32 H29 C29 30 29 28 31 26 A10 10 0 0 0 24 8 Z" fill="currentColor" fill-opacity="0.25"/><path d="M19 37 H29 M21 42 H27 M6 18 H10 M38 18 H42 M10 6 L13 9 M38 6 L35 9"/>',
+    ),
     // Two ledges and the drop between them, dark to its bottom.
     chasm: svg(
         '<path d="M4 16 H18 L20 44 H4 Z M44 16 H30 L28 44 H44 Z" fill="currentColor" fill-opacity="0.25"/><path d="M20 22 L28 22 L28 44 L20 44 Z" fill="currentColor" fill-opacity="0.9"/><path d="M4 16 H18 L20 44 M44 16 H30 L28 44"/>',

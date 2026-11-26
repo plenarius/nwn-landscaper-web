@@ -91,7 +91,7 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   replacing that area. The engine saves your work to disk as you go; when it can't (no engine, or a failed save), the browser
   keeps the area until the engine is back and then hands it over.
 - **Tools** (big buttons; the key is under each): Raise `1`, Lower `2`, Smooth `3`, Flatten `4`, Paint `5`, Water `6`, Chasm `c`,
-  Entrance `7`,
+  Entrance `7`, Light `b`,
   Place `8`, Scatter `9`, Ambience `a`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r` (shown on every
   area). Brush size `[` `]`, strength slider. Left-drag sculpts; right-drag turns the view, middle-drag moves it, the wheel
   zooms; `F` reframes. Undo/redo with Ctrl+Z / Ctrl+Y.
@@ -125,6 +125,10 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   chosen kind; Shift-drag clears it. The panel counts the particles they keep alive against the area's cap of 1,500, and Fill and
   the brush stop there. The view sketches them as moving points in each kind's colour, night-only kinds when it shows night. It
   needs an engine with the particle pack (nwn-landscaper's `/api/particles` and `ambience` header).
+- **Light** (`b`) gives the tiles under the brush two of the game's tile light colours (`lightcolor.2da`'s 32); Shift-drag
+  turns them off, *Whole area* and *All off* do every tile. A tile's two lights hang over its middle and reach 14 m, so this is
+  a broad wash (warm pools in a village at night, a cold glow in a cave), not a lamp: lamps stay placeables. The view draws it
+  on the ground. It needs an engine with tile lights (nwn-landscaper's `lights` header).
 - **Area > Import heightmap** replaces the open area's ground with a greyscale image (its top is north): the heights black
   and white stand for, stretched over the area or cropped to its shape. A 16-bit PNG is read at its full 65,536 levels; an
   8-bit image (JPEG, WebP, an 8-bit PNG) has 256, so *Smooth out steps* rounds off its terraces. Paint, water and things stay;
