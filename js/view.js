@@ -192,6 +192,14 @@ const OTHER_MARKER = [{ geo: k => new THREE.SphereGeometry(0.3 * k, 8, 6), y: 0.
 // A corner post of an outline (a selected one's are 1.8 times as thick and 1.5 times as tall).
 const POST = () => new THREE.CylinderGeometry(0.1, 0.1, 0.8, 6);
 
+/** How far the sky is drawn (m): inside the camera's far plane (4,000 m). */
+const SKY_RADIUS = 3000;
+/** The engine's sky panorama runs from 90° above the horizon to 30° below it. The view draws it down to 3° below: further down,
+ *  the game shows its fog colour past the area's edge, not the sky model's lower part (the stock skies paint land there). */
+const SKY_TOP = 90,
+    SKY_BOTTOM = -30,
+    SKY_CUT = -3;
+
 /** The 3D view in `container`: the ground, objects, water, things and markers of the area, the camera, and picking with the
  *  pointer. */
 export class View {
@@ -322,6 +330,57 @@ export class View {
         this.fog = f;
         this.scene.fog = new THREE.Fog(new THREE.Color(f.color), f.start, f.end);
         this.renderer.setClearColor(new THREE.Color(f.color));
+    }
+
+    /**
+     * Draws the area's sky around the camera, as the game draws its sky model: `url`, the engine's panorama of it
+     * (/api/sky-picture/, kind panorama), or null for none. The panorama's columns turn from east towards north and its rows
+     * run from overhead to below the horizon (SKY_TOP, SKY_BOTTOM); where it is clear or cut (SKY_CUT), the fog colour (the clear
+     * colour) shows, as in the game.
+     */
+    setSky(url) {
+        if (url === (this.skyUrl ?? null)) return;
+        this.skyUrl = url;
+        if (!url) {
+            if (this.sky) this.sky.visible = false;
+            return;
+        }
+        if (!this.sky) {
+            // A sphere from the top down to SKY_CUT, inside the camera's far plane and never fogged.
+            const down = THREE.MathUtils.degToRad(SKY_TOP - SKY_CUT);
+            const geometry = new THREE.SphereGeometry(SKY_RADIUS, 96, 32, 0, Math.PI * 2, 0, down);
+            const material = new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false, transparent: true });
+            this.sky = new THREE.Mesh(geometry, material);
+            this.sky.renderOrder = -1;
+            this.sky.frustumCulled = false;
+            this.sky.onBeforeRender = (_r, _s, camera) => this.sky.position.copy(camera.position);
+            this.skyTextures = new Map();
+            this.scene.add(this.sky);
+        }
+        let texture = this.skyTextures.get(url);
+        if (!texture) {
+            // (A sky the engine can't picture leaves the fog colour.)
+            texture = new THREE.TextureLoader().load(url, undefined, undefined, () => {
+                if (this.skyUrl === url) this.sky.visible = false;
+            });
+            texture.colorSpace = THREE.SRGBColorSpace;
+            // The sphere's seam is in the west, the panorama's in the east.
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.offset.x = 0.5;
+            // (the sphere's rows: the panorama's from the top to SKY_CUT)
+            texture.repeat.y = (SKY_TOP - SKY_CUT) / (SKY_TOP - SKY_BOTTOM);
+            texture.offset.y = (SKY_CUT - SKY_BOTTOM) / (SKY_TOP - SKY_BOTTOM);
+            this.skyTextures.set(url, texture);
+            // A few kept, for flipping between day and night or between skies.
+            if (this.skyTextures.size > 6) {
+                const [old, t] = this.skyTextures.entries().next().value;
+                t.dispose();
+                this.skyTextures.delete(old);
+            }
+        }
+        this.sky.material.map = texture;
+        this.sky.material.needsUpdate = true;
+        this.sky.visible = true;
     }
 
     /** The game measures fog from its camera, which stays about 20 m from

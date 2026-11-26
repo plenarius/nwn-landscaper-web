@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // The area's own settings: name, tag, scripts, PvP and rest, weather, music and ambient sound, load screen,
-// listen and spot modifiers, sky box, comments and local variables (what the toolset's Area Properties holds).
+// listen and spot modifiers, comments and local variables (what the toolset's Area Properties holds, but the sky: Sky & fog).
 // A dialog; OK keeps them in `area.settings`, which landscaper writes into the area on export.
 // An area without settings (made before this existed) is shown the standard template, but only what the
 // builder changes is kept: the rest stays what the area has.
@@ -63,7 +63,7 @@ const FIELDS = [
     { p: 'ambient.env', list: 'env', t: 'number', l: 'Reverb (environment audio)', min: 0 },
     { h: 'Look' },
     { p: 'loadScreen', list: 'loadScreen', t: 'number', l: 'Load screen', min: 0, max: 65535 },
-    { p: 'skyBox', list: 'skyBox', t: 'number', l: 'Sky box', min: 0, max: 255 },
+    // (The sky is chosen in Sky & fog, with the light it suits: atmosphere.js.)
 ];
 
 /** Opens the dialog for `area`. `template`: what a new area starts with; `onSave()` after OK. */

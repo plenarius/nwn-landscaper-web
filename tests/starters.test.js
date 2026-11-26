@@ -10,6 +10,7 @@ import './importmap.js';
 
 const { Area } = await import('../js/area.js');
 const { TERRAIN_STARTERS, seedTerrain, starterSettings } = await import('../js/starters.js');
+const { setInstalledSkies } = await import('../js/atmosphere.js');
 
 // The engine's starter library (its src/starter_textures.json): what every install builds from the game's files.
 const STOCK = [
@@ -208,9 +209,32 @@ test("the valley's lake fills its hollow and stays off the area's edges", () => 
     }
 });
 
-test("a sample landscape's settings change only the sky box and the weather it names", () => {
+test("a sample landscape's settings change only the weather it names", () => {
     const template = { tag: 'aa', skyBox: 0, weather: { rain: 40, snow: 0, lightning: 5, wind: 0 }, music: { day: 3 } };
     const s = starterSettings(template, TERRAIN_STARTERS['snowy-pass']);
-    assert.deepEqual(s, { tag: 'aa', skyBox: 4, weather: { rain: 0, snow: 60, lightning: 5, wind: 2 }, music: { day: 3 } });
-    assert.equal(template.skyBox, 0);
+    assert.deepEqual(s, { tag: 'aa', skyBox: 0, weather: { rain: 0, snow: 60, lightning: 5, wind: 2 }, music: { day: 3 } });
+    assert.equal(template.weather.rain, 40);
+});
+
+test("a sample landscape's sky is its preset's: the pack's when installed, else the game's nearest row", () => {
+    const skies = (id, seed = 1) => {
+        const a = Area.create('aa', 6, 'flat', 5);
+        seedTerrain(a, TERRAIN_STARTERS[id], 5, library, seed);
+        return [a.atmosphere.sky, a.atmosphere.skyRow];
+    };
+    setInstalledSkies([]);
+    assert.deepEqual(skies('canyon'), [undefined, 3]);
+    assert.deepEqual(skies('dunes'), [undefined, 3]);
+    assert.deepEqual(skies('lake-valley'), [undefined, 1]);
+    // Overcast's own row is the storm's: the pass keeps the winter sky.
+    assert.deepEqual(skies('snowy-pass'), [undefined, 4]);
+    setInstalledSkies([
+        { id: 'golden-haze', name: 'Golden haze', preset: 'golden' },
+        { id: 'overcast', name: 'Overcast', preset: 'overcast' },
+    ]);
+    assert.deepEqual(skies('canyon'), ['golden-haze', undefined]);
+    assert.deepEqual(skies('snowy-pass'), ['overcast', undefined]);
+    // Clear day's sky is the game's own.
+    assert.deepEqual(skies('lake-valley'), [undefined, 1]);
+    setInstalledSkies([]);
 });
