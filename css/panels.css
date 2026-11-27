@@ -497,24 +497,7 @@ input[type="color"] {
     margin: 6px 0;
     font-size: 14px;
 }
-.amb-bar {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-top: 8px;
-    padding: 2px;
-    background: var(--panel-2);
-    border-radius: 4px;
-}
-.amb-bar span {
-    height: 5px;
-    border-radius: 2px;
-    background: var(--accent);
-}
-.amb-bar span + span {
-    background: #6d8cc4;
-}
-#ambienceLive.warn {
+#ambienceLive.heavy {
     color: #f0a040;
 }
 /* The Light tool: a swatch of each light's colour beside its list, and the presets that suit the area outlined. */

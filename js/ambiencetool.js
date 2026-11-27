@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 // The Ambience tool's panel: the particle pack's kinds (the brush's kind, and the ones Fill and Clear take), the density, the
-// wind, and the particles the area keeps alive against its cap. The rules and the brush are ambience.js's; the stroke is
-// strokes.js's.
+// wind, and the particles the area keeps alive. The rules and the brush are ambience.js's; the stroke is strokes.js's.
 
-import { AREA_LIVE_MAX, LIVE_WARN, WINDS, FILL_KINDS, kindsOf, liveOf, fill, clearKinds, ambienceStamp, isTreeName } from './ambience.js';
+import { AREA_LIVE_HEAVY, WINDS, FILL_KINDS, kindsOf, liveOf, fill, clearKinds, ambienceStamp, isTreeName } from './ambience.js';
 import { api, json, engine, NEEDS_ENGINE } from './api.js';
 import { $, el } from './dom.js';
 
@@ -62,16 +61,15 @@ export function setAmbienceOpen(on) {
 const density = () => +$('ambienceDensity').value;
 const wind = () => +$('ambienceWind').value;
 
-/** The particles alive by day and at night against the cap, warned about from LIVE_WARN of it. */
+/** The particles alive by day and at night, and past AREA_LIVE_HEAVY a note that the area may be heavy: information only. */
 function showLive(a) {
     const live = liveOf(a.ambience, ambienceKinds()),
-        most = Math.max(live.day, live.night),
+        heavy = Math.max(live.day, live.night) > AREA_LIVE_HEAVY,
         n = v => Math.round(v).toLocaleString('en');
     $('ambienceLive').textContent =
-        `Particles alive: ${n(live.day)} by day, ${n(live.night)} at night, of at most ${n(AREA_LIVE_MAX)} in an area.`;
-    $('ambienceLive').classList.toggle('warn', most >= LIVE_WARN * AREA_LIVE_MAX);
-    $('ambienceBarDay').style.width = `${Math.min(100, (100 * live.day) / AREA_LIVE_MAX)}%`;
-    $('ambienceBarNight').style.width = `${Math.min(100, (100 * live.night) / AREA_LIVE_MAX)}%`;
+        `Particles alive: ${n(live.day)} by day, ${n(live.night)} at night.` +
+        (heavy ? ` Over ${n(AREA_LIVE_HEAVY)}, an area may be heavy on slower machines (a guide, not a limit).` : '');
+    $('ambienceLive').classList.toggle('heavy', heavy);
     return live;
 }
 
@@ -161,11 +159,7 @@ export function ambienceBrush(p, radius, erase) {
     const a = ctx.area(),
         k = ambienceKinds().find(q => q.id === brushKind);
     if (!a || !k) return false;
-    const r = ambienceStamp(a, ambienceKinds(), k, p.x, p.y, radius, { erase, density: density(), wind: wind() });
-    if (r.capped)
-        ctx.say(
-            `Another ${k.name.toLowerCase()} would keep more than ${AREA_LIVE_MAX.toLocaleString('en')} particles alive: clear some first.`,
-        );
+    const r = ambienceStamp(a, k, p.x, p.y, radius, { erase, density: density(), wind: wind() });
     if (!r.added && !r.removed) return false;
     ctx.view.updateAmbience();
     showAmbienceTool();
@@ -203,13 +197,10 @@ export function initAmbienceTool(c) {
             .filter(id => FILL_KINDS.includes(id))
             .map(id => `${r.byKind.get(id)} ${kinds.find(k => k.id === id).name.toLowerCase()}`)
             .join(', ');
-        const capped = r.placed < r.proposed;
         ctx.say(
-            capped
-                ? `Fill stopped at the cap: ${r.placed} of ${r.proposed} places kept (${where}), as more would keep over ${AREA_LIVE_MAX.toLocaleString('en')} particles alive. Lower the density or untick a kind.`
-                : r.placed
-                  ? `Filled: ${where}. Fill again for others; undo takes them back.`
-                  : 'Fill found no place for these kinds here (water, trees, grass, crests or hollows: see each kind).',
+            r.placed
+                ? `Filled: ${where}. Fill again for others; undo takes them back.`
+                : 'Fill found no place for these kinds here (water, trees, grass, crests or hollows: see each kind).',
         );
     };
     $('ambienceClear').onclick = () => {

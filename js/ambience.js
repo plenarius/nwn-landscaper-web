@@ -2,18 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 // The Ambience tool's placements (nwn-landscaper's docs/DESIGN-ambience.md, "Placing them: the Ambience tool"): the particle
-// pack's kinds, the particles they keep alive against the area's cap, Fill's rules and the brush. The engine bakes the list
-// into the tiles on export (its `ambience` header: `{ kind, x, y, z, scale, seed, bearing }`, area metres, bearing in radians
-// anticlockwise from east).
+// pack's kinds, the particles they keep alive, Fill's rules and the brush. The engine bakes the list into the tiles on export
+// (its `ambience` header: `{ kind, x, y, z, scale, seed, bearing }`, area metres, bearing in radians anticlockwise from east).
 
 import { SPACING } from './area.js';
 import { at as entranceAt } from './entrance.js';
 
-/** The most particles an area's placements may keep alive together, by day or at night: the engine skips placements past it
- *  (its `ambience::AREA_LIVE_MAX`, the design's budget for a view). */
-export const AREA_LIVE_MAX = 1500;
-/** From this share of the cap the count is drawn as a warning. */
-export const LIVE_WARN = 0.9;
+/** Past this many particles alive, by day or at night, an area may be heavy on slower machines (the design's guide, not
+ *  measured on a GPU). A guide, not a limit: nothing stops there, and the engine bakes every placement. */
+export const AREA_LIVE_HEAVY = 1500;
 
 /** The game's sun and moon shine from towards (4000, 4500) (view.js): the light shafts' tops lean that way, so the light falls
  *  away from it. */
@@ -128,11 +125,6 @@ export function liveOf(list, kinds) {
         }
     }
     return { day, night };
-}
-
-/** Whether one more placement of `kind` keeps `live` within `cap`, by day and at night. */
-export function fits(live, kind, cap = AREA_LIVE_MAX) {
-    return live.day + kind.live.day <= cap + 1e-3 && live.night + kind.live.night <= cap + 1e-3;
 }
 
 /** The height a placement at (x, y) stands at: the water's surface where there is water (mist and spray float on it), else the
@@ -555,8 +547,8 @@ export function seeded(seed) {
     };
 }
 
-/** Where kind `id`'s Fill rule puts it on `area` at `density` (1: the kind's spacing), as placements, before the cap: for tests
- *  and Fill. `opts`: `wind` (bearing the wind blows towards), `rand`, `env` (see NO_ENV). */
+/** Where kind `id`'s Fill rule puts it on `area` at `density` (1: the kind's spacing), as placements: for tests and Fill.
+ *  `opts`: `wind` (bearing the wind blows towards), `rand`, `env` (see NO_ENV). */
 export function propose(area, id, { density = 1, wind = 0, rand = Math.random, env = {}, ground = null } = {}) {
     const rule = RULES[id];
     if (!rule) return [];
@@ -572,8 +564,8 @@ export function propose(area, id, { density = 1, wind = 0, rand = Math.random, e
 }
 
 /** Fills `area` with kinds `ids` (of `kinds`, the pack's) by Fill's rules: their placements there were replaced by the rules'
- *  (other kinds' stay). Placements past the cap are left out, evenly across the kinds (in a random order, not the rules').
- *  Returns `{ placed, proposed, byKind: Map(id -> placed) }`; the caller begins the undo step. */
+ *  (other kinds' stay). Returns
+ *  `{ placed, byKind: Map(id -> placed) }`; the caller begins the undo step. */
 export function fill(area, kinds, ids, opts = {}) {
     const rand = opts.rand ?? Math.random,
         want = new Set(ids),
@@ -581,23 +573,13 @@ export function fill(area, kinds, ids, opts = {}) {
     const keep = area.ambience.filter(p => !want.has(p.kind));
     const proposals = [];
     for (const id of ids) proposals.push(...propose(area, id, { ...opts, rand, ground }));
-    const order = proposals.map(p => [rand(), p]).sort((a, b) => a[0] - b[0]);
-    const byId = new Map(kinds.map(k => [k.id, k]));
-    const live = liveOf(keep, kinds),
-        byKind = new Map(ids.map(id => [id, 0])),
-        placed = [];
-    for (const [, p] of order) {
-        const k = byId.get(p.kind);
-        if (!k || !fits(live, k, opts.cap)) continue;
-        live.day += k.live.day;
-        live.night += k.live.night;
-        byKind.set(p.kind, byKind.get(p.kind) + 1);
-        placed.push(p);
-    }
+    const known = new Set(kinds.map(k => k.id)),
+        byKind = new Map(ids.map(id => [id, 0]));
     // (in the area's order: by kind, then where the rules put them, so a save reads predictably)
-    placed.sort((a, b) => ids.indexOf(a.kind) - ids.indexOf(b.kind) || proposals.indexOf(a) - proposals.indexOf(b));
+    const placed = proposals.filter(p => known.has(p.kind));
+    for (const p of placed) byKind.set(p.kind, byKind.get(p.kind) + 1);
     area.ambience = [...keep, ...placed];
-    return { placed: placed.length, proposed: proposals.length, byKind };
+    return { placed: placed.length, byKind };
 }
 
 /** Removes kinds `ids`' placements from `area`; returns how many went. */
@@ -609,17 +591,16 @@ export function clearKinds(area, ids) {
 }
 
 /** The brush at (x, y), `radius` metres: Shift (`erase`) clears kind `kind`'s placements under it; else a few tries at a random
- *  point under it, kept when no placement of the kind is nearer than its spacing at `density`, the point isn't rock or chasm,
- *  and the area stays within the cap. Returns `{ added, removed, capped }` (capped: a try was refused for the cap). */
-export function ambienceStamp(area, kinds, kind, x, y, radius, { erase = false, density = 1, wind = 0, rand = Math.random, cap } = {}) {
+ *  point under it, kept when no placement of the kind is nearer than its spacing at `density`, and the point isn't rock or chasm.
+ *  Returns `{ added, removed }`. */
+export function ambienceStamp(area, kind, x, y, radius, { erase = false, density = 1, wind = 0, rand = Math.random } = {}) {
     if (erase) {
         const was = area.ambience.length;
         area.ambience = area.ambience.filter(p => p.kind !== kind.id || Math.hypot(p.x - x, p.y - y) > radius);
-        return { added: 0, removed: was - area.ambience.length, capped: false };
+        return { added: 0, removed: was - area.ambience.length };
     }
     const spacing = (SPACINGS[kind.id] ?? DEFAULT_SPACING) / Math.sqrt(Math.max(density, 0.05));
-    let added = 0,
-        capped = false;
+    let added = 0;
     for (let t = 0; t < 3; t++) {
         const a = rand() * Math.PI * 2,
             d = radius * Math.sqrt(rand());
@@ -629,12 +610,8 @@ export function ambienceStamp(area, kinds, kind, x, y, radius, { erase = false, 
         const { i, j } = area.sampleAt(px, py);
         if (area.void(i, j) || area.isChasm(i, j)) continue;
         if (area.ambience.some(p => p.kind === kind.id && Math.hypot(p.x - px, p.y - py) < spacing)) continue;
-        if (!fits(liveOf(area.ambience, kinds), kind, cap)) {
-            capped = true;
-            break;
-        }
         area.ambience.push(placement(area, kind.id, px, py, rand, { wind }));
         added++;
     }
-    return { added, removed: 0, capped };
+    return { added, removed: 0 };
 }

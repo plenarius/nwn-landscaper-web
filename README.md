@@ -157,9 +157,10 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
   embers, ground fog), which the export bakes into the tiles. **Fill** puts the ticked kinds where the area calls for them: mist on
   water (more where it is wide), spray where water drops, leaves under trees, fireflies on grass within 10 m of water, motes and
   shafts in gaps in the trees and at cave mouths, sand on dune crests, snow on ridges, ground fog in hollows. The brush adds the
-  chosen kind; Shift-drag clears it. The panel counts the particles they keep alive against the area's cap of 1,500, and Fill and
-  the brush stop there. The view sketches them as moving points in each kind's colour, night-only kinds when it shows night. It
-  needs an engine with the particle pack (nwn-landscaper's `/api/particles` and `ambience` header).
+  chosen kind; Shift-drag clears it. The panel counts the particles they keep alive by day and at night; past 1,500 it notes the
+  area may be heavy on slower machines, a guide rather than a limit. The view sketches them as moving points in each kind's
+  colour, night-only kinds when it shows night. It needs an engine with the particle pack (nwn-landscaper's `/api/particles`
+  and `ambience` header).
 - **Light** (`b`) gives the tiles under the brush two of the game's tile light colours (`lightcolor.2da`'s 32); Shift-drag
   turns them off, *Whole area* and *All off* do every tile. A tile's two lights hang over its middle and reach 14 m, so this is
   a broad wash (warm pools in a village at night, a cold glow in a cave), not a lamp: lamps stay placeables. The view draws it
