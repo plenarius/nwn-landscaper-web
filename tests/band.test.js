@@ -29,12 +29,13 @@ test("a new area has a band, a cave doesn't, and the first fill carries the edge
     assert.equal(b.n, BAND);
     assert.equal(b.nx, a.nx + 2 * BAND);
     // West of the area: its west edge's height; east: its east edge's (where the edge is the same far along it).
-    assert.equal(b.heights[(BAND + 20) * b.nx + BAND - 10], 0);
-    assert.equal(b.heights[(BAND + 20) * b.nx + b.nx - BAND + 9], a.nx - 1);
+    const near = (v, want) => assert.ok(Math.abs(v - want) < 0.01, `${v}, not ${want}`);
+    near(b.heights[(BAND + 20) * b.nx + BAND - 10], 0);
+    near(b.heights[(BAND + 20) * b.nx + b.nx - BAND + 9], a.nx - 1);
     assert.equal(b.materials[b.nx - 1], a.materials[a.nx - 1]);
     // Area point (-10, 5) is in the band, at the edge's height.
-    assert.equal(b.heightAt(-10, 5), 0);
-    assert.equal(b.heightAt(a.sizeX + 10, 5), a.nx - 1);
+    near(b.heightAt(-10, 5), 0);
+    near(b.heightAt(a.sizeX + 10, 5), a.nx - 1);
 });
 
 test('an area saved before bands gets its first fill, and a band keeps through a save', () => {

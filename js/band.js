@@ -10,6 +10,8 @@ import { SPACING, MAX_RISE, dryShallows, toBase64, fromBase64 } from './area.js'
 
 /** Samples beyond each side: 5 tiles, 50 m, as far as the game's scene reaches past an area. */
 export const BAND = 80;
+/** Passes of Band.ease's softening across its rings. */
+const SOFTEN = 24;
 /** How far along the edge the band's heights are averaged (Band.ease), per sample out: 50 m out, 25 m either way. */
 export const EASE = 0.5;
 
@@ -40,6 +42,12 @@ export class Band {
             ax = area.nx,
             ay = area.ny,
             h = this.heights;
+        // Water running out past the edge keeps its bed: a river's channel is as narrow along the edge as a step, and easing
+        // it away would end the river at the edge.
+        this.sync(area);
+        this.floodWater(area);
+        const bed = h.slice(),
+            wet = this.surfaceLevel.map(v => (Number.isNaN(v) ? 0 : 1));
         for (let t = 1; t <= n; t++) {
             // Ring t: from its south-west corner east, north, west and south again.
             const i0 = n - t,
@@ -63,6 +71,26 @@ export class Band {
                 h[ring[s]] = sum / weight;
             }
         }
+        // Then across the rings: terraces parallel to the edge soften the same way, more the further out; a steady rise or fall
+        // stays, as each sample moves towards its neighbours' average and on a plane that is itself.
+        const ny = this.ny,
+            ring = (i, j) => Math.max(n - i, i - (n + ax - 1), n - j, j - (n + ay - 1));
+        for (let pass = 0; pass < SOFTEN; pass++) {
+            const was = h.slice();
+            for (let j = 0; j < ny; j++)
+                for (let i = 0; i < nx; i++) {
+                    const t = ring(i, j);
+                    if (t <= 0) continue;
+                    let sum = 0;
+                    for (let dj = -1; dj <= 1; dj++)
+                        for (let di = -1; di <= 1; di++)
+                            if (di || dj) sum += was[Math.min(Math.max(j + dj, 0), ny - 1) * nx + Math.min(Math.max(i + di, 0), nx - 1)];
+                    const k = j * nx + i;
+                    h[k] = was[k] + Math.min(1, Math.max(0, t - 2) / 10) * 0.8 * (sum / 8 - was[k]);
+                }
+        }
+        for (let k = 0; k < h.length; k++) if (wet[k]) h[k] = Math.min(h[k], bed[k]);
+        this.floodWater(area);
         return this;
     }
 
