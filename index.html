@@ -78,10 +78,13 @@
         <span class="group-sep"></span>
         <button type="button" class="top-btn" id="btnCheck" title="Check how NWN will path this area (nothing is exported)"><span class="icon" data-icon="check"></span><span class="lbl">Check paths</span></button>
         <button type="button" class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
-        <button type="button" class="top-btn active" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on">Markers</button>
+        <button type="button" class="top-btn active" id="btnWalk" title="Show where NWN won't let creatures walk (W)"><span class="icon" data-icon="walk"></span><span class="lbl">Walkable</span></button>
+        <button type="button" class="top-btn" id="btnMarkers" title="Show or hide the path check's markers on the map (M); the checks go on"><span class="icon" data-icon="markers"></span><span class="lbl">Markers hidden</span></button>
         <div class="menu" id="menuShow">
             <button class="top-btn menu-btn" type="button" id="btnShow" aria-haspopup="true" aria-expanded="false" title="Which things show on the map when the Things tool isn't selected">Show</button>
             <div class="menu-list" hidden>
+                <label class="menu-item" data-stay title="The trees, rocks and bushes placed with Place and Scatter. Unticked, the view hides them, to sculpt or paint the ground under them; Place, Scatter and Things still show them. The area and its export keep them."><input type="checkbox" id="showScenery"><span>Scenery (Place and Scatter)</span></label>
+                <hr class="menu-sep">
                 <p class="menu-note" data-stay>On the map out of the Things tool (in it, everything shows). The area's own objects as well as yours.</p>
                 <label class="menu-item" data-stay><input type="checkbox" data-kind="creature"><span class="dot"></span><span>Creatures</span></label>
                 <label class="menu-item" data-stay><input type="checkbox" data-kind="waypoint"><span class="dot"></span><span>Waypoints</span></label>
@@ -127,7 +130,6 @@
             <div class="slider-head"><label for="brushStrength" id="strengthLabel">Strength</label><output id="strengthOut" for="brushStrength"></output></div>
             <input type="range" id="brushStrength" min="0.05" max="1" step="0.05" value="0.5">
         </div>
-        <button type="button" class="tool toggle on" id="btnWalk" title="Show where NWN won't let creatures walk (W)"><span class="icon" data-icon="walk"></span><span>Walkable</span></button>
     </nav>
 
     <main id="viewport">

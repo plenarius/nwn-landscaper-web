@@ -74,6 +74,10 @@ export const ICONS = {
     undo: svg('<path d="M14 16 H30 A10 10 0 0 1 30 36 H18"/><path d="M20 10 L14 16 L20 22"/>'),
     redo: svg('<path d="M34 16 H18 A10 10 0 0 0 18 36 H30"/><path d="M28 10 L34 16 L28 22"/>'),
     exportNwn: svg('<path d="M8 30 V40 H40 V30"/><path d="M24 6 V30 M16 22 L24 30 L32 22"/>'),
+    // A path check's marker: a pin on the ground.
+    markers: svg(
+        '<path d="M24 40 C18 30 12 25 12 17 A12 12 0 0 1 36 17 C36 25 30 30 24 40 Z" fill="#e0a040" fill-opacity="0.45"/><circle cx="24" cy="17" r="4"/><path d="M10 44 H38"/>',
+    ),
     walk: svg(
         '<path d="M4 40 L16 22 L24 32 L32 18 L44 40 Z" fill="currentColor" fill-opacity="0.25"/><path d="M26 30 L32 18 L38 28" stroke="#e0402a" stroke-width="4"/>',
     ),
