@@ -273,6 +273,14 @@ test("an interior's wall tops move onto their foot's line, as the game draws the
         [10 - SPACING, 10 - SPACING],
     ])
         assert.deepEqual(at(x, y), [0, 0]);
+    // The floor's edge is each wall's foot (the view paints the wall in its top's paint down to it); the floor and rock aren't.
+    const { uprightFoot } = await import('../js/area.js');
+    const foot = (x, y) => uprightFoot(a.heights, a.nx, a.ny, Math.round(x / SPACING), Math.round(y / SPACING));
+    assert.deepEqual([foot(10, 18), foot(30, 18), foot(20, 10), foot(20, 26.25)], [true, true, true, true]);
+    assert.deepEqual(
+        [foot(10 + SPACING, 18), foot(20, 20), foot(10 - SPACING, 18), foot(10 - 2 * SPACING, 18)],
+        [false, false, false, false],
+    );
     // A door pushed into a wall goes onto its foot, and anything there stands on the floor, as the game places them.
     assert.deepEqual(a.wallFoot(9.8, 18), [10, 18]);
     assert.equal(a.floorAt(9.8, 18), a.roof - 6);

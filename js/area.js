@@ -50,6 +50,18 @@ export function uprightShift(heights, nx, ny, i, j) {
     return [axis(i > 0, i < nx - 1, 1), axis(j > 0, j < ny - 1, nx)];
 }
 
+/** Whether sample (i, j) of an interior's `heights` is a wall's foot: a neighbour's top moved onto it (uprightShift). The view
+ *  paints a face between feet and tops all in the top's paint, as the game does: the wall is one paint down to the floor. */
+export function uprightFoot(heights, nx, ny, i, j) {
+    const onto = (di, dj, d) =>
+        i + di >= 0 &&
+        i + di < nx &&
+        j + dj >= 0 &&
+        j + dj < ny &&
+        uprightShift(heights, nx, ny, i + di, j + dj)[d] === -(di + dj) * SPACING;
+    return onto(1, 0, 0) || onto(-1, 0, 0) || onto(0, 1, 1) || onto(0, -1, 1);
+}
+
 // A chasm drops this far under its rim (the nearest ground that isn't chasm), and ground more than CHASM_BELOW under its rim is in
 // it: nobody walks there. Its walls fade to black, all black from CHASM_DARK of the way down (landscaper's CHASM_DEPTH,
 // CHASM_BELOW and CHASM_DARK).

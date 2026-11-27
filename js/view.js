@@ -12,7 +12,7 @@ import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { KEEP_BUFFER } from './desktop.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW, uprightShift } from './area.js';
+import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW, uprightFoot, uprightShift } from './area.js';
 import { waterMesh, WATER_FILM } from './watermesh.js';
 import { REACH, groundNormals } from './normals.js';
 import { fogRange, waterView, workShare } from './atmosphere.js';
@@ -123,6 +123,8 @@ const UNDERLAY_FRAGMENT = `
 const SPLAT_VERTEX = `
     vArea = vec2(transformed.x, uSize.y - transformed.z);
     vPaint = vArea - aShift;
+    vShift = aShift;
+    vWall = aWall;
     vUp = transformed.y;
     vGap = aGap;
     vDeep = aDeep;
@@ -130,7 +132,11 @@ const SPLAT_VERTEX = `
     vNormalArea = vec3(normal.x, -normal.z, normal.y);`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
-        vec2 f = clamp(vPaint / ${SPACING.toFixed(4)} + uOrigin, vec2(0.0), uN - 1.0);
+        // An interior's upright wall (every corner a foot or a top): the top's paint from the foot up, as the game paints it. vShift
+        // over vWall.y is the tops' shift, whole at any height.
+        bool upright = vWall.y > 1e-6 && vWall.x + vWall.y > 0.999;
+        vec2 paintAt = upright ? vArea - vShift / vWall.y : vPaint;
+        vec2 f = clamp(paintAt / ${SPACING.toFixed(4)} + uOrigin, vec2(0.0), uN - 1.0);
         vec2 base = min(floor(f), uN - 2.0);
         vec2 t = f - base;
         ivec2 b = ivec2(base);
@@ -155,7 +161,7 @@ ${triplanarGlsl('vNormalArea', 'vArea', 'vUp')}
         // (metres a pixel: worked out here, where every pixel of the ground takes the same branch)
         float softPx = length(fwidth(vArea));
         vec4 splat;
-        if (vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
+        if (upright || vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
             float wq[4] = float[4]((1.0 - t.x) * (1.0 - t.y), t.x * (1.0 - t.y), (1.0 - t.x) * t.y, t.x * t.y);
             float mq[4] = float[4](m00, m10, m01, m11);
             float heaviest = m00, most = -1.0;
@@ -485,6 +491,8 @@ export class View {
         // How far an interior's wall top was moved onto its foot's line (uprightShift; m east, north): its paint is read where
         // it was.
         geo.setAttribute('aShift', new THREE.BufferAttribute(new Float32Array(nx * ny * 2), 2));
+        // Whether each sample is an upright wall's foot and its top (uprightFoot): the shader paints the wall between them.
+        geo.setAttribute('aWall', new THREE.BufferAttribute(new Float32Array(nx * ny * 2), 2));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
         this.uniforms.uMat.value?.dispose();
         const mat = new THREE.DataTexture(area.materials, nx, ny, THREE.RedFormat, THREE.UnsignedByteType);
@@ -543,13 +551,13 @@ export class View {
             shader.vertexShader = shader.vertexShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nattribute float aUp;\nattribute vec2 aShift;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying vec2 vPaint;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
+                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nattribute float aUp;\nattribute vec2 aShift;\nattribute vec2 aWall;\nvarying vec2 vShift;\nvarying vec2 vWall;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying vec2 vPaint;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
                 )
                 .replace('#include <begin_vertex>', `#include <begin_vertex>${SPLAT_VERTEX}`);
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    `#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nuniform sampler2D uSoft;\nuniform vec2 uSoftN;\nuniform float uSoftOrigin;\nuniform sampler2D uLayers;\n#define TRI_METRES(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).r\n#define TRI_VARY(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).g\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying vec2 vPaint;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;${SOFT_GLSL}${variedGlsl}`,
+                    `#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nuniform sampler2D uSoft;\nuniform vec2 uSoftN;\nuniform float uSoftOrigin;\nuniform sampler2D uLayers;\n#define TRI_METRES(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).r\n#define TRI_VARY(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).g\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying vec2 vPaint;\nvarying vec2 vShift;\nvarying vec2 vWall;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;${SOFT_GLSL}${variedGlsl}`,
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`)
                 .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${LIGHTS_FRAGMENT}`);
@@ -946,6 +954,15 @@ export class View {
             }
         }
         for (const a of [pos, gap, deep, col, shift]) this.uploadRows(a, i0, i1, j0, j1);
+        // A foot depends on its neighbour's neighbours: a sample further out.
+        const wall = this.mesh.geometry.attributes.aWall,
+            [w0, w1, v0, v1] = [Math.max(0, i0 - 1), Math.min(n - 1, i1 + 1), Math.max(0, j0 - 1), Math.min(area.ny - 1, j1 + 1)];
+        for (let j = v0; j <= v1; j++)
+            for (let i = w0; i <= w1; i++) {
+                const top = upright && uprightShift(shownHeights, n, area.ny, i, j).some(d => d !== 0);
+                wall.setXY(this.vertex(i, j), upright && uprightFoot(shownHeights, n, area.ny, i, j) ? 1 : 0, top ? 1 : 0);
+            }
+        this.uploadRows(wall, w0, w1, v0, v1);
         this.uploadPaint(i0, i1, j0, j1);
         this.refreshSoft(r);
         // Only what the change reaches: on a 32×32 area each of these over the whole mesh took most of a 245 ms frame.
