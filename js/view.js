@@ -12,7 +12,8 @@ import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { KEEP_BUFFER } from './desktop.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK } from './area.js';
+import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW } from './area.js';
+import { waterMesh, WATER_FILM } from './watermesh.js';
 import { REACH, groundNormals } from './normals.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
@@ -1971,28 +1972,6 @@ export class View {
         return null;
     }
 
-    /** The band's water: a quad at the level over each of its cells beyond the area with a corner under water, as the engine
-     *  draws the halo's. */
-    addBandWater(pos) {
-        const area = this.area,
-            band = area.band,
-            { n, nx, ny, waterLevel: L } = band,
-            size = area.sizeY,
-            top = (a, b) => (Number.isNaN(b) || b < a ? a : b);
-        for (let j = 0; j < ny - 1; j++)
-            for (let i = 0; i < nx - 1; i++) {
-                if (i >= n && j >= n && i + 1 <= n + area.nx - 1 && j + 1 <= n + area.ny - 1) continue;
-                const k = j * nx + i,
-                    level = top(top(top(top(-Infinity, L[k]), L[k + 1]), L[k + nx]), L[k + nx + 1]);
-                if (level === -Infinity) continue;
-                const x0 = (i - n) * SPACING,
-                    x1 = x0 + SPACING,
-                    z0 = size - (j - n) * SPACING,
-                    z1 = z0 - SPACING;
-                pos.push(x0, level, z0, x1, level, z0, x1, level, z1, x0, level, z0, x1, level, z1, x0, level, z1);
-            }
-    }
-
     updateSkirt() {
         if (!this.skirt) return;
         const area = this.area,
@@ -2049,95 +2028,45 @@ export class View {
         this.skirt.geometry.computeBoundingSphere();
     }
 
-    /** The water's surface: a flat quad at the level over each cell with a
-     *  corner under water, as landscaper builds it (the ground hides it
-     *  beyond the shore). */
+    /** The water's surface (watermesh.js): over the shallows up to the bank, faint where it is shallow and gone where the
+     *  ground comes up through it, as the game draws it. */
     updateWater() {
-        const area = this.area,
-            n = area.nx,
-            rows = area.ny,
-            size = area.sizeY,
-            sx = area.sizeX,
-            L = area.waterLevel;
         if (this.water) {
             this.scene.remove(this.water);
             this.water.geometry.dispose();
             this.water.material.dispose();
         }
         this.water = null;
-        const pos = [];
-        // The higher of two levels, a dry one (NaN) counting as none.
-        const top = (a, b) => (Number.isNaN(b) || b < a ? a : b);
-        for (let j = 0; j < rows - 1; j++) {
-            for (let i = 0; i < n - 1; i++) {
-                // The wet corners' highest level. (Without a list of the four for each cell: it was most of a water drag's
-                // redraw.)
-                const k = j * n + i,
-                    level = top(top(top(top(-Infinity, L[k]), L[k + 1]), L[k + n]), L[k + n + 1]);
-                if (level === -Infinity) continue;
-                const x0 = i * SPACING,
-                    x1 = x0 + SPACING,
-                    z0 = size - j * SPACING,
-                    z1 = size - (j + 1) * SPACING;
-                pos.push(x0, level, z0, x1, level, z0, x1, level, z1, x0, level, z0, x1, level, z1, x0, level, z1);
-            }
-        }
-        if (area.band) {
-            this.addBandWater(pos);
-            this.finishWater(pos);
-            return;
-        }
-        // Carried out past the edge, as the edge scenery has it.
-        const D = 50;
-        const quad = (x0, y0, x1, y1, l) =>
-            pos.push(x0, l, size - y0, x1, l, size - y0, x1, l, size - y1, x0, l, size - y0, x1, l, size - y1, x0, l, size - y1);
-        const wet = (i, j) => L[j * n + i];
-        const lv = (a, b) => Math.max(Number.isNaN(a) ? -Infinity : a, Number.isNaN(b) ? -Infinity : b);
-        // A strip at the level l, when either of the two edge samples is wet.
-        const strip = (l, x0, y0, x1, y1) => {
-            if (l > -Infinity) quad(x0, y0, x1, y1, l);
-        };
-        for (let k = 0; k < rows - 1; k++) {
-            const t0 = k * SPACING,
-                t1 = t0 + SPACING;
-            strip(lv(wet(0, k), wet(0, k + 1)), -D, t0, 0, t1);
-            strip(lv(wet(n - 1, k), wet(n - 1, k + 1)), sx, t0, sx + D, t1);
-        }
-        for (let k = 0; k < n - 1; k++) {
-            const t0 = k * SPACING,
-                t1 = t0 + SPACING;
-            strip(lv(wet(k, 0), wet(k + 1, 0)), t0, -D, t1, 0);
-            strip(lv(wet(k, rows - 1), wet(k + 1, rows - 1)), t0, size, t1, size + D);
-        }
-        for (const [i, j, x0, y0, x1, y1] of [
-            [0, 0, -D, -D, 0, 0],
-            [0, rows - 1, -D, size, 0, size + D],
-            [n - 1, 0, sx, -D, sx + D, 0],
-            [n - 1, rows - 1, sx, size, sx + D, size + D],
-        ]) {
-            if (!Number.isNaN(wet(i, j))) quad(x0, y0, x1, y1, wet(i, j));
-        }
-        this.finishWater(pos);
-    }
-
-    /** The water's mesh from `pos` (three vertices a triangle, three.js's frame), when there is any. */
-    finishWater(pos) {
+        const { pos, depth } = waterMesh(this.area, this.drawn ?? this.area.heights);
         if (!pos.length) return;
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(depth, 1));
         geo.computeVertexNormals();
-        this.water = new THREE.Mesh(
-            geo,
-            new THREE.MeshPhongMaterial({
-                color: 0x2c6a86,
-                specular: 0x557788,
-                shininess: 60,
-                transparent: true,
-                opacity: 0.62,
-                depthWrite: false,
-                side: THREE.DoubleSide,
-            }),
-        );
+        const material = new THREE.MeshPhongMaterial({
+            color: 0x2c6a86,
+            specular: 0x557788,
+            shininess: 60,
+            transparent: true,
+            opacity: 0.62,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+        });
+        // Where the ground is over the level, nothing (the ground hid it, flickering where the two all but met); a film over the
+        // shallows, deepening to the full colour where it is too deep to walk.
+        material.onBeforeCompile = shader => {
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <common>', '#include <common>\nattribute float aDepth;\nvarying float vDepth;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDepth = aDepth;');
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <common>', '#include <common>\nvarying float vDepth;')
+                .replace(
+                    '#include <color_fragment>',
+                    `#include <color_fragment>\nif (vDepth <= 0.0) discard;\ndiffuseColor.a *= mix(${WATER_FILM.toFixed(3)}, 1.0, smoothstep(0.0, ${SHALLOW.toFixed(3)}, vDepth));`,
+                );
+        };
+        material.customProgramCacheKey = () => 'landscaper-water';
+        this.water = new THREE.Mesh(geo, material);
         this.water.renderOrder = 1;
         this.scene.add(this.water);
     }

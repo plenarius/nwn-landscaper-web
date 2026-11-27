@@ -20,8 +20,15 @@ export const WALKABLE_NZ = 0.64;
 export const MAX_RISE = (SPACING * Math.sqrt(1 - WALKABLE_NZ * WALKABLE_NZ)) / WALKABLE_NZ;
 // Water deeper than this can't be walked (landscaper's SHALLOW).
 export const SHALLOW = 0.5;
-// Water shallower than this is dry ground (landscaper's WET_DEPTH): the game draws it almost clear, so it reads as dry.
+// Water shallower than this is dry ground to walk and paint (landscaper's WET_DEPTH): the game draws it almost clear, so it reads
+// as dry. Its surface is still drawn (surfaceLevel), so a shore isn't cut along the cells where the shallows begin.
 export const WET_DEPTH = 0.15;
+
+/** `surface` (levels, NaN: none) into `out` with the samples under less than WET_DEPTH dry: what can be walked and painted. */
+export function dryShallows(surface, heights, out) {
+    for (let k = 0; k < surface.length; k++) out[k] = surface[k] - heights[k] < WET_DEPTH ? NaN : surface[k];
+    return out;
+}
 // A cave starts as rock this high over its floor; its tops (from VOID_BELOW
 // under the roof up) are void, drawn black (landscaper's VOID_BELOW).
 export const CAVE_ROCK = 6;
@@ -123,6 +130,9 @@ export class Area {
         // The NWN module it is exported into (another area's, to link them).
         this.module = name;
         this.waterLevel = new Float32Array(this.nx * this.ny).fill(NaN);
+        // The water's surface over each sample (NaN: none), the shallows under WET_DEPTH included (landscaper's surface_level):
+        // the view draws the water from it, so the shore is where the ground comes up through it, not the cells' edges.
+        this.surfaceLevel = new Float32Array(this.nx * this.ny).fill(NaN);
         // An id given when the area is made (New), kept in its saves: the engine refuses a save whose `created` differs from
         // its saved copy's, which is another area of the same name made since (from another tab or computer). null for an
         // area made before ids, or by the engine (an import).
@@ -314,18 +324,18 @@ export class Area {
         return wet;
     }
 
-    /** Recomputes waterLevel from the bodies (after the ground or water changed); a sample under less than WET_DEPTH is
-     *  dry, as landscaper exports it. */
+    /** Recomputes surfaceLevel and waterLevel from the bodies (after the ground or water changed); in waterLevel a sample
+     *  under less than WET_DEPTH is dry, as landscaper's water_level has it. */
     floodWater() {
-        const level = this.waterLevel.fill(NaN),
+        const surface = this.surfaceLevel.fill(NaN),
             h = this.heights;
         for (const b of this.water) {
             const wet = this.flood(b);
             for (let k = 0; k < wet.length; k++) {
-                if (wet[k] && !(level[k] >= b.level)) level[k] = b.level;
+                if (wet[k] && !(surface[k] >= b.level)) surface[k] = b.level;
             }
         }
-        for (let k = 0; k < level.length; k++) if (level[k] - h[k] < WET_DEPTH) level[k] = NaN;
+        dryShallows(surface, h, this.waterLevel);
         if (this.band) {
             this.band.sync(this);
             this.band.floodWater(this);
