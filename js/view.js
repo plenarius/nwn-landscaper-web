@@ -16,7 +16,7 @@ import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW } from './a
 import { waterMesh, WATER_FILM } from './watermesh.js';
 import { REACH, groundNormals } from './normals.js';
 import { fogRange } from './atmosphere.js';
-import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
+import { BOUNCE, shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { lightTexels, LIGHT_HEIGHT, LIGHT_RADIUS } from './lights.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
 import { triplanarGlsl } from './triplanar.js';
@@ -243,6 +243,9 @@ export class View {
         this.areaSun = new THREE.DirectionalLight(0xffffff, Math.PI);
         this.areaSun.position.set(4000, 7000, -4500).normalize();
         this.areaAmbient = new THREE.AmbientLight(0x000000, Math.PI);
+        // The sun or moon bounced off the ground onto steep ground, as the export's tile shaders add it (landscaper shared.rs,
+        // BOUNCE): from below only, none on flat ground, half of BOUNCE on a wall.
+        this.areaBounce = new THREE.HemisphereLight(0x000000, 0x000000, Math.PI);
         // The baked objects' shadows, from the game's sun in either light: a light that lights nothing, only its shadow map
         // (the ground reads it, see SHADE_FRAGMENT). Drawn again only when the objects change (updateObjectShadows).
         this.shadowSun = new THREE.DirectionalLight(0xffffff, 0);
@@ -250,8 +253,8 @@ export class View {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
         this.renderer.shadowMap.autoUpdate = false;
-        this.scene.add(this.workSun, this.workSky, this.areaSun, this.areaAmbient, this.shadowSun, this.shadowSun.target);
-        this.areaSun.visible = this.areaAmbient.visible = false;
+        this.scene.add(this.workSun, this.workSky, this.areaSun, this.areaAmbient, this.areaBounce, this.shadowSun, this.shadowSun.target);
+        this.areaSun.visible = this.areaAmbient.visible = this.areaBounce.visible = false;
         this.fog = null; // { start, end } as the game's camera sees it
 
         this.cursor = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff }));
@@ -331,7 +334,7 @@ export class View {
     setAtmosphere(atmosphere, night) {
         const on = !!atmosphere;
         this.workSun.visible = this.workSky.visible = !on;
-        this.areaSun.visible = this.areaAmbient.visible = on;
+        this.areaSun.visible = this.areaAmbient.visible = this.areaBounce.visible = on;
         // (the particles' night look and night-only kinds, as the game shows them)
         if (this.night !== (on && !!night)) {
             this.night = on && !!night;
@@ -347,6 +350,7 @@ export class View {
         // Colours are gamma-space; three.js lights in linear and divides by pi.
         this.areaAmbient.color.set(s.ambient);
         this.areaSun.color.set(s.diffuse);
+        this.areaBounce.groundColor.set(s.diffuse).multiplyScalar(BOUNCE);
         const f = fogRange(atmosphere, night);
         this.fog = f;
         this.scene.fog = new THREE.Fog(new THREE.Color(f.color), f.start, f.end);
