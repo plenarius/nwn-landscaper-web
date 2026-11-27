@@ -695,6 +695,7 @@ function refreshAll() {
     area.lastChange = null;
     view.markDirty(change.rect, false);
     view.markDirty(change.heights);
+    if (area.band) view.markBand();
     for (const e of change.entrances) view.markEntrance(e);
     view.updateEntrances();
     view.syncObjects();
