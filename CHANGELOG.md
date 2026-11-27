@@ -7,6 +7,8 @@ not released yet wait in `changelog.d/`, a file each, until the release puts the
 
 ## 0.7.3
 
+- **Grass in the Sky & fog panel.** A tick turns on the game's own animated grass for the area, with its density and height;
+  off by default. Picking a look keeps it. It needs the engine's grass (nwn-landscaper 0.7.3 or later).
 - **The browser page opens an area from a link.** `?area=<address>` (the handbook showcase's **Open in Landscaper**) fetches
   that area file from the page's own site, keeps it in the browser and opens it. If the browser already has an area of that
   name, you choose to open yours or the link's under a free name; yours is never replaced.
