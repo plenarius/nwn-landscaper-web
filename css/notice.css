@@ -5,7 +5,8 @@
 
 /* Without the engine: one line over the view saying what still works, with a link to how to start it. */
 #noEngine,
-#missingTex {
+#missingTex,
+#missingModels {
     position: absolute;
     left: 50%;
     bottom: 44px;
@@ -24,11 +25,16 @@
     z-index: 20;
 }
 #noEngine[hidden],
-#missingTex[hidden] {
+#missingTex[hidden],
+#missingModels[hidden] {
     display: none;
 }
 #noEngine b {
     color: var(--warn);
+}
+/* Placeables whose models the engine lacks (missingmodels.js): above the textures' notice when both show. */
+#missingTex:not([hidden]) ~ #missingModels {
+    bottom: 150px;
 }
 /* Textures the library hasn't got (missing.js): the export is refused until they are added or swapped. */
 #missingTex {
@@ -38,14 +44,16 @@
     color: var(--missing);
 }
 #noEngine span,
-#missingTex span {
+#missingTex span,
+#missingModels span {
     color: var(--muted);
 }
 #noEngine a {
     color: var(--accent);
 }
 #noEngineClose,
-#missingTexClose {
+#missingTexClose,
+#missingModelsClose {
     position: absolute;
     right: 8px;
     top: 4px;

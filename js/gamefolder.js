@@ -84,6 +84,8 @@ async function give(open) {
  * Resolves to whether the engine has them; the export goes on either way.
  */
 export async function shadersForExport() {
+    // (The page's own copy of the game's shaders, with its stock placeables: nothing to ask.)
+    if (web.boot?.stock?.shaders) game.shaders = true;
     if (!web.on || game.shaders) return game.shaders;
     const dir = await remembered();
     if (dir?.queryPermission) {

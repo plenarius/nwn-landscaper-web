@@ -38,6 +38,53 @@ export const MIX = 12;
 /** Kinds a group's mix leaves out: they grow in their own places (deserts, wet ground). Their chip or a search finds them. */
 const OWN_PLACES = new Set(['cactus', 'reed']);
 
+/** A model's stand-in while the engine has no such model (an area from another install, or a model the web demo lacks): a
+ *  translucent box at the object's place, trees taller. Its size in metres, `[width, height]`. */
+export function standInSize(model) {
+    const words = String(model)
+        .toLowerCase()
+        .split(/[^a-z]+/);
+    return words.includes('tree') ? [3, 8] : [1.5, 1.5];
+}
+
+/** A stand-in's shape for what reads a model's (place.js): no triangles and no footprint, so it stands at its origin. */
+export const STAND_IN_FLAT = Object.freeze({
+    positions: [],
+    uvs: [],
+    groups: [],
+    transparency: [],
+    footprint: [],
+    min: [0, 0, 0],
+    max: [0, 0, 0],
+    standIn: true,
+});
+
+/** A stand-in's box: drawn, picked and moved as a model is, but casting no shadow (the engine bakes none for it). */
+class StandInMesh extends THREE.Mesh {
+    get castShadow() {
+        return false;
+    }
+    set castShadow(_) {}
+}
+
+let standInLook = null;
+
+/** The stand-in group for `model` ([`standInSize`]): a translucent box with its edges drawn, its base at the origin. */
+function standIn(model) {
+    standInLook ??= {
+        fill: new THREE.MeshBasicMaterial({ color: 0xd8a24a, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }),
+        edges: new THREE.LineBasicMaterial({ color: 0xd8a24a, transparent: true, opacity: 0.9 }),
+    };
+    const [w, h] = standInSize(model);
+    const geo = new THREE.BoxGeometry(w, h, w);
+    geo.translate(0, h / 2, 0);
+    const g = new THREE.Group();
+    g.add(new StandInMesh(geo, standInLook.fill), new THREE.LineSegments(new THREE.EdgesGeometry(geo), standInLook.edges));
+    g.userData.flat = STAND_IN_FLAT;
+    g.userData.standIn = true;
+    return g;
+}
+
 /** The game's placeable models from the engine: the list to search, each model's outline (`flat`), its 3D group, its textures
  *  and a thumbnail, each loaded once and kept. */
 export class ModelLibrary {
@@ -50,6 +97,8 @@ export class ModelLibrary {
         this.textures = new Map(); // name -> THREE.Texture
         this.loaded = new Map(); // name -> Promise (settles when the image is in)
         this.thumbs = new Map(); // model -> { url: Promise<data URL>, wants: [() => still wanted] }
+        this.missing = new Set(); // models the engine has none of (404): drawn as stand-ins
+        this.onMissing = null; // called when one is found missing (missingmodels.js)
     }
 
     /** The list, asked for until the engine gives it (so a search after it starts finds them). */
@@ -159,16 +208,30 @@ export class ModelLibrary {
         return { results, total };
     }
 
+    /** The engine's flattened model (rejects when it has none: see [`shape`] for a stand-in's). */
     flat(model) {
         if (!this.flats.has(model)) {
             this.flats.set(
                 model,
-                api(`/api/model/${encodeURIComponent(model)}`).then(r =>
-                    r.ok ? r.json() : Promise.reject(new Error(`no model ${model}`)),
-                ),
+                api(`/api/model/${encodeURIComponent(model)}`).then(r => {
+                    if (r.ok) return r.json();
+                    if (r.status === 404 && !this.missing.has(model)) {
+                        this.missing.add(model);
+                        this.onMissing?.(model);
+                    }
+                    return Promise.reject(new Error(`no model ${model}`));
+                }),
             );
         }
         return this.flats.get(model);
+    }
+
+    /** The model's shape for placing and moving an object: its flat, or a stand-in's when the engine has no such model. */
+    shape(model) {
+        return this.flat(model).catch(err => {
+            if (this.missing.has(model)) return STAND_IN_FLAT;
+            throw err;
+        });
     }
 
     texture(name) {
@@ -209,31 +272,37 @@ export class ModelLibrary {
         if (!this.groups.has(model)) {
             this.groups.set(
                 model,
-                this.flat(model).then(f => {
-                    const g = new THREE.Group();
-                    for (const [texture, first, count] of f.groups) {
-                        const pos = new Float32Array(count * 9),
-                            uv = new Float32Array(count * 6);
-                        for (let k = 0; k < count * 3; k++) {
-                            const [x, y, z] = f.positions[first * 3 + k];
-                            pos.set([x, z, -y], k * 3);
-                            uv.set(f.uvs[first * 3 + k], k * 2);
+                this.flat(model).then(
+                    f => {
+                        const g = new THREE.Group();
+                        for (const [texture, first, count] of f.groups) {
+                            const pos = new Float32Array(count * 9),
+                                uv = new Float32Array(count * 6);
+                            for (let k = 0; k < count * 3; k++) {
+                                const [x, y, z] = f.positions[first * 3 + k];
+                                pos.set([x, z, -y], k * 3);
+                                uv.set(f.uvs[first * 3 + k], k * 2);
+                            }
+                            const geo = new THREE.BufferGeometry();
+                            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                            geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+                            geo.computeVertexNormals();
+                            // Cut-outs (leaves) as the game draws them; opaque ones are untouched.
+                            const material = new THREE.MeshLambertMaterial({
+                                map: this.texture(texture),
+                                alphaTest: 0.3,
+                                side: THREE.DoubleSide,
+                            });
+                            g.add(new THREE.Mesh(geo, material));
                         }
-                        const geo = new THREE.BufferGeometry();
-                        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-                        geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-                        geo.computeVertexNormals();
-                        // Cut-outs (leaves) as the game draws them; opaque ones are untouched.
-                        const material = new THREE.MeshLambertMaterial({
-                            map: this.texture(texture),
-                            alphaTest: 0.3,
-                            side: THREE.DoubleSide,
-                        });
-                        g.add(new THREE.Mesh(geo, material));
-                    }
-                    g.userData.flat = f;
-                    return g;
-                }),
+                        g.userData.flat = f;
+                        return g;
+                    },
+                    err => {
+                        if (this.missing.has(model)) return standIn(model);
+                        throw err;
+                    },
+                ),
             );
         }
         return this.groups.get(model);

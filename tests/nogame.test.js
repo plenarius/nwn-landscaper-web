@@ -59,3 +59,14 @@ test('without the game, each panel that needs it says so once, with the folder b
         assert.equal(h.children.length, 0, h.id);
     }
 });
+
+test("with the page's stock placeables, Place and Scatter need nothing more; the others still say so", () => {
+    const hosts = NEEDS_GAME.map(([id]) => document.getElementById(id));
+    showNoGame(true, true);
+    assert.deepEqual(
+        hosts.filter(h => h.classList.contains('no-game')).map(h => h.id),
+        ['thingsPanel', 'scriptDialog', 'importDialog'],
+    );
+    showNoGame(false);
+    assert.ok(hosts.every(h => !h.classList.contains('no-game')));
+});

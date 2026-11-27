@@ -17,7 +17,7 @@ export const NEEDS_GAME = [
 
 /** What the game-folder button says it will do: reading the game in the page comes in a later version. */
 export const GAME_FOLDER_SOON =
-    'Using your game folder in this page is coming soon. Until then, Place, Scatter, Things, Scripts and Import need the Landscaper on your computer.';
+    'Using your game folder in this page is coming soon. Until then, the panels that say they need the game need the Landscaper on your computer.';
 
 /** The notice for `name`, which `what`. */
 function notice(name, what) {
@@ -37,16 +37,21 @@ function notice(name, what) {
     return box;
 }
 
-/** Marks each panel that needs the game, with its notice, when `noGame`; takes the marks off otherwise. */
-export function showNoGame(noGame) {
+/** The panels the page's own stock placeables serve (the web demo with stock/: /api/me's `stock`). */
+export const STOCK_SERVES = new Set(['placePanel', 'scatterPanel']);
+
+/** Marks each panel that needs the game, with its notice, when `noGame`; takes the marks off otherwise. With `stock`, the
+ *  panels the page's stock placeables serve need nothing more. */
+export function showNoGame(noGame, stock = false) {
     for (const [id, name, what] of NEEDS_GAME) {
         const host = $(id);
         if (!host) continue;
-        host.classList.toggle('no-game', noGame);
+        const needs = noGame && !(stock && STOCK_SERVES.has(id));
+        host.classList.toggle('no-game', needs);
         // In a dialog, the notice goes under its title (inside its form, when it has one).
         const inner = host.querySelector(':scope > form') ?? host;
         const had = inner.querySelector(':scope > .needs-game');
-        if (!noGame) {
+        if (!needs) {
             had?.remove();
             continue;
         }

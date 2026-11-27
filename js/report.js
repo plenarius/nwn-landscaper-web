@@ -58,6 +58,14 @@ export function showReport(r, checkOnly = false) {
                       ),
                   ]
                 : []),
+            ...(r.missing_models?.length
+                ? [
+                      p(
+                          'warn',
+                          `● ${r.missing_models.length} model(s) the engine doesn't have (${r.missing_models.slice(0, 3).join(', ')}${r.missing_models.length > 3 ? ', …' : ''}): their placeables block nothing here${checkOnly ? '' : ' and the baked ones are left out of the tiles'}.`,
+                      ),
+                  ]
+                : []),
             p('', `Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%`),
             ...(checkOnly
                 ? [p('note', 'Nothing was exported: this only checks.')]

@@ -8,6 +8,7 @@
 
 import { Engine } from './engine.js';
 import { Store } from './opfs.js';
+import { Stock } from './stock.js';
 import { zip } from './zip.js';
 
 /** The engine's data folder under /work (HOME is /work): areas, the texture library, settings. */
@@ -20,8 +21,11 @@ let engine = null;
 let store = null;
 let started = null;
 let queue = Promise.resolve();
-// Whether the visitor's game gave the export's shaders this visit (they are in the engine's override, in memory only).
+// Whether the engine has the game's shaders for an export: the page's stock ones, else the visitor's game folder's this visit
+// (in the engine's override, in memory only).
 let shaders = false;
+// The game's stock placeables, when the page has them (stock.js).
+let stock = null;
 
 const say = text => self.postMessage({ kind: 'progress', text });
 const log = text => self.postMessage({ kind: 'log', text: String(text) });
@@ -89,6 +93,14 @@ async function start(site) {
     boot.storage = performance.now() - t;
     boot.textures = await library(site);
     t = performance.now();
+    stock = await Stock.open(SITE, log);
+    if (stock) {
+        await stock.start(engine);
+        shaders = true;
+        boot.stock = { models: stock.models, shaders };
+    }
+    boot.stockStart = performance.now() - t;
+    t = performance.now();
     if (store) boot.written = await store.save(engine.dir(DATA, true));
     boot.save = performance.now() - t;
     boot.keeps = !!store;
@@ -98,7 +110,18 @@ async function start(site) {
 /** Answers one request from the editor (`m`, as sw.js sends it), then writes what it changed to OPFS. */
 async function answer(m) {
     const t = performance.now();
+    const listed = await stock?.answer(m);
+    if (listed) return listed;
+    if (stock) await stock.give(engine, stock.filesFor(m));
     const r = await engine.request(m.method, m.path, m.headers, m.body ? new Uint8Array(m.body) : new Uint8Array());
+    // (With the stock placeables, Place and Scatter work without the visitor's game: nogame.js.)
+    if (stock && m.method === 'GET' && m.path === '/api/me' && r.status === 200) {
+        try {
+            const me = JSON.parse(new TextDecoder().decode(r.body));
+            r.body = new TextEncoder().encode(JSON.stringify({ ...me, stock: true }));
+            r.headers = r.headers.filter(([k]) => k.toLowerCase() !== 'content-length');
+        } catch {}
+    }
     const ran = performance.now() - t;
     const written = store ? await store.save(engine.dir(DATA, true)) : 0;
     log(`${m.method} ${m.path.slice(0, 80)} ${r.status} ${ran.toFixed(0)} ms${written ? `, ${written} file(s) kept` : ''}`);
