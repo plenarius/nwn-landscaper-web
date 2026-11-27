@@ -11,6 +11,7 @@ import { $, say } from './dom.js';
 import { showReport, showError } from './report.js';
 import { web } from './web.js';
 import { downloadExport } from './webdemo.js';
+import { shadersForExport } from './gamefolder.js';
 
 /** What app.js gives this file (initExport): `area()`, `readOnly()` and `view`. */
 let ctx = null;
@@ -77,11 +78,13 @@ export function initExport(c) {
         const btn = $('btnExport');
         btn.disabled = true;
         const a = ctx.area();
-        say(`Exporting ${a.name}…`);
         try {
+            // (In the browser: the game's shaders first, from the visitor's game folder, asked for once a visit.)
+            const shaders = web.on && (await shadersForExport());
+            say(`Exporting ${a.name}…`);
             const report = await sendArea('export');
             // (In the browser the export is a download: its zip, named in the report.)
-            if (web.on) report.download = await downloadExport(report);
+            if (web.on) Object.assign(report, { download: await downloadExport(report), shaders });
             showReport(report);
             showMarkers(a, report);
         } catch (err) {

@@ -11,6 +11,7 @@ import { api, engine } from './api.js';
 import { ask } from './ask.js';
 import { browserCopy, saveNew } from './save.js';
 import { TERRAIN_STARTERS, seedTerrain, starterSettings } from './starters.js';
+import { bigAreaOk } from './webdemo.js';
 
 /** What app.js gives this file (initNewArea): `setArea(a)`, the Things tool (`thingsTool`) and the texture `library`. */
 let ctx = null;
@@ -147,6 +148,8 @@ async function create(name, form) {
     const start = new FormData(form).get('start');
     const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
     const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
+    // (In the browser, an area over 16 by 16 asks first: its export may need more memory than the browser has.)
+    if (!(await bigAreaOk(tiles($('newW').value), tiles($('newH').value)))) return;
     const starter = DESCENT_STARTERS[start],
         terrain = TERRAIN_STARTERS[start];
     const created = Area.create(name, tiles($('newW').value), starter?.from ?? (terrain ? 'flat' : start), base, tiles($('newH').value));

@@ -103,6 +103,13 @@ The engine is `landscaper.wasm` from a release's `landscaper-wasm.zip`, or built
   the module and its haks (`try/zip.js`). The engine gets stand-ins for the few game files it reads (`try/standins.js`), made
   in code, none of them the game's.
 - One tab at a time: a second tab waits until the first is closed, since both would write the same files.
+- Export asks for the visitor's game folder (`js/gamefolder.js`): its tiles' shaders are made from three of the game's
+  files, which `try/shaders.js` reads from the game's keys and archives (the key's index and about 20 KB of shaders). They go
+  to the engine for the visit only, never into the page's storage. Chromium picks the folder with its folder picker and
+  remembers it; Firefox and Safari choose it in an upload field each visit. Without it the export still downloads, and says
+  it won't draw right in the game.
+- Areas over 16 by 16 ask first: exporting one needs more memory than a phone may have (0.4 GB at 16 by 16, 1.2 GB at 32 by
+  32), and an export that runs out says the area is too big for this browser.
 
 The page needs WebGL. Without a GPU (e.g. a remote desktop), start a separate browser window with software rendering:
 

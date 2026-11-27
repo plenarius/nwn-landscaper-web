@@ -173,3 +173,97 @@ test("Help's source link names the release's tag, or the main branch between rel
     assert.equal(sourceUrl('0.7.0+dev'), 'https://github.com/plenarius/nwn-landscaper');
     assert.equal(sourceUrl(undefined), 'https://github.com/plenarius/nwn-landscaper');
 });
+
+const { readShaders, openFiles, SHADERS } = await import('../try/shaders.js');
+
+/** A BIF V1 holding `res` ([bytes]) as variable resources 0, 1, ... */
+function bif(res) {
+    const tableAt = 20;
+    const dataAt = tableAt + 16 * res.length;
+    const size = res.reduce((n, r) => n + r.length, 0);
+    const out = new Uint8Array(dataAt + size);
+    const v = new DataView(out.buffer);
+    out.set(new TextEncoder().encode('BIFFV1  '));
+    v.setUint32(8, res.length, true);
+    v.setUint32(16, tableAt, true);
+    let at = dataAt;
+    res.forEach((r, i) => {
+        v.setUint32(tableAt + 16 * i, i, true);
+        v.setUint32(tableAt + 16 * i + 4, at, true);
+        v.setUint32(tableAt + 16 * i + 8, r.length, true);
+        v.setUint32(tableAt + 16 * i + 12, 2069, true);
+        out.set(r, at);
+        at += r.length;
+    });
+    return out;
+}
+
+/** A KEY V1 naming archive `path` and, in it, `names` (resref, type) at resource indexes 0, 1, ... */
+function key(path, names) {
+    const fileAt = 64;
+    const nameAt = fileAt + 12;
+    const keyAt = nameAt + path.length + 1;
+    const out = new Uint8Array(keyAt + 22 * names.length);
+    const v = new DataView(out.buffer);
+    out.set(new TextEncoder().encode('KEY V1  '));
+    for (const [i, n] of [1, names.length, fileAt, keyAt].entries()) v.setUint32(8 + 4 * i, n, true);
+    v.setUint32(fileAt + 4, nameAt, true);
+    v.setUint16(fileAt + 8, path.length + 1, true);
+    out.set(new TextEncoder().encode(path), nameAt);
+    names.forEach(([resref, type], i) => {
+        out.set(new TextEncoder().encode(resref), keyAt + 22 * i);
+        v.setUint16(keyAt + 22 * i + 16, type, true);
+        v.setUint32(keyAt + 22 * i + 18, i, true); // archive 0, resource i
+    });
+    return out;
+}
+
+/** A game folder of `files` (path to bytes) as the upload field gives it, under a folder `pick`. */
+const folder = (files, pick = 'Neverwinter Nights') =>
+    openFiles(Object.entries(files).map(([p, b]) => Object.assign(new Blob([b]), { webkitRelativePath: `${pick}/${p}` })));
+
+const shd = s => new TextEncoder().encode(s);
+
+test("the export's shaders come from the game's keys, nwn_retail's over nwn_base's, whichever folder was picked", async () => {
+    const files = {
+        'data/nwn_base.key': key('data\\base_shaders.bif', [
+            ['fslit', 2069],
+            ['vslit', 2069],
+            ['inc_lighting', 2069],
+            ['fslit', 2017], // (a 2DA of that name: not a shader)
+        ]),
+        'data/base_shaders.bif': bif([shd('fs base'), shd('vs base'), shd('lighting base'), shd('not a shader')]),
+        'data/nwn_retail.key': key('data\\retail.bif', [['inc_lighting', 2069]]),
+        'data/retail.bif': bif([shd('lighting retail')]),
+    };
+    const want = { fslit: 'fs base', vslit: 'vs base', inc_lighting: 'lighting retail' };
+    const read = async open =>
+        Object.fromEntries(Object.entries(await readShaders(open)).map(([k, v]) => [k, new TextDecoder().decode(v)]));
+    assert.deepEqual(await read(folder(files)), want);
+    // The data folder itself picked.
+    const data = Object.fromEntries(Object.entries(files).map(([p, b]) => [p.replace('data/', ''), b]));
+    assert.deepEqual(await read(folder(data, 'data')), want);
+    assert.deepEqual(Object.keys(want).sort(), [...SHADERS].sort());
+});
+
+test("a folder that isn't the game's, or a game without shaders, says so", async () => {
+    await assert.rejects(readShaders(folder({ 'modules/a.mod': shd('x') })), /isn't the game's/);
+    const noShaders = { 'data/nwn_base.key': key('data\\a.bif', [['fslit', 2069]]), 'data/a.bif': bif([shd('fs')]) };
+    await assert.rejects(readShaders(folder(noShaders)), /no vslit, inc_lighting/);
+});
+
+const { exportGb, bigAreaOk } = await import('../js/webdemo.js');
+const { web } = await import('../js/web.js');
+
+test('in the browser an area over 16 by 16 asks first; up to it, and on the desktop, never', async () => {
+    assert.equal(exportGb(16, 16).toFixed(2), '0.39');
+    assert.equal(exportGb(32, 32).toFixed(2), '1.17');
+    assert.equal(await bigAreaOk(32, 32), true, 'not in the browser');
+    web.on = true;
+    try {
+        assert.equal(await bigAreaOk(16, 16), true);
+        assert.equal(await bigAreaOk(12, 16), true);
+    } finally {
+        web.on = false;
+    }
+});
