@@ -101,6 +101,19 @@ export async function startEngine(site) {
             if (m?.kind === 'landscaper-request')
                 worker.postMessage({ ...m, kind: 'request' }, m.body ? [ev.ports[0], m.body] : [ev.ports[0]]);
         };
+        // (The editor's API requests come here straight from api(); the Service Worker still passes the rest, such as the
+        // texture library's pictures.)
+        web.request = async (method, path, headers, body) => {
+            const bytes = body == null ? null : await new Response(body).arrayBuffer();
+            const { port1, port2 } = new MessageChannel();
+            const a = await new Promise(done => {
+                port1.onmessage = m => done(m.data);
+                const m = { kind: 'request', method, path, headers: [...headers], body: bytes };
+                worker.postMessage(m, bytes ? [port2, bytes] : [port2]);
+            });
+            const empty = a.status === 204 || a.status === 304 || method === 'HEAD';
+            return new Response(empty ? null : a.body, { status: a.status, statusText: a.statusText, headers: a.headers });
+        };
         web.call = (what, ...args) =>
             new Promise((done, fail) => {
                 const id = ++next;

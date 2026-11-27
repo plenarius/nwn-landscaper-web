@@ -285,6 +285,7 @@ select.from[hidden] {
     font-size: 12px;
 }
 .preset .look {
+    align-self: stretch;
     height: 44px;
     border-radius: 6px;
 }
@@ -514,9 +515,6 @@ input[type="color"] {
     display: block;
     width: 100%;
     margin: 4px 0 8px;
-}
-#lightPresets .look {
-    align-self: stretch;
 }
 #lightPresets .preset.suits:not(.active) {
     border-color: #6d7a8c;

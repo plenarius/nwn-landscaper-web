@@ -16,6 +16,8 @@ import { zip } from './zip.js';
 const DATA = '.local/share/landscaper';
 /** The file in the data folder that says which demo pack the texture library was built from (its pack.json's SHA-256). */
 const PACK_STAMP = 'demo-pack.sha256';
+/** The file in the data folder that says which sky packs are installed (site.json's `skyPacks`, their SHA-256). */
+const SKIES_STAMP = 'demo-skies.sha256';
 const SITE = new URL('./', import.meta.url);
 
 let engine = null;
@@ -65,6 +67,38 @@ async function library(site) {
     return performance.now() - t;
 }
 
+/** The sky packs beside the page (site.json's `skyPacks`: `[{ file, sha256 }]`), installed into the engine's sky library as
+ *  `landscaper skies get` installs them, unless the data folder has them already: ms it took, 0 when kept. Needs the game's
+ *  skyboxes.2da from the stock files, which decides their rows as on the desktop. A pack that fails is left out, said in the log. */
+async function skies(site) {
+    const packs = Array.isArray(site.skyPacks) ? site.skyPacks : [];
+    if (!packs.length || !stock?.has('skyboxes.2da')) return 0;
+    const want = packs.map(p => p.sha256).join(' ');
+    const stamp = engine.get(`${DATA}/${SKIES_STAMP}`);
+    if (stamp && new TextDecoder().decode(stamp) === want && engine.get(`${DATA}/skies/catalog.json`)) return 0;
+    const t = performance.now();
+    say('Preparing the skies (the first visit only)…');
+    const kept = await Kept.open('skies', await sha256(new TextEncoder().encode(want)), log);
+    let all = true;
+    for (const p of packs) {
+        const name = p.file.split('/').at(-1);
+        try {
+            const res = await kept.get(new URL(p.file, SITE), async bytes => (await sha256(bytes)) === p.sha256);
+            if (!res.ok) throw new Error(`${res.status}`);
+            engine.put(`skypacks/${name}`, new Uint8Array(await res.arrayBuffer()));
+            const { code } = await engine.run(['skies', 'get', `/work/skypacks/${name}`]);
+            if (code !== 0) throw new Error(`exit ${code}`);
+        } catch (err) {
+            all = false;
+            log(`the sky pack ${name} couldn't be installed: ${err?.message ?? err}`);
+        } finally {
+            engine.remove('skypacks');
+        }
+    }
+    if (all) engine.put(`${DATA}/${SKIES_STAMP}`, new TextEncoder().encode(want));
+    return performance.now() - t;
+}
+
 /** Starts the engine: compiled, its data folder from OPFS, the texture library ready. What each step took, for the page. */
 async function start(site) {
     const boot = {};
@@ -103,6 +137,7 @@ async function start(site) {
         boot.stock = { models: stock.models, shaders, kept: stock.kept.hits, fetched: stock.kept.fetched };
     }
     boot.stockStart = performance.now() - t;
+    boot.skies = await skies(site);
     t = performance.now();
     if (store) boot.written = await store.save(engine.dir(DATA, true));
     boot.save = performance.now() - t;

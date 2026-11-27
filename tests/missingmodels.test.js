@@ -79,19 +79,33 @@ function body(tiles, extra, paint = true) {
 test("the page's stock: a request gets its model's files first, a check every placed model's, the lists from files", async () => {
     engine.reset();
     const index = {
-        start: ['placeables.2da', 'fslit.shd'],
-        models: { tnp_tree_t11: ['tnp_tree_t11.mdl', 'tnp_tree_t11.pwk', 'tnp_bark.dds'], plc_rock01: ['plc_rock01.mdl', 'rock.tga'] },
+        start: ['placeables.2da', 'skyboxes.2da', 'fslit.shd'],
+        models: {
+            tnp_tree_t11: ['tnp_tree_t11.mdl', 'tnp_tree_t11.pwk', 'tnp_bark.dds'],
+            plc_rock01: ['plc_rock01.mdl', 'rock.tga'],
+            sky_001: ['sky_001.mdl', 'sky_001.tga'],
+            skyn_001: ['skyn_001.mdl', 'skyn_001.tga'],
+        },
         textures: { tnp_bark: 'tnp_bark.dds', rock: 'rock.tga' },
+        skies: { 'row-1': ['sky_001', 'skyn_001'] },
     };
     engine.routes.set('GET /try/stock/index.json', () => [index]);
     engine.routes.set('GET /try/stock/placeables.json', () => [{ placeables: [{ row: 555, model: 'tnp_tree_t11', source: 'game' }] }]);
     const site = new URL('/try/', location.href);
     const stock = await Stock.open(site, undefined, () => {});
-    assert.equal(stock.models, 2);
+    assert.equal(stock.models, 4);
+    assert.ok(stock.has('skyboxes.2da'));
+    assert.ok(!stock.has('sky_001.mdl'));
     const req = (method, path, b) => ({ method, path, body: b?.buffer });
     assert.deepEqual(stock.filesFor(req('GET', '/api/model/TNP_TREE_T11')), index.models.tnp_tree_t11);
     assert.deepEqual(stock.filesFor(req('GET', '/api/texture/rock')), ['rock.tga']);
     assert.deepEqual(stock.filesFor(req('GET', '/api/texture/nowhere')), []);
+    // A game sky's picture needs its row's models; an installed sky's files are the engine's own.
+    assert.deepEqual(stock.filesFor(req('GET', '/api/sky-picture/row-1?time=day&kind=strip')), [
+        ...index.models.sky_001,
+        ...index.models.skyn_001,
+    ]);
+    assert.deepEqual(stock.filesFor(req('GET', '/api/sky-picture/overcast?time=day&kind=strip')), []);
     const objects = [{ model: 'plc_rock01' }, { model: 'tnp_tree_t11' }, { model: 'plc_rock01' }, { model: 'my_hak_a' }];
     const check = req('POST', '/api/check?name=a&tiles=3&tilesY=3', body(3, { palette: [], objects }));
     assert.deepEqual(stock.filesFor(check), [...index.models.plc_rock01, ...index.models.tnp_tree_t11]);
