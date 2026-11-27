@@ -32,12 +32,24 @@ export const uv = (axis, p) => {
     return axis === 0 ? [y, z] : axis === 1 ? [x, z] : [x, y];
 };
 
+/** Where the face's own normal and the smoothed `normal` agree this closely (the cosine between them), the weights take the
+ *  smoothed one, so rolling ground blends smoothly; where they part (floor meeting a wall, a cliff's foot), the face's own, as
+ *  landscaper's export blends by the ground's own slope there (its triplanar.rs, `blend_normal`). */
+export const CREASE = [0.9, 0.98];
+
 /**
  * GLSL for a fragment shader's main(): the weights `triW` from the varying `normal` (area frame) and the macro `TRIPLANAR(layer)`,
  * layer `layer` of the sampler2DArray `uTex` drawn from three sides at the area point (`area`, a vec2, and `up`, its height).
+ * At a crease the face's own normal (from the area point's screen derivatives) takes over from the smoothed one: blended by the
+ * smoothed normal, flat floor at a wall's foot took the side's projection and smeared into stripes, the wall's foot the one from
+ * above.
  */
 export const triplanarGlsl = (normal, area, up) => `
-        vec3 triW = pow(abs(normalize(${normal})), vec3(${SHARPNESS.toFixed(1)}));
+        vec3 triS = normalize(${normal});
+        vec3 triF = cross(dFdx(vec3(${area}, ${up})), dFdy(vec3(${area}, ${up})));
+        vec3 triN = dot(triF, triF) > 0.0 ? normalize(triF) : triS;
+        triN = mix(triN, triS, smoothstep(${CREASE[0].toFixed(2)}, ${CREASE[1].toFixed(2)}, abs(dot(triN, triS))));
+        vec3 triW = pow(abs(triN), vec3(${SHARPNESS.toFixed(1)}));
         triW /= triW.x + triW.y + triW.z;
         vec2 triX = vec2(${area}.y, -${up}) / ${TEXTURE_METRES.toFixed(1)};
         vec2 triY = vec2(${area}.x, -${up}) / ${TEXTURE_METRES.toFixed(1)};
