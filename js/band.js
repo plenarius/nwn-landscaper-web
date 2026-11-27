@@ -6,10 +6,12 @@
 // the game (its halo), as a canvas piece draws its neighbours. Its grid is the area's with BAND samples more on each side, the
 // area's own samples in its middle (kept a copy of the area's: the area's grids are the ones edited and undone there).
 
-import { SPACING, dryShallows, toBase64, fromBase64 } from './area.js';
+import { SPACING, MAX_RISE, dryShallows, toBase64, fromBase64 } from './area.js';
 
 /** Samples beyond each side: 5 tiles, 50 m, as far as the game's scene reaches past an area. */
 export const BAND = 80;
+/** How far along the edge the band's heights are averaged (Band.ease), per sample out: 50 m out, 25 m either way. */
+export const EASE = 0.5;
 
 export class Band {
     /** The band round `area`, `n` samples a side; its grids given, or empty. */
@@ -24,9 +26,49 @@ export class Band {
         this.surfaceLevel = new Float32Array(this.nx * this.ny).fill(NaN);
     }
 
-    /** The first fill: each sample takes the height and paint of the area's sample nearest it, so the area's ground carries
-     *  straight out (as the edge scenery showed it before bands) until someone shapes it. */
+    /** The first fill: the area's edge carried out (extruded), its heights then eased (ease), so the strip by the edge
+     *  matches it and the bumps along it spread into slopes instead of running out as 50 m ridges and steps. */
     static fill(area) {
+        return Band.extruded(area).ease(area);
+    }
+
+    /** Eases the band's heights along the edge: each ring of samples round the area (those as far out as each other) averaged
+     *  along itself over more of it the further out (EASE), so steps between neighbouring rows, which grow wherever each row
+     *  ran out on its own, become slopes; how the ground rises or falls away from the edge is kept. Returns the band. */
+    ease(area) {
+        const { n, nx } = this,
+            ax = area.nx,
+            ay = area.ny,
+            h = this.heights;
+        for (let t = 1; t <= n; t++) {
+            // Ring t: from its south-west corner east, north, west and south again.
+            const i0 = n - t,
+                j0 = n - t,
+                i1 = n + ax - 1 + t,
+                j1 = n + ay - 1 + t;
+            const ring = [];
+            for (let i = i0; i < i1; i++) ring.push(j0 * nx + i);
+            for (let j = j0; j < j1; j++) ring.push(j * nx + i1);
+            for (let i = i1; i > i0; i--) ring.push(j1 * nx + i);
+            for (let j = j1; j > j0; j--) ring.push(j * nx + i0);
+            const len = ring.length,
+                r = Math.min(Math.floor((len - 1) / 2), Math.floor(EASE * (t - 0.5)));
+            if (r <= 0) continue;
+            const was = ring.map(k => h[k]);
+            // A tent of weights: smooth, and the same at either end of the loop.
+            const weight = (r + 1) * (r + 1);
+            for (let s = 0; s < len; s++) {
+                let sum = 0;
+                for (let k = -r; k <= r; k++) sum += (r + 1 - Math.abs(k)) * was[(((s + k) % len) + len) % len];
+                h[ring[s]] = sum / weight;
+            }
+        }
+        return this;
+    }
+
+    /** The band as the first fill made it before it was eased: each sample the height and paint of the area's sample nearest it.
+     *  A band saved like this was never touched, so it is filled again (Area.fromJSON). */
+    static extruded(area) {
         const b = new Band(area),
             { n, nx, ny } = b;
         for (let j = 0; j < ny; j++) {
@@ -39,6 +81,16 @@ export class Band {
             }
         }
         return b;
+    }
+
+    /** Whether this band is the same as `other` round `area` (their samples past its edge). */
+    same(other, area) {
+        if (other.nx !== this.nx || other.ny !== this.ny) return false;
+        for (let j = 0, k = 0; j < this.ny; j++)
+            for (let i = 0; i < this.nx; i++, k++)
+                if (!this.inArea(i, j, area) && (this.heights[k] !== other.heights[k] || this.materials[k] !== other.materials[k]))
+                    return false;
+        return true;
     }
 
     /** Metres from the band's first sample to the area's: brushes stamp the band at an area point plus this. */
@@ -73,6 +125,47 @@ export class Band {
         const a = h[j * nx + i] + (h[j * nx + i + 1] - h[j * nx + i]) * tx;
         const b = h[(j + 1) * nx + i] + (h[(j + 1) * nx + i + 1] - h[(j + 1) * nx + i]) * tx;
         return a + (b - a) * ty;
+    }
+
+    /** Band sample (i, j)'s height (clamped to the band), the area's own in the middle: a point by the edge reads the area as it
+     *  is now, synced or not. */
+    sample(area, i, j) {
+        i = Math.min(Math.max(i, 0), this.nx - 1);
+        j = Math.min(Math.max(j, 0), this.ny - 1);
+        const ai = i - this.n,
+            aj = j - this.n;
+        return this.inArea(i, j, area) ? area.heights[aj * area.nx + ai] : this.heights[j * this.nx + i];
+    }
+
+    /** The ground's height at area point (x, y), bilinear over the band and the area's edge. */
+    groundAt(area, x, y) {
+        const fx = Math.min(Math.max(x / SPACING + this.n, 0), this.nx - 1),
+            fy = Math.min(Math.max(y / SPACING + this.n, 0), this.ny - 1);
+        const i = Math.min(Math.floor(fx), this.nx - 2),
+            j = Math.min(Math.floor(fy), this.ny - 2),
+            tx = fx - i,
+            ty = fy - j;
+        const h = (di, dj) => this.sample(area, i + di, j + dj);
+        const a = h(0, 0) + (h(1, 0) - h(0, 0)) * tx;
+        const b = h(0, 1) + (h(1, 1) - h(0, 1)) * tx;
+        return a + (b - a) * ty;
+    }
+
+    /** Whether the band's ground nearest area point (x, y) is dry and no steeper than walkable ground (the area's rule), as
+     *  Scatter wants it: it is never walked, but a tree on a cliff or in a lake looks as wrong there. */
+    firm(area, x, y) {
+        const i = Math.min(Math.max(Math.round(x / SPACING) + this.n, 0), this.nx - 1),
+            j = Math.min(Math.max(Math.round(y / SPACING) + this.n, 0), this.ny - 1);
+        if (!this.inArea(i, j, area) && !Number.isNaN(this.waterLevel[j * this.nx + i])) return false;
+        const z = this.sample(area, i, j);
+        for (const [di, dj] of [
+            [-1, 0],
+            [1, 0],
+            [0, -1],
+            [0, 1],
+        ])
+            if (Math.abs(this.sample(area, i + di, j + dj) - z) > MAX_RISE) return false;
+        return true;
     }
 
     /** Each sample's water surface and level (NaN: dry): the area's bodies flooded over the band as the engine floods them over

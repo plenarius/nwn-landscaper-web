@@ -8,8 +8,10 @@ import { $, say } from './dom.js';
 import { QUICK, models, modelResults, fillSources, searchSoon, appearanceOf, groundUnder } from './place.js';
 import { GROUPS } from './models.js';
 import { basePoints } from './footing.js';
+import { carryOutward, REACH } from './carry.js';
+import { saveSoon } from './save.js';
 
-/** What app.js gives this file (initScatter): `area()` and `view`. */
+/** What app.js gives this file (initScatter): `area()`, `readOnly()`, `busy()` (a stroke under way) and `view`. */
 let ctx = null;
 
 /** The models in the mix (their names). */
@@ -36,12 +38,9 @@ function markMix() {
 }
 
 /** Whether the ground under object `o`'s base suits it: walkable and dry at every corner and the middle, not only under its
- *  origin (a bush at a lake's edge stood in the water). */
+ *  origin (a bush at a lake's edge stood in the water). On the band, its own slopes and water. */
 export function groundSuits(area, o, flat) {
-    return basePoints(o, flat).every(([x, y]) => {
-        const { i, j } = area.sampleAt(x, y);
-        return area.walkable(i, j) && area.depth(i, j) <= 0;
-    });
+    return basePoints(o, flat).every(([x, y]) => area.firmAt(x, y));
 }
 
 /** A few tries a frame at a random point in the brush; a try is kept when
@@ -67,7 +66,8 @@ export function scatterStamp(p, radius, s) {
             d = radius * Math.sqrt(Math.random());
         const x = p.x + Math.cos(a) * d,
             y = p.y + Math.sin(a) * d;
-        if (x < 0.5 || y < 0.5 || x > ctx.area().sizeX - 0.5 || y > ctx.area().sizeY - 0.5) continue;
+        // (On the band too, where it has one: scenery past the edge.)
+        if (!ctx.area().onGround(x, y, 0.5)) continue;
         if (ctx.area().objects.some(o => Math.hypot(o.x - x, o.y - y) < spacing)) continue;
         const [model, flat] = mix[Math.floor(Math.random() * mix.length)];
         const bearing = Math.random() * Math.PI * 2,
@@ -103,9 +103,47 @@ function mixGroup(chip) {
     );
 }
 
+/** "Carry the scenery outward": the band filled with scenery like that near the area's edge (carry.js), one undo step. */
+async function carryScenery() {
+    const area = ctx.area();
+    if (!area || ctx.readOnly() || ctx.busy()) return;
+    if (!area.band) {
+        say('A cave or an interior has no band of scenery past its edge.');
+        return;
+    }
+    const names = [...new Set(area.objects.filter(o => !o.model.startsWith('@import:')).map(o => o.model))];
+    const flats = new Map(
+        (
+            await Promise.all(
+                names.map(m =>
+                    models.flat(m).then(
+                        f => [m, f],
+                        () => null,
+                    ),
+                ),
+            )
+        ).filter(Boolean),
+    );
+    if (area !== ctx.area()) return;
+    const added = carryOutward(area, flats);
+    if (!added.length) {
+        say(`Nothing to carry: nothing stands within ${REACH} m of the area's edge, or the band there is steep or under water.`);
+        return;
+    }
+    area.beginStroke();
+    for (const o of added) o.id = area.nextObjectId++;
+    area.objects.push(...added);
+    ctx.view.addObjects(added);
+    saveSoon();
+    say(
+        `${added.length} objects on the band, like those within ${REACH} m of the edge: the game shows them past the edge, never in the way. Undo takes them all back.`,
+    );
+}
+
 /** Sets up the Scatter panel. */
 export function initScatter(c) {
     ctx = c;
+    $('scatterCarry').onclick = carryScenery;
     for (const q of QUICK) {
         const b = document.createElement('button');
         b.type = 'button';

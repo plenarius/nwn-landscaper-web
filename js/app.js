@@ -494,7 +494,7 @@ async function openArea(a, settle = true) {
     }
 }
 
-initScatter(editor);
+initScatter({ ...editor, busy: currentStroke });
 initAmbienceTool({ ...editor, models: () => models, library, saveSoon: () => saveSoon(), say });
 
 initSky({ ...editor, saveSoon });

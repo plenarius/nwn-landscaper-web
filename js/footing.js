@@ -70,3 +70,11 @@ export function basePoints(o, flat) {
 export function groundUnder(o, flat, heightAt) {
     return Math.min(...basePoints(o, flat).map(([x, y]) => heightAt(x, y)));
 }
+
+/** (x, y) kept where placed object `o` may stand on `area`: a baked one anywhere on the area or its band (the engine draws it in
+ *  the scenery past the edge), a placeable (object mode) inside the area, as the game has no objects past its edge. */
+export function keepPlaced(area, o, x, y) {
+    const r = o.baked === false ? 0 : (area.band?.offset ?? 0);
+    const keep = (v, size) => Math.min(size + r, Math.max(r ? -r : 0, Number.isFinite(v) ? v : 0));
+    return [keep(x, area.sizeX), keep(y, area.sizeY)];
+}

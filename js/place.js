@@ -9,7 +9,7 @@ import { Transformer } from './transform.js';
 import { engine, NEEDS_ENGINE } from './api.js';
 import { $, el, say } from './dom.js';
 import { saveSoon } from './save.js';
-import { groundUnder as groundUnderBase } from './footing.js';
+import { groundUnder as groundUnderBase, keepPlaced } from './footing.js';
 
 /** What app.js gives this file (initPlace): `area()`, `tool()` and `view`. */
 let ctx = null;
@@ -122,12 +122,25 @@ const showScale = () => {
  *  imported tile's cliffs and blocked ground (heights built in) where it is. */
 function settle(o, flat) {
     if (flat.fixed) return o.z;
-    return o.model.startsWith('@import:') ? ctx.area().heightAt(o.x, o.y) : groundUnder(o, flat);
+    return o.model.startsWith('@import:') ? ctx.area().groundAt(o.x, o.y) : groundUnder(o, flat);
 }
 
-/** Ground under object `o`: the lowest point under its base (footing.js), so it doesn't float on a slope or sink to its crown. */
+/** Ground under object `o`: the lowest point under its base (footing.js), so it doesn't float on a slope or sink to its crown.
+ *  Past the area's edge, the band's ground. */
 export function groundUnder(o, flat) {
-    return groundUnderBase(o, flat, (x, y) => ctx.area().heightAt(x, y));
+    return groundUnderBase(o, flat, (x, y) => ctx.area().groundAt(x, y));
+}
+
+/** What the editor says when a placeable is kept from the band. */
+export const NO_PLACEABLE_PAST_EDGE =
+    'A placeable stays inside the area: the game has no objects past its edge. Baked scenery can stand on the band there (choose Baked).';
+
+/** Where object `o` may stand when asked for (x, y): baked scenery anywhere on the area or its band (keepPlaced), a placeable
+ *  inside the area, saying so when it is held back. */
+function keepIn(o, x, y) {
+    const [kx, ky] = keepPlaced(ctx.area(), o, x, y);
+    if ((kx !== x || ky !== y) && o.baked === false && ctx.area().beyond(x, y)) say(NO_PLACEABLE_PAST_EDGE);
+    return [kx, ky];
 }
 
 /** Removes placed object `o` from the area (undoable), and deselects it. */
@@ -197,6 +210,10 @@ export async function placeDown(e, p) {
         say('Pick a placeable in the panel first.');
         return null;
     }
+    if (!placeBaked() && ctx.area().beyond(p.x, p.y)) {
+        say(NO_PLACEABLE_PAST_EDGE);
+        return null;
+    }
     let flat;
     try {
         flat = await models.flat(placeModel);
@@ -238,8 +255,7 @@ export function placeDrag(e, s) {
             ctx.area().beginStroke();
             s.stepped = true;
         }
-        s.object.x = Math.min(ctx.area().sizeX, Math.max(0, p.x + s.move.dx));
-        s.object.y = Math.min(ctx.area().sizeY, Math.max(0, p.y + s.move.dy));
+        [s.object.x, s.object.y] = keepIn(s.object, p.x + s.move.dx, p.y + s.move.dy);
     } else {
         if (Math.hypot(p.x - s.from.x, p.y - s.from.y) < 0.3) return;
         s.object.bearing = Math.atan2(p.y - s.from.y, p.x - s.from.x);
@@ -282,6 +298,7 @@ export function initPlace(c) {
         area: () => ctx.area(),
         flat: o => models.shape(o.model),
         settle: (o, flat) => settle(o, flat),
+        keep: keepIn,
         say,
         changed: (o, final) => {
             showObjectPanel(o);
@@ -321,9 +338,14 @@ export function initPlace(c) {
     showScale();
     for (const b of $('placeMode').children) {
         b.onclick = () => {
+            const sel = ctx.view.selected;
+            if (sel && b.dataset.baked !== '1' && ctx.area().beyond(sel.x, sel.y)) {
+                say(NO_PLACEABLE_PAST_EDGE);
+                return;
+            }
             showPlaceMode(b.dataset.baked === '1');
             // The selected object takes the mode too.
-            if (ctx.view.selected)
+            if (sel)
                 changeSelected(o => {
                     o.baked = b.dataset.baked === '1';
                 }).then(() => ctx.view.select(ctx.view.selected));
@@ -338,11 +360,11 @@ export function initPlace(c) {
     };
     $('objX').onchange = () =>
         changeSelected(o => {
-            o.x = Math.min(ctx.area().sizeX, Math.max(0, +$('objX').value));
+            [o.x] = keepIn(o, +$('objX').value, o.y);
         }).then(() => showObjectPanel(ctx.view.selected));
     $('objY').onchange = () =>
         changeSelected(o => {
-            o.y = Math.min(ctx.area().sizeY, Math.max(0, +$('objY').value));
+            [, o.y] = keepIn(o, o.x, +$('objY').value);
         }).then(() => showObjectPanel(ctx.view.selected));
     $('objAngle').onchange = () =>
         changeSelected(o => {

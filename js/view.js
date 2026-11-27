@@ -1354,6 +1354,31 @@ export class View {
         this.updateObjectShadows();
     }
 
+    /** Adds many objects' models to the view, the shadows worked out once at the end (each addObject works them out). */
+    async addObjects(list) {
+        const group = this.objectGroup;
+        if (!group || !this.models) return;
+        const loaded = await Promise.all(
+            list.map(o =>
+                this.models.group(o.model).then(
+                    m => [o, m],
+                    () => null,
+                ),
+            ),
+        );
+        if (group !== this.objectGroup) return;
+        const still = new Set(this.area.objects);
+        for (const [o, model] of loaded.filter(Boolean)) {
+            if (!still.has(o)) continue;
+            const inst = model.clone();
+            this.place(inst, o);
+            inst.userData.object = o;
+            group.add(inst);
+            this.addDecal(group, o, model.userData.flat);
+        }
+        this.updateObjectShadows();
+    }
+
     /** Cuts the imported tiles' roofs and upper floors away above `h` metres (null: shows them whole). Only imported tile
      *  models are cut: the ground, things and anything else stay as they are. */
     setCut(h) {

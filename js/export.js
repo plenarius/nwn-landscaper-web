@@ -99,7 +99,7 @@ export function initExport(c) {
             const report = await sendArea('export');
             // (In the browser the export is a download: its zip, named in the report.)
             if (web.on) Object.assign(report, { download: await downloadExport(report), shaders });
-            showReport(report);
+            showReport(report, false, a);
             showMarkers(a, report);
         } catch (err) {
             say('');
@@ -119,7 +119,7 @@ export function initExport(c) {
         say('Checking how NWN will path this area…');
         try {
             const report = await sendArea('check');
-            showReport(report, true);
+            showReport(report, true, a);
             showMarkers(a, report);
         } catch (err) {
             say('');

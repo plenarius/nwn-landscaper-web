@@ -202,9 +202,10 @@ function reach(d, radius, soft) {
 /**
  * Paints `plan` (mixPlan) over the brush at area point (x, y), `radius` metres: each sample takes its patch's texture, where the
  * patch's cover hash is under `strength` (0..1) times the edge's reach; the others keep theirs. The same ground always comes out
- * the same, so a second pass changes nothing. Returns the changed sample rectangle, as tools.js's stamp.
+ * the same, so a second pass changes nothing. Returns the changed sample rectangle, as tools.js's stamp. `origin`: metres from
+ * the grid's first sample to the area's (the band's offset), so the band's patches are the area's and run on across the edge.
  */
-export function mixStamp(area, x, y, radius, strength, plan) {
+export function mixStamp(area, x, y, radius, strength, plan, origin = 0) {
     const n = area.nx,
         m = area.materials;
     const i0 = Math.max(0, Math.floor((x - radius) / SPACING)),
@@ -218,7 +219,7 @@ export function mixStamp(area, x, y, radius, strength, plan) {
                 py = j * SPACING;
             const r = reach(Math.hypot(px - x, py - y), radius, plan.soft);
             if (r <= 0) continue;
-            const { ci, cj } = patchAt(px, py, plan.patch, plan.seed);
+            const { ci, cj } = patchAt(px - origin, py - origin, plan.patch, plan.seed);
             const { k, cover } = patchChoice(plan, ci, cj);
             if (cover < strength * r) m[j * n + i] = plan.indices[k];
         }
