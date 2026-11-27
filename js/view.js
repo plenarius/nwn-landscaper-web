@@ -623,7 +623,7 @@ export class View {
         const area = this.area,
             light = this.shadowSun,
             group = this.objectGroup;
-        const casting = group?.children.some(c => c.userData.object?.baked !== false && !c.userData.decal);
+        const casting = group?.visible && group.children.some(c => c.userData.object?.baked !== false && !c.userData.decal);
         const on = !!(area && area.shadow > 0 && !area.enclosed() && casting);
         this.uniforms.uShadowStrength.value = area?.shadow ?? 0;
         this.uniforms.uObjectShadows.value = on;
@@ -1197,6 +1197,7 @@ export class View {
             for (const c of this.objectGroup.children) if (c.userData.decal) disposeDecal(c);
         }
         const group = new THREE.Group();
+        group.visible = this.showScenery !== false;
         this.objectGroup = group;
         this.scene.add(group);
         this.updateObjectShadows();
@@ -1826,7 +1827,7 @@ export class View {
 
     /** The placed object under the pointer, or null. */
     pickObject(clientX, clientY) {
-        if (!this.objectGroup) return null;
+        if (!this.objectGroup?.visible) return null;
         this.aim(clientX, clientY);
         const hit = this.raycaster.intersectObject(this.objectGroup, true)[0];
         let n = hit?.object;
@@ -2435,6 +2436,13 @@ export class View {
         }
         this.markers.visible = this.showMarkers !== false;
         this.scene.add(this.markers);
+    }
+
+    /** Shows or hides the placed objects (Place and Scatter) with their ground patches and shadows: in the view only. */
+    setShowScenery(on) {
+        this.showScenery = on;
+        if (this.objectGroup) this.objectGroup.visible = on;
+        this.updateObjectShadows();
     }
 
     /** Shows or hides the markers (they stay, and update, either way). */

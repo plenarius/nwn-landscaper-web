@@ -66,6 +66,9 @@ export function showReport(r, checkOnly = false) {
                       ),
                   ]
                 : []),
+            r.warnings.length &&
+                !$('btnMarkers').classList.contains('active') &&
+                p('note', 'The markers are hidden: Markers in the top bar (M) shows them.'),
             p('', `Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%`),
             ...(checkOnly
                 ? [p('note', 'Nothing was exported: this only checks.')]

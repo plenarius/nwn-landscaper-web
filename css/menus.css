@@ -95,9 +95,21 @@
 .top-btn.icon-only .lbl {
     display: none;
 }
-/* A narrow window (a laptop's, the app's): Check paths and Export show their icons only, so Share and Help stay in the bar. */
-@media (max-width: 1400px) {
-    #btnCheck .lbl,
+/* A narrower window (a laptop's, the app's): buttons show their icons only, Walkable's and Markers' first, then Check paths',
+   then Export's, so Share and Help stay in the bar. Over 1500 px the title takes one line: then, with Help, the longest status
+   and the version note, every label needs about 1840 px, all but the first two 1640, Export's alone 1540. */
+@media (max-width: 1860px) {
+    #btnWalk .lbl,
+    #btnMarkers .lbl {
+        display: none;
+    }
+}
+@media (max-width: 1660px) {
+    #btnCheck .lbl {
+        display: none;
+    }
+}
+@media (max-width: 1560px) {
     #btnExport .lbl {
         display: none;
     }

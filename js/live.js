@@ -75,22 +75,31 @@ async function liveCheck() {
         return;
     }
     ctx.view.setMarkers(report.warnings || []);
-    showLive(...liveState(report));
+    const [state, text, title] = liveState(report);
+    showLive(state, text, report.warnings?.length ? `${title}\nMarkers (M) shows or hides them on the map.` : title);
 }
 
-// The markers on the map: shown or hidden (M), remembered; the checks go on.
+// The markers on the map: shown or hidden (M); the checks go on. Hidden until the builder shows them, and then remembered.
+// (A new key: the old one was written on every start, so it can't tell a choice from the old default.)
+const MARKERS_KEY = 'landscaper.markersShown';
 function showMarkers(on) {
-    store.set('landscaper.markers', on ? 'on' : 'off');
     ctx.view.setShowMarkers(on);
     $('btnMarkers').classList.toggle('active', on);
-    $('btnMarkers').textContent = on ? 'Markers' : 'Markers hidden';
+    $('btnMarkers').querySelector('.lbl').textContent = on ? 'Markers' : 'Markers hidden';
+    $('btnMarkers').title = on
+        ? "The path check's markers show on the map (M): click to hide them; the checks go on"
+        : "The path check's markers are hidden (M): click to show them on the map";
 }
 
 /** Sets up the Live and Markers buttons. */
 export function initLive(c) {
     ctx = c;
-    $('btnMarkers').onclick = () => showMarkers(!$('btnMarkers').classList.contains('active'));
-    showMarkers(store.get('landscaper.markers') !== 'off');
+    $('btnMarkers').onclick = () => {
+        const on = !$('btnMarkers').classList.contains('active');
+        store.set(MARKERS_KEY, on ? 'on' : 'off');
+        showMarkers(on);
+    };
+    showMarkers(store.get(MARKERS_KEY) === 'on');
 
     $('btnLive').onclick = async () => {
         // Off for want of the engine: started since? (Asking again sets engine.up when it answers.) Then the click turns it on.

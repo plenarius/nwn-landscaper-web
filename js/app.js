@@ -162,10 +162,18 @@ function updatePanels() {
     setAmbienceOpen(tool === 'ambience' && !over);
     if (tool !== 'place' && view.selected) selectObject(null);
     if (tool === 'place' && !over) showPlaceables();
+    showScenery();
     $('thingsPanel').hidden = over || tool !== 'things';
     if (tool === 'things' && !over) thingsTool.show();
     else thingsTool.hide();
     $('btnSky').classList.toggle('active', skyOpen);
+}
+// The Show menu's Scenery: unticked, the view hides what Place and Scatter put down (to work on the ground under a forest),
+// but in the tools that place it or things among it. Remembered in this browser.
+const SCENERY_KEY = 'landscaper.showScenery';
+let sceneryTicked = store.get(SCENERY_KEY) !== 'off';
+function showScenery() {
+    view.setShowScenery(sceneryTicked || ['place', 'scatter', 'things'].includes(tool));
 }
 // Creatures, waypoints, triggers, sounds...: the Things tool.
 let showLabel = () => {}; // the Show button's text, set with the Show menu below
@@ -190,8 +198,8 @@ sizeIn.oninput = strengthIn.oninput = showSliders;
 showSliders();
 
 $('btnWalk').onclick = () => {
-    const on = !$('btnWalk').classList.contains('on');
-    $('btnWalk').classList.toggle('on', on);
+    const on = !$('btnWalk').classList.contains('active');
+    $('btnWalk').classList.toggle('active', on);
     view.setShowWalkability(on);
 };
 
@@ -536,8 +544,17 @@ initLightTool({ ...editor, night: skyShowsNight, saveSoon: () => saveSoon(), say
     const boxes = [...document.querySelectorAll('#menuShow input[data-kind]')];
     // In the Things tool everything shows, whatever is ticked: the button says so.
     const label = () => {
-        $('btnShow').textContent = thingsTool.active ? 'Show: all (Things tool)' : `Show (${thingsTool.shown.size})`;
+        $('btnShow').textContent = thingsTool.active ? 'Show: all' : `Show (${thingsTool.shown.size + (sceneryTicked ? 1 : 0)})`;
     };
+    const scenery = $('showScenery');
+    scenery.checked = sceneryTicked;
+    const setScenery = on => {
+        scenery.checked = sceneryTicked = on;
+        store.set(SCENERY_KEY, on ? 'on' : 'off');
+        showScenery();
+        label();
+    };
+    scenery.onchange = () => setScenery(scenery.checked);
     showLabel = label;
     for (const cb of boxes) {
         cb.checked = thingsTool.shown.has(cb.dataset.kind);
@@ -552,7 +569,7 @@ initLightTool({ ...editor, night: skyShowsNight, saveSoon: () => saveSoon(), say
             cb.checked = on;
             thingsTool.setShown(cb.dataset.kind, on);
         }
-        label();
+        setScenery(on);
     };
     // Imported buildings: cut the roofs and upper floors away to see inside (the height is kept in this browser).
     const cutOn = $('showCut'),
