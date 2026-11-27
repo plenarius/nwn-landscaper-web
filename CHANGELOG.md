@@ -7,6 +7,12 @@ not released yet wait in `changelog.d/`, a file each, until the release puts the
 
 ## 0.7.0
 
+- **Every area has a band of ground round it, shown past its edge in the game.** 50 m beyond each side, drawn round the area in
+  place of the old extruded edge. Raise, Lower, Smooth, Flatten and Paint shape and paint it where the brush reaches past the
+  edge, with undo; the area's water runs on into it where its ground is lower. A new area, and an old one when it is opened, gets
+  a first fill that carries its edge straight out, as the game's edge scenery showed it before. An export sends it as the
+  area's halo, and the engine draws it past the edge in the game. A cave or an interior has none. Needs the engine's `halo`
+  (nwn-landscaper #78 and its band export).
 - **The Ambience tool (A) places particles.** A palette of the particle pack's kinds; **Fill** puts the ticked ones where the
   area calls for them (mist on water, more where it is wide; spray where water drops; leaves under trees; fireflies on grass
   near water; motes and light shafts in gaps in the trees and at cave mouths; sand on dune crests; snow on ridges; ground fog in
