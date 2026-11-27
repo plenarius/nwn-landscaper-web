@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { SHARPNESS, TEXTURE_METRES, triplanarGlsl, uv, weights } = await import('../js/triplanar.js');
+const { SHARPNESS, TEXTURE_METRES, metresOf, triplanarGlsl, uv, weights } = await import('../js/triplanar.js');
 
 const close = (a, b) => Math.abs(a - b) < 1e-6;
 
@@ -53,6 +53,12 @@ test('each projection keeps one repeat to 4 m of the ground it faces', () => {
     assert.deepEqual(uv(1, [4, 8, 2]), [1, 0.5]);
 });
 
+test('a texture whose catalog entry says so covers more metres a repeat: cliff rock 8', () => {
+    assert.deepEqual(uv(0, [4, 8, 2], 8), [1, 0.25]);
+    assert.equal(metresOf({ metres: 8 }), 8);
+    for (const entry of [undefined, {}, { metres: 0 }, { metres: 'x' }, { metres: 100 }]) assert.equal(metresOf(entry), 4);
+});
+
 test('the view’s GLSL has the same projections, v negated for its texture array, and the same sharpness', () => {
     const glsl = triplanarGlsl('vN', 'vA', 'vU');
     assert.match(glsl, new RegExp(`pow\\(abs\\(triN\\), vec3\\(${SHARPNESS}\\.0\\)\\)`));
@@ -60,8 +66,13 @@ test('the view’s GLSL has the same projections, v negated for its texture arra
     assert.match(glsl, /vec3 triS = normalize\(vN\);/);
     assert.match(glsl, /cross\(dFdx\(vec3\(vA, vU\)\), dFdy\(vec3\(vA, vU\)\)\)/);
     assert.match(glsl, /triN = mix\(triN, triS, smoothstep\(0\.90, 0\.98, abs\(dot\(triN, triS\)\)\)\);/);
-    assert.match(glsl, /vec2 triX = vec2\(vA\.y, -vU\) \/ 4\.0;/);
-    assert.match(glsl, /vec2 triY = vec2\(vA\.x, -vU\) \/ 4\.0;/);
-    assert.match(glsl, /vec2 triZ = vec2\(vA\.x, -vA\.y\) \/ 4\.0;/);
-    assert.match(glsl, /vec3\(triX, layer\)\) \* triW\.x \+ .*vec3\(triY, layer\)\) \* triW\.y \+ .*vec3\(triZ, layer\)\) \* triW\.z/);
+    assert.match(glsl, /vec2 triX = vec2\(vA\.y, -vU\);/);
+    assert.match(glsl, /vec2 triY = vec2\(vA\.x, -vU\);/);
+    assert.match(glsl, /vec2 triZ = vec2\(vA\.x, -vA\.y\);/);
+    // Each layer at its own metres a repeat (TRI_METRES, which the view defines from its layer table), 4 m when not defined.
+    assert.match(glsl, /#ifndef TRI_METRES\s+#define TRI_METRES\(layer\) 4\.0\s+#endif/);
+    assert.match(
+        glsl,
+        /vec3\(triX \/ TRI_METRES\(layer\), layer\)\) \* triW\.x \+ .*vec3\(triY \/ TRI_METRES\(layer\), layer\)\) \* triW\.y \+ .*vec3\(triZ \/ TRI_METRES\(layer\), layer\)\) \* triW\.z/,
+    );
 });

@@ -19,7 +19,7 @@ import { fogRange } from './atmosphere.js';
 import { BOUNCE, shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { lightTexels, LIGHT_HEIGHT, LIGHT_RADIUS } from './lights.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
-import { triplanarGlsl } from './triplanar.js';
+import { metresOf, triplanarGlsl } from './triplanar.js';
 import { AmbienceLayer } from './ambienceview.js';
 import { SOFT_GLSL, SoftGrid, edgeOf, seed } from './softpaint.js';
 
@@ -28,9 +28,10 @@ const GRASS_HIGH = new THREE.Color(0x7d9b4a);
 const ROCK = new THREE.Color(0x8a8378);
 const BLOCKED = new THREE.Color(0xc0503c);
 const WHITE = new THREE.Color(1, 1, 1);
-/** The soft paint's layer table (uLayers, softpaint.js): 256 texels, each palette index's edge, mean luminance and noise seed. */
+/** The layer table (uLayers): 256 texels a row, a palette index each. Row 0, the soft paint's (softpaint.js): its edge, mean
+ *  luminance and noise seed; row 1: in r, the metres one repeat of its texture covers (triplanar.js, TRI_METRES). */
 const layersTexture = () => {
-    const t = new THREE.DataTexture(new Float32Array(256 * 4), 256, 1, THREE.RGBAFormat, THREE.FloatType);
+    const t = new THREE.DataTexture(new Float32Array(256 * 2 * 4), 256, 2, THREE.RGBAFormat, THREE.FloatType);
     t.needsUpdate = true;
     return t;
 };
@@ -531,7 +532,7 @@ export class View {
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    `#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nuniform sampler2D uSoft;\nuniform vec2 uSoftN;\nuniform float uSoftOrigin;\nuniform sampler2D uLayers;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;${SOFT_GLSL}`,
+                    `#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nuniform sampler2D uSoft;\nuniform vec2 uSoftN;\nuniform float uSoftOrigin;\nuniform sampler2D uLayers;\n#define TRI_METRES(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).r\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;${SOFT_GLSL}`,
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`)
                 .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${LIGHTS_FRAGMENT}`);
@@ -707,7 +708,7 @@ export class View {
     }
 
     /** Each palette index's edge (the catalog's; an import's is crisp), mean luminance (`luma`, by layer; the import's
-     *  `importLuma` at `importAt`) and noise seed, for the soft paint's edges. */
+     *  `importLuma` at `importAt`) and noise seed, for the soft paint's edges; and the metres a repeat of its texture covers. */
     setLayers(luma, importLuma, importAt) {
         const data = this.uniforms.uLayers.value.image.data;
         data.fill(0);
@@ -718,6 +719,7 @@ export class View {
             data[k * 4 + 1] = k === importAt && importLuma != null ? importLuma : (luma?.[k] ?? 0.5);
             data[k * 4 + 2] = s & 0xffff;
             data[k * 4 + 3] = s >>> 16;
+            data[(256 + k) * 4] = metresOf(this.library.byId.get(id));
         }
         this.uniforms.uLayers.value.needsUpdate = true;
     }
