@@ -179,6 +179,15 @@ Two rules of this repository's own, as Biome plugins in `lint/`:
 - Every request to the engine goes through `api()` in `js/api.js`, which sends the `X-Landscaper: 1` header the engine
   checks. Another site's page can't send that header, so the engine can refuse requests that don't carry it.
 
+In the desktop app (the engine's
+[DESIGN-desktop-app.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/DESIGN-desktop-app.md)) the window opens
+the editor at `/?app`, which `js/desktop.js` reads. There the page shows no "How to start the engine" link, says to restart the
+app when its engine stops answering, and has a Help menu (the handbook, the data folder, the log), Area, Game folders…, and a
+place in the version menu for the update item. Each of those items sends `POST /api/app/open` with `{"what": "data"}`, `"log"`
+or `"folders"` to the engine inside the app, which opens the folder or the log with the system, or shows the app's page for the
+game's folders, and answers 204 (else `{ "error" }`). `KEEP_BUFFER_ON_MAC` in `js/desktop.js` keeps the 3D view's drawing
+buffer in the app on macOS, if a real Mac shows the view empty without it.
+
 `tests/lint.test.js` runs each plugin on its fixture in `lint/fixtures/` (with `biome` on the PATH): the lines marked
 `// flagged` must be found and no others, so a pattern that stops matching after a Biome upgrade fails the tests.
 

@@ -95,6 +95,13 @@
 .top-btn.icon-only .lbl {
     display: none;
 }
+/* A narrow window (a laptop's, the app's): Check paths and Export show their icons only, so Share and Help stay in the bar. */
+@media (max-width: 1400px) {
+    #btnCheck .lbl,
+    #btnExport .lbl {
+        display: none;
+    }
+}
 
 /* The Things panel's kind chips carry the colour that kind has in the view. */
 #thingKinds button::before {

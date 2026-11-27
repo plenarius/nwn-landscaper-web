@@ -10,6 +10,7 @@
 
 import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
+import { KEEP_BUFFER } from './desktop.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK } from './area.js';
 import { REACH, groundNormals } from './normals.js';
@@ -205,7 +206,7 @@ const SKY_TOP = 90,
 export class View {
     constructor(container) {
         this.container = container;
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: KEEP_BUFFER });
         this.renderer.localClippingEnabled = true;
         // Imported tiles' roofs and upper floors: cut away above this height (null: whole).
         this.cut = null;
