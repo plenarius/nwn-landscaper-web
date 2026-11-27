@@ -12,6 +12,7 @@ import { showReport, showError } from './report.js';
 import { web } from './web.js';
 import { downloadExport } from './webdemo.js';
 import { shadersForExport } from './gamefolder.js';
+import { exportBlocked } from './missing.js';
 
 /** What app.js gives this file (initExport): `area()`, `readOnly()` and `view`. */
 let ctx = null;
@@ -82,6 +83,12 @@ export function initExport(c) {
     $('btnExport').onclick = async () => {
         if (ctx.readOnly()) return;
         if (!ctx.area()) return;
+        // Textures the library hasn't got: the engine would refuse the area anyway; this says which, and how to fix it.
+        const blocked = exportBlocked();
+        if (blocked) {
+            showError(blocked, 'Export refused');
+            return;
+        }
         const btn = $('btnExport');
         btn.disabled = true;
         const a = ctx.area();

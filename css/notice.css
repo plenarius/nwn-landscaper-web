@@ -4,7 +4,8 @@
 /* The line over the view without the engine, and the keyboard's focus ring. */
 
 /* Without the engine: one line over the view saying what still works, with a link to how to start it. */
-#noEngine {
+#noEngine,
+#missingTex {
     position: absolute;
     left: 50%;
     bottom: 44px;
@@ -22,19 +23,29 @@
     font-size: 14px;
     z-index: 20;
 }
-#noEngine[hidden] {
+#noEngine[hidden],
+#missingTex[hidden] {
     display: none;
 }
 #noEngine b {
     color: var(--warn);
 }
-#noEngine span {
+/* Textures the library hasn't got (missing.js): the export is refused until they are added or swapped. */
+#missingTex {
+    border-color: var(--missing);
+}
+#missingTex b {
+    color: var(--missing);
+}
+#noEngine span,
+#missingTex span {
     color: var(--muted);
 }
 #noEngine a {
     color: var(--accent);
 }
-#noEngineClose {
+#noEngineClose,
+#missingTexClose {
     position: absolute;
     right: 8px;
     top: 4px;

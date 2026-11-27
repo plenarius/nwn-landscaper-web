@@ -351,6 +351,13 @@
         <button type="button" id="noEngineClose" title="Hide this" aria-label="Hide this">×</button>
     </div>
 
+    <div id="missingTex" role="alert" hidden>
+        <b>Textures missing from the library.</b>
+        <span id="missingTexWhy"></span>
+        <button type="button" id="missingTexFix">Add or swap them…</button>
+        <button type="button" id="missingTexClose" title="Hide this" aria-label="Hide this">×</button>
+    </div>
+
     <footer id="status">
         <span id="statusPos">Left-drag to sculpt or paint · right-drag to turn · middle-drag to move · wheel to zoom · arrows move, Shift+arrows turn, +/- zoom, Home top-down, F frame</span>
         <span id="who"></span>
@@ -552,6 +559,18 @@
             <div id="packsList" class="packs-list"></div>
             <progress id="packsBar" max="1" aria-label="Install progress" hidden></progress>
             <p id="packsStatus" class="note" role="status" aria-live="polite"></p>
+            <div class="dialog-buttons"><button type="submit" value="cancel">Close</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="missingDialog" aria-labelledby="missingTitle">
+        <form method="dialog">
+            <h2 id="missingTitle">Textures missing from the library</h2>
+            <p class="note" id="missingDialogWhy"></p>
+            <div id="missingAdd"></div>
+            <p class="note">Or swap each for a texture the library has: its ground keeps its shape, painted with that one. Undo takes a swap back.</p>
+            <div id="missingList"></div>
+            <p id="missingStatus" class="note" role="status" aria-live="polite"></p>
             <div class="dialog-buttons"><button type="submit" value="cancel">Close</button></div>
         </form>
     </dialog>

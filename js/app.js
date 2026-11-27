@@ -66,6 +66,7 @@ import {
 } from './save.js';
 import { initLive, showLive, checkSoon } from './live.js';
 import { initExport } from './export.js';
+import { initMissing, showMissing } from './missing.js';
 
 /** An icon from icons.js: fixed SVG markup, written in this repository (no data reaches it). */
 function setIcon(e, name) {
@@ -315,6 +316,7 @@ initMixPanel({
 async function loadLibrary() {
     if (engine.up && (await library.load())) view.setLibrary(library);
     buildPalette();
+    showMissing();
 }
 
 // The eyedropper: click the ground to paint with what is there. Ground you painted gives its library texture; the ground of an
@@ -374,16 +376,16 @@ async function pickTexture(p, add = false) {
     if (r.added) say(`${$('statusMsg').textContent} It is in the Tileset textures now.`);
 }
 
-// A texture pack installed or removed: the library again, the view's textures, and the palette. A texture painted with that
-// left gives way to the default.
-initPacks({
-    changed: async () => {
-        await library.load();
-        view.setLibrary(library);
-        if (!stillThere(library.catalog, paintTexture)) paintTexture = DEFAULT_TEXTURE;
-        buildPalette();
-    },
-});
+// A texture pack installed or removed, or starter textures added (missing.js): the library again, the view's textures, and the
+// palette. A texture painted with that left gives way to the default; one the open area lacks shows as missing.
+async function libraryChanged() {
+    await library.load();
+    view.setLibrary(library);
+    if (!stillThere(library.catalog, paintTexture)) paintTexture = DEFAULT_TEXTURE;
+    buildPalette();
+    showMissing();
+}
+initPacks({ changed: libraryChanged });
 
 initPlace(editor);
 
@@ -594,6 +596,7 @@ function setArea(a, blank = false) {
     $('areaInfo').title = $('areaInfo').textContent;
     $('report').hidden = true;
     showAreaSky(a);
+    showMissing();
     if (tool === 'entrance' && !skyOpen) showEntrances();
     if (tool === 'ambience' && !skyOpen) showAmbienceTool();
     if (tool === 'light' && !skyOpen) showLightTool();
@@ -710,8 +713,10 @@ function refreshAll() {
     view.updateLights();
     if (tool === 'light' && !skyOpen) showLightTool();
     refreshSky();
+    showMissing();
     saveSoon();
 }
+initMissing({ ...editor, library, refresh: refreshAll, reload: libraryChanged });
 let areaLists = null;
 $('btnSettings').onclick = async () => {
     if (!area || readOnly) return;

@@ -201,3 +201,46 @@ dialog div:where(.dialog-buttons) button.primary {
 #packsBar[hidden] {
     display: none;
 }
+
+/* Textures missing from the library (missing.js): a row each, its checker, its id and share, and what to swap it for. */
+#missingDialog {
+    width: min(620px, calc(100vw - 32px));
+}
+#missingDialog .note {
+    color: var(--muted);
+}
+#missingAdd {
+    margin: 4px 0 12px;
+}
+.missing-row {
+    display: grid;
+    grid-template-columns: 28px minmax(110px, 1fr) minmax(0, 1.4fr) auto;
+    gap: 4px 10px;
+    align-items: center;
+    padding: 6px 0;
+    border-top: 1px solid var(--panel-2);
+}
+.missing-row select {
+    min-width: 0;
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 4px;
+}
+#missingAdd button.primary {
+    background: var(--accent);
+    color: #1d1a12;
+    font-weight: 600;
+}
+.missing-why {
+    grid-column: 3 / 5;
+    font-size: 12px;
+}
+.missing-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    background: repeating-conic-gradient(#ff00ff 0 25%, #140014 0 50%) 0 0 / 14px 14px;
+}
