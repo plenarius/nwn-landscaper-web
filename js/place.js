@@ -133,7 +133,7 @@ export function groundUnder(o, flat) {
 
 /** What the editor says when a placeable is kept from the band. */
 export const NO_PLACEABLE_PAST_EDGE =
-    'A placeable stays inside the area: the game has no objects past its edge. Baked scenery can stand on the band there (choose Baked).';
+    'A placeable stays inside the area: the game has no objects past its edge. Scenery can stand on the band there: choose Bake into terrain.';
 
 /** Where object `o` may stand when asked for (x, y): baked scenery anywhere on the area or its band (keepPlaced), a placeable
  *  inside the area, saying so when it is held back. */
