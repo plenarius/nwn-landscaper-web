@@ -6,7 +6,7 @@
 // the game (its halo), as a canvas piece draws its neighbours. Its grid is the area's with BAND samples more on each side, the
 // area's own samples in its middle (kept a copy of the area's: the area's grids are the ones edited and undone there).
 
-import { SPACING, WET_DEPTH, toBase64, fromBase64 } from './area.js';
+import { SPACING, dryShallows, toBase64, fromBase64 } from './area.js';
 
 /** Samples beyond each side: 5 tiles, 50 m, as far as the game's scene reaches past an area. */
 export const BAND = 80;
@@ -20,6 +20,8 @@ export class Band {
         this.heights = heights ?? new Float32Array(this.nx * this.ny);
         this.materials = materials ?? new Uint8Array(this.nx * this.ny);
         this.waterLevel = new Float32Array(this.nx * this.ny).fill(NaN);
+        // The water's surface, the shallows included (the area's surfaceLevel).
+        this.surfaceLevel = new Float32Array(this.nx * this.ny).fill(NaN);
     }
 
     /** The first fill: each sample takes the height and paint of the area's sample nearest it, so the area's ground carries
@@ -73,11 +75,11 @@ export class Band {
         return a + (b - a) * ty;
     }
 
-    /** Each sample's water level (NaN: dry): the area's bodies flooded over the band as the engine floods them over its halo (a
-     *  lake at the edge runs on into the band as far as its ground is lower). */
+    /** Each sample's water surface and level (NaN: dry): the area's bodies flooded over the band as the engine floods them over
+     *  its halo (a lake at the edge runs on into the band as far as its ground is lower). */
     floodWater(area) {
         const { n, nx, ny, heights: h } = this,
-            level = this.waterLevel.fill(NaN),
+            level = this.surfaceLevel.fill(NaN),
             wet = new Uint8Array(nx * ny);
         for (const body of area.water) {
             wet.fill(0);
@@ -99,7 +101,7 @@ export class Band {
                 if (y + 1 < ny) stack.push(k + nx);
             }
         }
-        for (let k = 0; k < level.length; k++) if (level[k] - h[k] < WET_DEPTH) level[k] = NaN;
+        dryShallows(level, h, this.waterLevel);
     }
 
     toJSON() {
