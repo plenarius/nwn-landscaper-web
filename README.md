@@ -37,18 +37,16 @@ the calls in nwn-landscaper's [REVIEW-SERVICE.md](https://github.com/plenarius/n
 
 ## Install
 
-Download the archive for your system from nwn-landscaper's
-[releases](https://github.com/plenarius/nwn-landscaper/releases): Windows (x86-64), macOS (Apple silicon and Intel) or Linux
-(x86-64). It holds the engine and this editor of the same release, in `web/` beside the program. Unpack it anywhere and start the
-program in it: `landscaper.exe` on Windows, `landscaper` on macOS and Linux. Your browser opens the editor at
-<http://127.0.0.1:8765/>. Close the program's window to stop it. `QUICKSTART.txt` in the archive says what to set when it can't
-find the game.
+Install the Landscaper app from nwn-landscaper's [releases](https://github.com/plenarius/nwn-landscaper/releases): an installer
+for Windows (`-setup.exe`), a `.dmg` for macOS, and an AppImage or a `.deb` for Linux. It opens this editor in a window of its
+own, with the engine inside it. The handbook's
+[Getting started](https://plenarius.github.io/nwn-landscaper/handbook/getting-started/) has a page for each system. The Windows
+and macOS downloads are signed (and notarized by Apple on macOS).
 
-The builds are not signed:
-
-- **macOS** refuses the program the first time. Open System Settings, Privacy & Security, and click **Open Anyway**. On macOS 14 and
-  older, right-click the program and choose **Open**. Or run `xattr -dr com.apple.quarantine` on the unpacked folder.
-- **Windows** SmartScreen may say it protected your PC. Click **More info**, then **Run anyway**.
+Each release also has the program alone, for the command line, a server or your own browser: an archive with the engine and this
+editor in `web/` beside it. Unpack it anywhere and start `landscaper.exe` on Windows or `landscaper` on macOS and Linux; your
+browser opens the editor at <http://127.0.0.1:8765/>. Close the program's window to stop it. `QUICKSTART.txt` in the archive
+says what to set when it can't find the game.
 
 To run this page from a checkout instead, see "Run" below.
 
@@ -202,6 +200,9 @@ there ([CONTRIBUTING.md](CONTRIBUTING.md)). A release's pull request folds them 
 `scripts/changelog.sh release X.Y.Z`, as the engine's does; the engine's README ("Releases") has the rest of a release.
 Between releases the editor says `+dev` after the last release's version beside its title while `changelog.d/` holds an entry
 (the engine lists them at `/changelog.d/`) or CHANGELOG.md starts with `## Unreleased`.
+
+A change a builder sees also updates the handbook page that covers it, in nwn-landscaper's `docs/handbook/`: a pull request
+there, linked from this one ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 `node --test 'tests/*.test.js'` (Node 24) runs the tests, without a browser: `tests/browser.js` gives the page's modules a
 stand-in for the page, the browser's storage and the engine, and swaps the modules that draw or ask for the stubs in
