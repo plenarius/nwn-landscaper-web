@@ -271,16 +271,16 @@ test('in the browser an area over 16 by 16 asks first; up to it, and on the desk
 const { AREA_ORIGINS, areaLink, freeName } = await import('../js/webdemo.js');
 
 test("an ?area= link opens a file of the page's own site only", () => {
-    const page = 'https://plenarius.github.io/nwn-landscaper/try/';
-    const here = ['https://plenarius.github.io'];
+    const page = 'https://landscaper.layonara.com/try/';
+    const here = ['https://landscaper.layonara.com'];
     assert.equal(
         areaLink('?area=../assets/showcase/areas/lsvale.json', page, here)?.href,
-        'https://plenarius.github.io/nwn-landscaper/assets/showcase/areas/lsvale.json',
+        'https://landscaper.layonara.com/assets/showcase/areas/lsvale.json',
     );
     assert.equal(areaLink('?area=/x/a.json', page, here)?.pathname, '/x/a.json');
     assert.equal(areaLink('?area=https://example.com/a.json', page, here), null, 'another site');
     assert.equal(areaLink('?area=//example.com/a.json', page, here), null, 'another site, no scheme');
-    assert.equal(areaLink('?area=http://plenarius.github.io/a.json', page, here), null, 'another scheme');
+    assert.equal(areaLink('?area=http://landscaper.layonara.com/a.json', page, here), null, 'another scheme');
     assert.equal(areaLink('?area=data:application/json,{}', page, here), null);
     assert.equal(areaLink('?area=', page, here), null);
     assert.equal(areaLink('?review=a/b', page, here), null);

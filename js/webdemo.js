@@ -181,7 +181,7 @@ export async function downloadExport(report) {
 }
 
 /** The handbook's page for installing the app on each system. */
-export const DESKTOP_URL = 'https://plenarius.github.io/nwn-landscaper/handbook/getting-started/';
+export const DESKTOP_URL = 'https://landscaper.layonara.com/handbook/getting-started/';
 
 /** Sets up the browser's items when the engine runs in this page; does nothing otherwise. `ctx`: area(), setArea(a). */
 export function initWebDemo(ctx) {
