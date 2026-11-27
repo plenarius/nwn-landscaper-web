@@ -7,7 +7,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { SHARPNESS, TEXTURE_METRES, metresOf, triplanarGlsl, uv, weights } = await import('../js/triplanar.js');
+const {
+    SHARPNESS,
+    TEXTURE_METRES,
+    VARY_CELLS,
+    cellOffset,
+    hexCells,
+    metresOf,
+    shade,
+    triplanarGlsl,
+    uv,
+    varied,
+    variedGlsl,
+    varyOf,
+    weights,
+} = await import('../js/triplanar.js');
 
 const close = (a, b) => Math.abs(a - b) < 1e-6;
 
@@ -66,13 +80,59 @@ test('the view’s GLSL has the same projections, v negated for its texture arra
     assert.match(glsl, /vec3 triS = normalize\(vN\);/);
     assert.match(glsl, /cross\(dFdx\(vec3\(vA, vU\)\), dFdy\(vec3\(vA, vU\)\)\)/);
     assert.match(glsl, /triN = mix\(triN, triS, smoothstep\(0\.90, 0\.98, abs\(dot\(triN, triS\)\)\)\);/);
-    assert.match(glsl, /vec2 triX = vec2\(vA\.y, -vU\);/);
-    assert.match(glsl, /vec2 triY = vec2\(vA\.x, -vU\);/);
-    assert.match(glsl, /vec2 triZ = vec2\(vA\.x, -vA\.y\);/);
+    assert.match(glsl, /vec2 triX = vec2\(vA\.y, vU\);/);
+    assert.match(glsl, /vec2 triY = vec2\(vA\.x, vU\);/);
+    assert.match(glsl, /vec2 triZ = vec2\(vA\.x, vA\.y\);/);
     // Each layer at its own metres a repeat (TRI_METRES, which the view defines from its layer table), 4 m when not defined.
     assert.match(glsl, /#ifndef TRI_METRES\s+#define TRI_METRES\(layer\) 4\.0\s+#endif/);
     assert.match(
         glsl,
-        /vec3\(triX \/ TRI_METRES\(layer\), layer\)\) \* triW\.x \+ .*vec3\(triY \/ TRI_METRES\(layer\), layer\)\) \* triW\.y \+ .*vec3\(triZ \/ TRI_METRES\(layer\), layer\)\) \* triW\.z/,
+        /triVaried\(triX \/ TRI_METRES\(layer\), layer, TRI_VARY\(layer\)\) \* triW\.x \+ .*triVaried\(triY \/ TRI_METRES\(layer\), layer, TRI_VARY\(layer\)\) \* triW\.y \+ .*triVaried\(triZ \/ TRI_METRES\(layer\), layer, TRI_VARY\(layer\)\) \* triW\.z/,
     );
+    // The game's v runs up, the texture array's rows down: negated at the fetch, after the cells are found in the game's terms.
+    assert.match(variedGlsl, /texture\(uTex, vec3\(uv\.x, -uv\.y, layer\)\)/);
+});
+
+test('a varied repeat: three cells share a point, each keeps its slot, and a slot changes cell only where its share is 0', () => {
+    for (const p of [
+        [0.1, 0.2],
+        [3.7, -2.25],
+        [10.5, 7.33],
+    ]) {
+        const cells = hexCells(p, VARY_CELLS);
+        assert.ok(
+            close(
+                cells.reduce((t, c) => t + c[1], 0),
+                1,
+            ),
+            `${p}`,
+        );
+        for (const [slot, [v]] of cells.entries()) assert.equal((((v[0] + 2 * v[1]) % 3) + 3) % 3, slot);
+    }
+    for (let x = 0; x < 400; x++) {
+        const [a, b] = [hexCells([x * 0.01, 0.37], 2), hexCells([x * 0.01 + 0.0001, 0.37], 2)];
+        for (let s = 0; s < 3; s++) if (a[s][0].join() !== b[s][0].join()) assert.ok(a[s][1] < 1e-3 && b[s][1] < 1e-3, `${x}`);
+    }
+});
+
+test('a varied repeat keeps a flat colour, breaks a grid, and matches landscaper’s numbers', () => {
+    const flat = varied([1.3, 2.7], VARY_CELLS, () => [0.4, 0.5, 0.6]);
+    assert.ok(
+        flat.every((c, k) => close(c, [0.4, 0.5, 0.6][k])),
+        `${flat}`,
+    );
+    const dot = (u, v) => (((u % 1) + 1) % 1 < 0.1 && ((v % 1) + 1) % 1 < 0.1 ? [1, 1, 1] : [0, 0, 0]);
+    const lit = [...Array(8).keys()].map(k => varied([k + 0.05, 0.05], VARY_CELLS, dot)[0] > 0.5);
+    assert.ok(
+        lit.some(l => !l),
+        `${lit}`,
+    );
+    assert.ok(close(cellOffset([3, 5])[0], Math.sin(3 * 1.7 + 5 * 3.1)) && close(cellOffset([3, 5])[1], Math.sin(3 * 2.3 - 5 * 1.3 + 0.7)));
+    assert.ok(shade([123, 45, 6]) > 0.9 && shade([123, 45, 6]) < 1.1);
+    // On for natural ground and rock, off for laid surfaces, unless the entry says; cells by the picture's own repeats.
+    assert.equal(varyOf({}, 'broken'), 1.5);
+    assert.equal(varyOf({ repeats: 2 }, 'broken'), 3);
+    assert.equal(varyOf({}, 'crisp'), 0);
+    assert.equal(varyOf({ vary: false }, 'broken'), 0);
+    assert.equal(varyOf({ vary: true }, 'crisp'), 1.5);
 });
