@@ -7,11 +7,14 @@
 // `<img>` or a texture loader are plain GETs and can't carry it.
 
 import { IN_APP } from './desktop.js';
+import { web } from './web.js';
 
 /** What api() answers when the engine can't be reached (stopped, or the network dropped); the app starts its own engine. */
 const NO_ANSWER = IN_APP
     ? 'The engine inside the app did not answer: restart the app. Its log, landscaper.log in the data folder, says what went wrong.'
-    : 'The Landscaper engine did not answer: is `landscaper serve` still running?';
+    : web.on
+      ? 'The engine in this page did not answer: reload the page.'
+      : 'The Landscaper engine did not answer: is `landscaper serve` still running?';
 
 /**
  * Whether the engine is there: `up` is false once a request got no answer, or /api/me (asked at start) found the page served by
@@ -34,7 +37,9 @@ const CHANGE_NOTHING = new Set(['/api/view-as', '/api/check']);
 /** What a tool that needs the engine says when it isn't there. */
 export const NEEDS_ENGINE = IN_APP
     ? 'This needs the engine inside the app, which stopped answering: restart the app. Sculpting works without it.'
-    : 'This needs the Landscaper engine (landscaper serve), which is not running: sculpting works without it.';
+    : web.on
+      ? "This needs the engine, which couldn't start in this browser: sculpting works without it."
+      : 'This needs the Landscaper engine (landscaper serve), which is not running: sculpting works without it.';
 
 /** A JSON answer's body, or `{}` when it has none (an error page, an empty answer). `res` is a fetch() Response. */
 export const json = res => res.json().catch(() => ({}));

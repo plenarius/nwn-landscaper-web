@@ -63,3 +63,28 @@
 :is(#scriptDialog, #importDialog).no-game .dialog-buttons > :not([data-close], [value="cancel"]) {
     display: none;
 }
+
+/* The engine starting in the browser (try/page.js): a card over the page until it is ready. */
+.web-start {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(20, 24, 30, 0.92);
+    z-index: 100;
+}
+.web-start > div {
+    width: min(420px, calc(100vw - 32px));
+    padding: 20px 24px;
+    background: rgba(38, 44, 52, 0.98);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    text-align: center;
+}
+.web-start h2 {
+    margin: 0 0 10px;
+    font-weight: 400;
+}
+.web-start small {
+    color: var(--muted);
+}

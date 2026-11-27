@@ -31,6 +31,8 @@ import { initSky, showAreaSky, refreshSky, skyShowsNight } from './sky.js';
 import { initLightTool, showLightTool, lightPair } from './lighttool.js';
 import { initMenus } from './menus.js';
 import { initDesktop } from './help.js';
+import { initWebDemo } from './webdemo.js';
+import { web } from './web.js';
 import { showVersion } from './version.js';
 import { initActivity } from './activity.js';
 import { initPublish } from './publish.js';
@@ -200,8 +202,10 @@ function buildPalette() {
     const body = $('paletteBody');
     body.textContent = '';
     if (!library.catalog.length) {
-        body.innerHTML =
-            '<p>No texture library. Run the page from <code>landscaper serve</code>: it builds a starter library from your game files the first time (or run <code>landscaper textures init</code>).</p>';
+        if (web.on) body.append(el('p', { textContent: "No texture library: the engine in this page didn't start." }));
+        else
+            body.innerHTML =
+                '<p>No texture library. Run the page from <code>landscaper serve</code>: it builds a starter library from your game files the first time (or run <code>landscaper textures init</code>).</p>';
         return;
     }
     const categories = categoriesOf(library.catalog);
@@ -640,7 +644,8 @@ function showButtons() {
     $('sepFile').hidden = $('btnActivity').hidden;
     $('btnVersion').hidden = !(me.team && me.versions);
     // Publish opens pull requests through a review service when there is one; without it, it makes a package to download.
-    $('btnPublish').hidden = !((me.team && me.publish) || me.package);
+    // (Not in the browser: a package is a module's source files for a team, and the page's export is its download.)
+    $('btnPublish').hidden = !((me.team && me.publish) || me.package) || web.on;
     $('btnPublish').querySelector('span').textContent = me.package ? 'Package for your module…' : 'Publish to the team…';
     // Its dialog says the same: a package to download, or pull requests for the team.
     $('pubTitle').textContent = me.package ? 'Package for your module' : 'Publish to the team';
@@ -749,6 +754,9 @@ $('btnRedo').onclick = () => {
 
 // The New area dialog (newarea.js).
 initNewArea({ setArea, thingsTool, library });
+
+// The engine in this browser (webdemo.js): Download area, Open area from a file, Help's source link.
+initWebDemo({ area: () => area, setArea });
 
 // Import heightmap (heightmap.js): the whole ground changes, so all of it is redrawn and saved.
 initHeightmap({

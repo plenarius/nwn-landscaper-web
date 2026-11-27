@@ -76,6 +76,34 @@ program, then `nwn-landscaper-web` and `../nwn-landscaper-web` (or `landscaper-w
 you start it; or pass `--web <folder>` (or set `LANDSCAPER_WEB`). `--port` changes the port. nwn-landscaper's
 [SELF-HOSTING.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/SELF-HOSTING.md) covers a team server.
 
+### In a browser, with no engine to run
+
+The page can also run the engine itself, built for WebAssembly, with nothing to install: nwn-landscaper's
+[DESIGN-web-demo.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/DESIGN-web-demo.md). It has none of the
+game's files, so it paints with the demo's own textures, and Place, Scatter, Things, Scripts and Import say they need the game.
+To make that page from a checkout:
+
+```bash
+scripts/try-site.sh /tmp/try ../nwn-landscaper/target/wasm32-wasip1/wasm/landscaper.wasm ../nwn-landscaper/packs/demo
+cd /tmp/try && python3 -m http.server 8000    # http://127.0.0.1:8000/
+```
+
+The engine is `landscaper.wasm` from a release's `landscaper-wasm.zip`, or built by nwn-landscaper's `scripts/build-wasm.sh`.
+`try-site.sh` copies in only the editor's own files, the engine and the pack's listed pictures, and writes `try/site.json`;
+`js/start.js` finds that file and starts the engine before the editor (from `landscaper serve` there is none). Then:
+
+- `try/page.js` starts the Service Worker (`sw.js`) and a Worker of the page's own (`try/worker.js`) that runs the engine, once
+  for each request, through [browser_wasi_shim](https://github.com/bjorn3/browser_wasi_shim) (`try/engine.js`). The Service
+  Worker hands the editor's requests (`/api/...`, `textures/...`) to the page, which passes them to its Worker: the editor and
+  the engine's HTTP interface are the same as on the desktop.
+- The engine's data folder (areas, the texture library) is kept in the browser's private storage for the site (OPFS,
+  `try/opfs.js`): read at the start, and what a request changed written back before its answer. Exports stay in memory. The
+  first visit builds the texture library from the pack's pictures (about 2.5 s); later visits read it back.
+- File has **Download area** and **Open area from a file**, since the browser's storage is no backup; Export downloads a zip of
+  the module and its haks (`try/zip.js`). The engine gets stand-ins for the few game files it reads (`try/standins.js`), made
+  in code, none of them the game's.
+- One tab at a time: a second tab waits until the first is closed, since both would write the same files.
+
 The page needs WebGL. Without a GPU (e.g. a remote desktop), start a separate browser window with software rendering:
 
 ```bash
@@ -207,6 +235,8 @@ Vendored, unmodified, each with its own `LICENSE`:
 - `vendor/three`: [three.js](https://threejs.org/) r186 (npm `three` 0.186.1: `build/three.module.js`, the
   `build/three.core.js` it imports, and `examples/jsm/controls/OrbitControls.js`), MIT.
 - `vendor/simplex-noise`: [simplex-noise](https://github.com/jwagner/simplex-noise.js) 4.0.3 (`dist/esm/simplex-noise.js`), MIT.
+- `vendor/browser_wasi_shim`: [browser_wasi_shim](https://github.com/bjorn3/browser_wasi_shim) 0.4.2 (npm
+  `@bjorn3/browser_wasi_shim`, `dist/`), MIT or Apache-2.0: runs the engine's WebAssembly in the page in the browser.
 - `vendor/codemirror`: [CodeMirror](https://codemirror.net/) 6 for the script editor, all MIT. It is one file that esbuild 0.28.2
   bundled from `codemirror` 6.0.2, `@codemirror/view` 6.43.15, `@codemirror/state` 6.7.6, `@codemirror/lint` 6.9.7,
   `@codemirror/lang-cpp` 6.0.3 and `@codemirror/theme-one-dark` 6.1.3, with the packages they pull in.

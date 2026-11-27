@@ -10,6 +10,7 @@ import { api, engine, failure, json } from './api.js';
 import { ask } from './ask.js';
 import { $, store, say } from './dom.js';
 import { checkSoon } from './live.js';
+import { web } from './web.js';
 import { copyKeys, copyOf, dropCopyOf, keepCopy } from './copies.js';
 
 export { loadCopies } from './copies.js';
@@ -236,7 +237,7 @@ async function writeArea(a, also = '') {
         if (await keepInBrowser(a, json))
             say(
                 engine.up
-                    ? `Couldn't save ${a.name} to disk (${err.message}): kept in this browser for now.`
+                    ? `Couldn't save ${a.name} ${web.on ? "in this browser's storage" : 'to disk'} (${err.message}): kept in this browser for now.`
                     : `Saved ${a.name} in this browser (no engine to save it to disk).`,
             );
         else say(`Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`);

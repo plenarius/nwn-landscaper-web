@@ -390,6 +390,9 @@ dialog button.busy:disabled {
     margin: 6px 0 4px;
     font-size: 14px;
 }
+#askLabel[hidden] {
+    display: none;
+}
 #askLabel input {
     padding: 8px 10px;
     font: inherit;

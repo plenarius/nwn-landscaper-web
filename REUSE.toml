@@ -42,6 +42,12 @@ SPDX-FileCopyrightText = "Copyright (c) 2018 Jonas Wagner"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
+path = "vendor/browser_wasi_shim/**"
+precedence = "override"
+SPDX-FileCopyrightText = "bjorn3 and the browser_wasi_shim contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+
+[[annotations]]
 path = "vendor/codemirror/**"
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (C) 2018-2021 by Marijn Haverbeke and others"

@@ -71,15 +71,28 @@ export function showReport(r, checkOnly = false) {
                               el('b', { textContent: r.added_to_module.module }),
                               ` as area ${r.added_to_module.area}: link its entrances to the others there (Entrance tool, Leads to).`,
                           ),
-                      el(
-                          'p',
-                          {},
-                          'Ready to play: ',
-                          el('b', { textContent: r.name }),
-                          ' is in your NWN modules list.',
-                          el('br'),
-                          el('code', { textContent: r.installed_module || r.module }),
-                      ),
+                      r.download
+                          ? el(
+                                'p',
+                                {},
+                                'Downloaded ',
+                                el('b', { textContent: r.download }),
+                                ": its module goes in your NWN user folder's modules folder, its haks in hak (its README says where).",
+                            )
+                          : el(
+                                'p',
+                                {},
+                                'Ready to play: ',
+                                el('b', { textContent: r.name }),
+                                ' is in your NWN modules list.',
+                                el('br'),
+                                el('code', { textContent: r.installed_module || r.module }),
+                            ),
+                      r.download &&
+                          p(
+                              'warn',
+                              "● Made without the game's files: the tiles' shaders are stand-ins, so the area doesn't draw right in the game yet. Export it from the Landscaper on your computer to play it.",
+                          ),
                   ]),
         ].filter(Boolean),
     );
