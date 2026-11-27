@@ -16,7 +16,7 @@ import { downloadExport } from './webdemo.js';
 let ctx = null;
 
 /** The area open, as landscaper serve takes it: the query string has its name and simple settings (tiles, shadow, kind, roof,
- *  clearance, module); the body is its heights (f32 a sample), each sample's palette index (u8), then JSON with its lists and
+ *  clearance, module, halo: its band's samples a side); the body is its heights (its band's, with one) (f32 a sample), each sample's palette index (u8), then JSON with its lists and
  *  objects (palette, water, chasm, lights, entrances, atmosphere, objects, things, settings, originals, ambience). */
 export function areaRequest() {
     const a = ctx.area();
@@ -35,12 +35,19 @@ export function areaRequest() {
             ambience: ambienceForExport(a),
         }),
     );
-    const heights = new Uint8Array(a.heights.buffer, a.heights.byteOffset, a.heights.byteLength);
-    const body = new Uint8Array(heights.byteLength + a.materials.byteLength + extra.byteLength);
+    // With a band, its grids (the area's in their middle): the engine's halo, drawn past the edge in the game. The chasm and the
+    // water stay in the area's own samples; the engine moves them into the larger grid.
+    const band = a.band;
+    band?.sync(a);
+    const h = band ? band.heights : a.heights,
+        paint = band ? band.materials : a.materials;
+    const heights = new Uint8Array(h.buffer, h.byteOffset, h.byteLength);
+    const body = new Uint8Array(heights.byteLength + paint.byteLength + extra.byteLength);
     body.set(heights);
-    body.set(a.materials, heights.byteLength);
-    body.set(extra, heights.byteLength + a.materials.byteLength);
+    body.set(paint, heights.byteLength);
+    body.set(extra, heights.byteLength + paint.byteLength);
     const query = new URLSearchParams({ name: a.name, tiles: a.tiles, tilesY: a.tilesY, shadow: a.shadow });
+    if (band) query.set('halo', band.n);
     if (a.enclosed()) {
         query.set('kind', a.kind);
         query.set('roof', a.roof);

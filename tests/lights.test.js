@@ -12,6 +12,9 @@ const { Area, MAX_LIGHT } = await import('../js/area.js');
 const { lightStamp, lightFill, litTiles, lightTexels, lightKind, LIGHT_COLORS, LIGHT_PRESETS } = await import('../js/lights.js');
 const { initExport, sendArea } = await import('../js/export.js');
 
+/** Bytes of heights and paint an export of `a` sends before its JSON: its band's grids, with one (band.js). */
+const grids = a => (a.band ? a.band.heights.byteLength + a.band.materials.byteLength : a.heights.byteLength + a.materials.byteLength);
+
 let open = null;
 initExport({ area: () => open, readOnly: () => false, view: { setMarkers() {} } });
 
@@ -82,7 +85,7 @@ test('an export sends a pair a tile, rows from the south, and none when every li
     open = a;
     engine.reset();
     await sendArea('check');
-    const at = a.heights.byteLength + a.materials.byteLength;
+    const at = grids(a);
     const json = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(at)));
     assert.equal(json.lights.length, 12);
     assert.deepEqual(json.lights[2], WARM, 'east tile of the south row');
@@ -90,7 +93,7 @@ test('an export sends a pair a tile, rows from the south, and none when every li
     open = Area.create('lo', 3, 'flat');
     engine.reset();
     await sendArea('check');
-    const plain = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(open.heights.byteLength + open.materials.byteLength)));
+    const plain = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(grids(open))));
     assert.equal(plain.lights, null);
 });
 
@@ -141,7 +144,7 @@ test('lights and particles in one area: each keeps its own undo step, save and e
     open = a;
     engine.reset();
     await sendArea('check');
-    const json = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(a.heights.byteLength + a.materials.byteLength)));
+    const json = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(grids(a))));
     assert.equal(json.lights.length, 9);
     assert.deepEqual(
         json.ambience.map(p => p.kind),

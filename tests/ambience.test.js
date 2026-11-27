@@ -14,6 +14,9 @@ const { kindsOf, liveOf, propose, fill, clearKinds, ambienceStamp, seeded, surfa
 );
 const { initExport, areaRequest } = await import('../js/export.js');
 
+/** Bytes of heights and paint an export of `a` sends before its JSON: its band's grids, with one (band.js). */
+const grids = a => (a.band ? a.band.heights.byteLength + a.band.materials.byteLength : a.heights.byteLength + a.materials.byteLength);
+
 /** The pack as /api/particles gives it, cut down to what the tool reads (#52's live counts and colours). */
 const PACK = {
     format: 1,
@@ -310,13 +313,13 @@ test('placements are one undo step, keep through a save, and export standing on 
     a.floodWater();
     initExport({ area: () => a, readOnly: () => false, view: { setMarkers() {} } });
     const { body } = areaRequest();
-    const sent = JSON.parse(new TextDecoder().decode(body.subarray(a.heights.byteLength + a.materials.byteLength))).ambience;
+    const sent = JSON.parse(new TextDecoder().decode(body.subarray(grids(a)))).ambience;
     assert.equal(sent.length, n + 1);
     assert.equal(sent.at(-1).z, 7);
     assert.ok(sent.slice(0, -1).every(p => p.z === 4.5));
     assert.equal(surfaceAt(a, 5, 5), 7);
     // None: none sent.
     a.ambience = [];
-    const none = JSON.parse(new TextDecoder().decode(areaRequest().body.subarray(a.heights.byteLength + a.materials.byteLength)));
+    const none = JSON.parse(new TextDecoder().decode(areaRequest().body.subarray(grids(a))));
     assert.equal(none.ambience, null);
 });

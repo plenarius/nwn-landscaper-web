@@ -114,7 +114,7 @@ const SPLAT_VERTEX = `
     vNormalArea = vec3(normal.x, -normal.z, normal.y);`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
-        vec2 f = clamp(vArea / ${SPACING.toFixed(4)}, vec2(0.0), uN - 1.0);
+        vec2 f = clamp(vArea / ${SPACING.toFixed(4)} + uOrigin, vec2(0.0), uN - 1.0);
         vec2 base = min(floor(f), uN - 2.0);
         vec2 t = f - base;
         ivec2 b = ivec2(base);
@@ -256,6 +256,8 @@ export class View {
             uMat: { value: null },
             // Samples and metres, across and up.
             uN: { value: new THREE.Vector2(2, 2) },
+            // Samples from the paint grid's first to the area's first: 0 for the area, the band's width for the band (band.js).
+            uOrigin: { value: 0 },
             uSize: { value: new THREE.Vector2(1, 1) },
             uTextured: { value: false },
             // Baked shadows (shade.js): a grid SHADE_STEP apart over the area.
@@ -295,6 +297,7 @@ export class View {
             requestAnimationFrame(loop);
             this.onFrame?.();
             if (this.dirty) this.flush();
+            if (this.bandDirty) this.updateBand();
             this.controls.update();
             this.updateFog();
             const px = this.renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
@@ -412,6 +415,7 @@ export class View {
             this.markers,
             this.water,
             this.skirt,
+            this.band,
             this.entranceGroup,
             this.objectGroup,
             this.thingGroup,
@@ -458,6 +462,7 @@ export class View {
         this.mesh.receiveShadow = true;
         this.scene.add(this.mesh);
         this.buildSkirt();
+        this.buildBand();
         this.grid = new THREE.LineSegments(
             new THREE.BufferGeometry(),
             new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }),
@@ -490,10 +495,11 @@ export class View {
         this.updateAmbience();
     }
 
-    splatMaterial() {
+    /** The ground's material; `uniforms`: the band's (its own paint grid and origin, the rest the area's). */
+    splatMaterial(uniforms = this.uniforms) {
         const material = new THREE.MeshLambertMaterial({ vertexColors: true });
         material.onBeforeCompile = shader => {
-            Object.assign(shader.uniforms, this.uniforms);
+            Object.assign(shader.uniforms, uniforms);
             shader.vertexShader = shader.vertexShader
                 .replace(
                     '#include <common>',
@@ -503,7 +509,7 @@ export class View {
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
+                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`)
                 .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${LIGHTS_FRAGMENT}`);
@@ -879,7 +885,11 @@ export class View {
         this.updateBounds(i0, i1, j0, j1);
         this.updateGrid({ i0, i1, j0, j1 });
         // (the edge scenery carries the outer rows and columns out: a fifth of a stroke's redraw, for a stroke far from them)
-        if (i0 === 0 || j0 === 0 || i1 === n - 1 || j1 === area.ny - 1) this.updateSkirt();
+        if (i0 === 0 || j0 === 0 || i1 === n - 1 || j1 === area.ny - 1) {
+            this.updateSkirt();
+            // (the band's inner edge is the area's)
+            if (area.band) this.markBand();
+        }
     }
 
     /**
@@ -1782,9 +1792,140 @@ export class View {
         geo.setIndex(index);
         this.skirt = new THREE.Mesh(geo, this.mesh.material);
         // A cave has no edge scenery.
-        this.skirt.visible = !this.area.enclosed();
+        this.skirt.visible = !this.area.enclosed() && !this.area.band;
         this.skirt.material.side = THREE.DoubleSide;
         this.scene.add(this.skirt);
+    }
+
+    /** The band round the area (band.js): its ground beyond the edge at full detail, the area's own cells left out (the area's
+     *  mesh draws them, and both share the samples on the edge, so they meet), painted from its own paint grid by the area's
+     *  shader. A little darker, as it can't be walked. */
+    buildBand() {
+        const area = this.area,
+            band = area.band;
+        this.band = null;
+        this.bandDirty = false;
+        if (!band) return;
+        const { n, nx, ny } = band;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3).fill(0.8), 3));
+        geo.setAttribute('aDeep', new THREE.BufferAttribute(new Float32Array(nx * ny), 1));
+        geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1e9), 1));
+        geo.setAttribute('aUp', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1), 1));
+        const index = [],
+            inside = (i, j) => i >= n && j >= n && i + 1 <= n + area.nx - 1 && j + 1 <= n + area.ny - 1;
+        for (let j = 0; j < ny - 1; j++)
+            for (let i = 0; i < nx - 1; i++) {
+                if (inside(i, j)) continue;
+                const a = j * nx + i;
+                // Counter-clockwise from above (rows from the south; three.js's z runs north to south).
+                index.push(a, a + 1, a + nx + 1, a, a + nx + 1, a + nx);
+            }
+        geo.setIndex(index);
+        const mat = new THREE.DataTexture(band.materials, nx, ny, THREE.RedFormat, THREE.UnsignedByteType);
+        mat.minFilter = mat.magFilter = THREE.NearestFilter;
+        mat.unpackAlignment = 1;
+        mat.needsUpdate = true;
+        this.bandUniforms = { ...this.uniforms, uMat: { value: mat }, uN: { value: new THREE.Vector2(nx, ny) }, uOrigin: { value: n } };
+        this.band = new THREE.Mesh(geo, this.splatMaterial(this.bandUniforms));
+        this.band.material.side = THREE.DoubleSide;
+        this.band.receiveShadow = true;
+        this.scene.add(this.band);
+        this.updateBand();
+    }
+
+    /** The band changed (a brush beyond the edge, the area's edge moved, an undo): redrawn at the next frame. */
+    markBand() {
+        this.bandDirty = true;
+        this.groundVersion++;
+    }
+
+    updateBand() {
+        this.bandDirty = false;
+        const area = this.area,
+            band = area.band;
+        if (!this.band || !band) return;
+        band.sync(area);
+        const { n, nx, ny, heights: h } = band,
+            sy = area.sizeY,
+            pos = this.band.geometry.attributes.position;
+        for (let j = 0, k = 0; j < ny; j++)
+            for (let i = 0; i < nx; i++, k++) pos.setXYZ(k, (i - n) * SPACING, h[k], sy - (j - n) * SPACING);
+        pos.needsUpdate = true;
+        const geo = this.band.geometry;
+        geo.computeVertexNormals();
+        const nor = geo.attributes.normal,
+            up = geo.attributes.aUp;
+        for (let v = 0; v < up.count; v++) up.setX(v, nor.getY(v));
+        up.needsUpdate = true;
+        geo.computeBoundingSphere();
+        geo.computeBoundingBox();
+        this.bandUniforms.uMat.value.needsUpdate = true;
+        this.band.visible = !area.enclosed();
+    }
+
+    /** Where the ray from `o` along `d` first meets the band (three.js's frame), or null: marched in half-metre steps over its
+     *  ground, then halved down to a centimetre. */
+    bandHit(o, d) {
+        const area = this.area,
+            band = area?.band;
+        if (!band || !this.band?.visible) return null;
+        const sy = area.sizeY,
+            r = band.offset,
+            above = t => {
+                const x = o.x + d.x * t,
+                    y = sy - (o.z + d.z * t);
+                return o.y + d.y * t - band.heightAt(x, y);
+            },
+            outside = t => {
+                const x = o.x + d.x * t,
+                    y = sy - (o.z + d.z * t);
+                return x < -r || y < -r || x > area.sizeX + r || y > sy + r;
+            };
+        const far = 4 * (r + Math.max(area.sizeX, sy)) + Math.abs(o.y);
+        let prev = 0;
+        for (let t = 0.5; t < far; t += 0.5) {
+            if (outside(t)) {
+                if (t > far / 2) break;
+                prev = t;
+                continue;
+            }
+            if (above(t) <= 0) {
+                let lo = prev,
+                    hi = t;
+                while (hi - lo > 0.01) {
+                    const mid = (lo + hi) / 2;
+                    if (above(mid) <= 0) hi = mid;
+                    else lo = mid;
+                }
+                return new THREE.Vector3(o.x + d.x * hi, o.y + d.y * hi, o.z + d.z * hi);
+            }
+            prev = t;
+        }
+        return null;
+    }
+
+    /** The band's water: a quad at the level over each of its cells beyond the area with a corner under water, as the engine
+     *  draws the halo's. */
+    addBandWater(pos) {
+        const area = this.area,
+            band = area.band,
+            { n, nx, ny, waterLevel: L } = band,
+            size = area.sizeY,
+            top = (a, b) => (Number.isNaN(b) || b < a ? a : b);
+        for (let j = 0; j < ny - 1; j++)
+            for (let i = 0; i < nx - 1; i++) {
+                if (i >= n && j >= n && i + 1 <= n + area.nx - 1 && j + 1 <= n + area.ny - 1) continue;
+                const k = j * nx + i,
+                    level = top(top(top(top(-Infinity, L[k]), L[k + 1]), L[k + nx]), L[k + nx + 1]);
+                if (level === -Infinity) continue;
+                const x0 = (i - n) * SPACING,
+                    x1 = x0 + SPACING,
+                    z0 = size - (j - n) * SPACING,
+                    z1 = z0 - SPACING;
+                pos.push(x0, level, z0, x1, level, z0, x1, level, z1, x0, level, z0, x1, level, z1, x0, level, z1);
+            }
     }
 
     updateSkirt() {
@@ -1876,6 +2017,11 @@ export class View {
                 pos.push(x0, level, z0, x1, level, z0, x1, level, z1, x0, level, z0, x1, level, z1, x0, level, z1);
             }
         }
+        if (area.band) {
+            this.addBandWater(pos);
+            this.finishWater(pos);
+            return;
+        }
         // Carried out past the edge, as the edge scenery has it.
         const D = 50;
         const quad = (x0, y0, x1, y1, l) =>
@@ -1906,6 +2052,11 @@ export class View {
         ]) {
             if (!Number.isNaN(wet(i, j))) quad(x0, y0, x1, y1, wet(i, j));
         }
+        this.finishWater(pos);
+    }
+
+    /** The water's mesh from `pos` (three vertices a triangle, three.js's frame), when there is any. */
+    finishWater(pos) {
         if (!pos.length) return;
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -1983,7 +2134,7 @@ export class View {
         const { origin, direction } = this.raycaster.ray,
             last = this.lastPick;
         if (!last || last.ground !== this.groundVersion || !last.origin.equals(origin) || !last.direction.equals(direction)) {
-            const hit = this.groundHit(origin, direction);
+            const hit = this.groundHit(origin, direction) ?? this.bandHit(origin, direction);
             this.lastPick = {
                 ground: this.groundVersion,
                 origin: origin.clone(),

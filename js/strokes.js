@@ -550,15 +550,19 @@ export function initStrokes(c) {
             const { i, j } = ctx.area().sampleAt(p.x, p.y);
             const walk = ctx.area().walkable(i, j),
                 deep = ctx.area().depth(i, j);
-            const what = ctx.area().isChasm(i, j)
-                ? 'a chasm: nobody walks here'
-                : deep > SHALLOW
-                  ? `water ${deep.toFixed(1)} m deep: too deep to walk`
-                  : deep > 0
-                    ? `shallow water ${deep.toFixed(1)} m: wading`
-                    : walk
-                      ? 'walkable'
-                      : 'too steep to walk';
+            const a = ctx.area();
+            const beyond = a.band && (p.x < 0 || p.y < 0 || p.x > a.sizeX || p.y > a.sizeY);
+            const what = beyond
+                ? 'the band round the area: shown past its edge in the game, never walked'
+                : ctx.area().isChasm(i, j)
+                  ? 'a chasm: nobody walks here'
+                  : deep > SHALLOW
+                    ? `water ${deep.toFixed(1)} m deep: too deep to walk`
+                    : deep > 0
+                      ? `shallow water ${deep.toFixed(1)} m: wading`
+                      : walk
+                        ? 'walkable'
+                        : 'too steep to walk';
             $('statusPos').textContent =
                 `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
         }
@@ -592,8 +596,25 @@ export function initStrokes(c) {
                       : stamp(ctx.area(), stroke.tool, p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
                 stroke.tool !== 'paint',
             );
+            bandStamp(stroke, p, radius, dt);
             dbg.stamps++;
             if (dbg.stamps % 10 === 0) showDebug();
         }
     };
+}
+
+/** The brushes that shape and paint the band round the area too (band.js), where they reach past its edge. */
+const BAND_TOOLS = new Set(['raise', 'lower', 'smooth', 'flatten', 'paint']);
+
+/** Stamps the band beyond the area's edge with the stroke's brush at area point `p`, as the area was stamped. */
+function bandStamp(stroke, p, radius, dt) {
+    const area = ctx.area(),
+        band = area.band;
+    if (!band || stroke.mix || !BAND_TOOLS.has(stroke.tool)) return;
+    if (p.x - radius > 0 && p.y - radius > 0 && p.x + radius < area.sizeX && p.y + radius < area.sizeY) return;
+    // (its middle the area's as it is now, so a brush across the edge reads both sides)
+    band.sync(area);
+    const o = band.offset;
+    if (stamp(band, stroke.tool, p.x + o, p.y + o, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex))
+        ctx.view.markBand();
 }

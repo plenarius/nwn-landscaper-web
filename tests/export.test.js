@@ -37,12 +37,16 @@ test('an export sends its lists in the body, and only its name and simple settin
     assert.equal(asked, 1, 'the area is read once');
     const [sent] = engine.exports;
     assert.equal(sent.path, '/api/export');
-    assert.deepEqual([...sent.query.keys()].sort(), ['module', 'name', 'shadow', 'tiles', 'tilesY']);
+    assert.deepEqual([...sent.query.keys()].sort(), ['halo', 'module', 'name', 'shadow', 'tiles', 'tilesY']);
     assert.equal(sent.query.get('name'), 'ex');
-    // Heights, then paint, then the JSON.
-    const at = a.heights.byteLength + a.materials.byteLength;
-    assert.deepEqual(new Float32Array(sent.body.slice(0, a.heights.byteLength).buffer), a.heights);
-    assert.deepEqual(sent.body.slice(a.heights.byteLength, at), a.materials);
+    // The band's heights (the area's in their middle), then its paint, then the JSON.
+    const b = a.band;
+    assert.equal(sent.query.get('halo'), String(b.n));
+    const at = b.heights.byteLength + b.materials.byteLength;
+    const heights = new Float32Array(sent.body.slice(0, b.heights.byteLength).buffer);
+    assert.deepEqual(heights, b.heights);
+    assert.equal(heights[b.n * b.nx + b.n], a.heights[0]);
+    assert.deepEqual(sent.body.slice(b.heights.byteLength, at), b.materials);
     const json = JSON.parse(new TextDecoder().decode(sent.body.slice(at)));
     assert.deepEqual(json.palette, a.palette);
     assert.deepEqual(json.water, a.water);

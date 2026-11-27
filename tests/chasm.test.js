@@ -12,6 +12,9 @@ const { Area, CHASM_DEPTH, chasmFade, CHASM_DARK } = await import('../js/area.js
 const { chasmStamp, chasmEdge } = await import('../js/tools.js');
 const { initExport, sendArea } = await import('../js/export.js');
 
+/** Bytes of heights and paint an export of `a` sends before its JSON: its band's grids, with one (band.js). */
+const grids = a => (a.band ? a.band.heights.byteLength + a.band.materials.byteLength : a.heights.byteLength + a.materials.byteLength);
+
 let open = null;
 initExport({ area: () => open, readOnly: () => false, view: { setMarkers() {} } });
 
@@ -112,7 +115,7 @@ test('an export sends the chasm as runs of samples, and none without one', async
     open = a;
     engine.reset();
     await sendArea('check');
-    const at = a.heights.byteLength + a.materials.byteLength;
+    const at = grids(a);
     const json = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(at)));
     const mask = new Uint8Array(a.nx * a.ny);
     for (const [first, count] of json.chasm) mask.fill(1, first, first + count);
@@ -120,7 +123,7 @@ test('an export sends the chasm as runs of samples, and none without one', async
     open = Area.create('pl', 3, 'flat');
     engine.reset();
     await sendArea('check');
-    const plain = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(open.heights.byteLength + open.materials.byteLength)));
+    const plain = JSON.parse(new TextDecoder().decode(engine.exports[0].body.slice(grids(open))));
     assert.equal(plain.chasm, null);
 });
 

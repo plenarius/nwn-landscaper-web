@@ -6,6 +6,7 @@
 // Rows run from the south edge (NWN y = 0) north; each row west to east,
 // the order `landscaper export` reads.
 
+import { Band } from './band.js';
 import { generateHeightMap } from './noise.js';
 import { defaultAtmosphere, copyPreset, PRESETS } from './atmosphere.js';
 
@@ -131,6 +132,10 @@ export class Area {
         this.undoStack = [];
         this.redoStack = [];
         this.undoBase = null;
+        // The band of ground round it (band.js), shown past its edge in the game; null in a cave or an interior, which have no
+        // edge scenery. And its undo base, as undoBase is the area's.
+        this.band = null;
+        this.bandBase = null;
     }
 
     /** Palette index of a texture id, adding it if new. */
@@ -197,6 +202,7 @@ export class Area {
                 for (let k = 0; k < h.length; k++) h[k] = base + ((h[k] - low) / (high - low)) * amplitude;
             }
         }
+        if (!area.enclosed()) area.band = Band.fill(area);
         return area;
     }
 
@@ -320,6 +326,10 @@ export class Area {
             }
         }
         for (let k = 0; k < level.length; k++) if (level[k] - h[k] < WET_DEPTH) level[k] = NaN;
+        if (this.band) {
+            this.band.sync(this);
+            this.band.floodWater(this);
+        }
     }
 
     /** The body of water over sample (i, j), if any (the highest); none where it is too shallow to show. */
@@ -555,7 +565,7 @@ export class Area {
      */
     beginStroke(before = null) {
         this.settle(this.undoStack.at(-1), before?.meta);
-        this.undoStack.push({ rect: null, h: null, m: null, ch: null, chNull: this.chasm === null, meta: {} });
+        this.undoStack.push({ rect: null, h: null, m: null, ch: null, chNull: this.chasm === null, meta: {}, band: null });
         if (this.undoStack.length > UNDO_STEPS) this.undoStack.shift();
         this.redoStack = [];
     }
@@ -583,6 +593,7 @@ export class Area {
      * `meta`: the fields to settle, a snapshot()'s, instead of the area's own (beginStroke's `before`).
      */
     settle(into, meta = null) {
+        this.settleBand(into);
         const now = meta ?? this,
             n = this.nx * this.ny;
         const base = this.undoBase;
@@ -613,6 +624,54 @@ export class Area {
             if (c) base.ch.set(c.subarray(a, b), a);
             else base.ch.fill(0, a, b);
         }
+    }
+
+    /** Settles what changed in the band (its samples beyond the area) since its undo base into step `into`, as settle does
+     *  the area's, then moves its base up to now. */
+    settleBand(into) {
+        const b = this.band;
+        if (!b) return;
+        const n = b.nx * b.ny;
+        if (this.bandBase?.h.length !== n) {
+            this.bandBase = { h: b.heights.slice(), m: b.materials.slice(), ch: new Uint8Array(n) };
+            return;
+        }
+        const base = this.bandBase,
+            h = bits(b.heights),
+            bh = bits(base.h);
+        let r = null;
+        for (let j = 0, k = 0; j < b.ny; j++)
+            for (let i = 0; i < b.nx; i++, k++)
+                if (!b.inArea(i, j, this) && (h[k] !== bh[k] || b.materials[k] !== base.m[k])) r = grow(r, i, j);
+        if (!r) return;
+        if (into) {
+            into.band ??= { rect: null, h: null, m: null, ch: null };
+            widen(into.band, r, base, b.nx);
+        }
+        for (let j = r.j0; j <= r.j1; j++) {
+            const a = j * b.nx + r.i0,
+                e = j * b.nx + r.i1 + 1;
+            base.h.set(b.heights.subarray(a, e), a);
+            base.m.set(b.materials.subarray(a, e), a);
+        }
+    }
+
+    /** Puts the band back to step `s`'s (its `band`, the old values of the rectangle it changed), and returns the way back. */
+    applyBand(s) {
+        const b = this.band,
+            base = this.bandBase;
+        if (!b || !s?.rect || base?.h.length !== b.nx * b.ny) return null;
+        const { i0, i1, j0, j1 } = s.rect,
+            size = (i1 - i0 + 1) * (j1 - j0 + 1),
+            back = { rect: s.rect, h: new Float32Array(size), m: new Uint8Array(size), ch: new Uint8Array(size) };
+        for (let j = j0, r = 0; j <= j1; j++)
+            for (let i = i0, k = j * b.nx + i0; i <= i1; i++, k++, r++) {
+                back.h[r] = b.heights[k];
+                back.m[r] = b.materials[k];
+                b.heights[k] = base.h[k] = s.h[r];
+                b.materials[k] = base.m[k] = s.m[r];
+            }
+        return back;
     }
 
     /** The samples whose height, paint or chasm differ from undo base `base` (i0..i1, j0..j1), null when none do. Heights are
@@ -656,7 +715,7 @@ export class Area {
     apply(s) {
         const base = this.undoBase,
             { nx, ny } = this,
-            back = { rect: s.rect, h: null, m: null, ch: null, chNull: this.chasm === null, meta: {} };
+            back = { rect: s.rect, h: null, m: null, ch: null, chNull: this.chasm === null, meta: {}, band: this.applyBand(s.band) };
         let rect = null,
             heights = null;
         // (a state with a chasm array has one again, if only of zeros, as a whole snapshot gave it back)
@@ -716,6 +775,7 @@ export class Area {
 
     // Saved in the browser between sessions.
     toJSON() {
+        this.band?.sync(this);
         return {
             name: this.name,
             tiles: this.tiles,
@@ -743,6 +803,7 @@ export class Area {
             originals: this.originals,
             created: this.created,
             underlay: this.underlay,
+            band: this.band?.toJSON() ?? null,
         };
     }
 
@@ -775,10 +836,10 @@ export class Area {
         if (o.originals)
             area.originals = { removed: o.originals.removed ?? [], moved: o.originals.moved ?? {}, edited: o.originals.edited ?? {} };
         area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;
-        if (o.water) {
-            area.water = o.water;
-            area.floodWater();
-        }
+        // (an area saved before bands gets its first fill: every area shows real ground past its edge)
+        if (!area.enclosed()) area.band = Band.fromJSON(o.band, area) ?? Band.fill(area);
+        if (o.water) area.water = o.water;
+        area.floodWater();
         return area;
     }
 }
@@ -795,13 +856,13 @@ function validLights(v, tiles) {
     return Array.isArray(v) && v.length === tiles && v.every(p => Array.isArray(p) && p.length === 2 && row(p[0]) && row(p[1]));
 }
 
-function toBase64(bytes) {
+export function toBase64(bytes) {
     let bin = '';
     for (let k = 0; k < bytes.length; k += 0x8000) bin += String.fromCharCode(...bytes.subarray(k, k + 0x8000));
     return btoa(bin);
 }
 
-function fromBase64(text) {
+export function fromBase64(text) {
     const bin = atob(text);
     const bytes = new Uint8Array(bin.length);
     for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
