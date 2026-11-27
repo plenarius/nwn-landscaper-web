@@ -86,7 +86,7 @@ test("the page's stock: a request gets its model's files first, a check every pl
     engine.routes.set('GET /try/stock/index.json', () => [index]);
     engine.routes.set('GET /try/stock/placeables.json', () => [{ placeables: [{ row: 555, model: 'tnp_tree_t11', source: 'game' }] }]);
     const site = new URL('/try/', location.href);
-    const stock = await Stock.open(site, () => {});
+    const stock = await Stock.open(site, undefined, () => {});
     assert.equal(stock.models, 2);
     const req = (method, path, b) => ({ method, path, body: b?.buffer });
     assert.deepEqual(stock.filesFor(req('GET', '/api/model/TNP_TREE_T11')), index.models.tnp_tree_t11);
@@ -108,5 +108,5 @@ test("the page's stock: a request gets its model's files first, a check every pl
     await stock.give(fake, ['plc_rock01.mdl', 'rock.tga']);
     await stock.give(fake, ['plc_rock01.mdl', 'rock.tga']);
     assert.deepEqual(put, ['user/override/plc_rock01.mdl']);
-    assert.equal(await Stock.open(new URL('/elsewhere/', location.href), () => {}), null);
+    assert.equal(await Stock.open(new URL('/elsewhere/', location.href), undefined, () => {}), null);
 });

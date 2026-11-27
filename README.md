@@ -96,6 +96,10 @@ The engine is `landscaper.wasm` from a release's `landscaper-wasm.zip`, or built
 - The engine's data folder (areas, the texture library) is kept in the browser's private storage for the site (OPFS,
   `try/opfs.js`): read at the start, and what a request changed written back before its answer. Exports stay in memory. The
   first visit builds the texture library from the pack's pictures (about 2.5 s); later visits read it back.
+- The engine and the stock placeables' files (`try/stock.js`) are kept in Cache Storage (`try/kept.js`), in a cache named by
+  their SHA-256 in `try/site.json` (`engineSha256`, `stockSha256`): later visits ask the network for neither, since GitHub
+  Pages' `max-age=600` would have the browser ask again. A new hash fetches the new files and deletes the old cache; the engine
+  is kept only when its SHA-256 is right. The editor's own files stay on the HTTP cache, so a release's editor is never stale.
 - File has **Download area** and **Open area from a file**, since the browser's storage is no backup; Export downloads a zip of
   the module and its haks (`try/zip.js`). The engine gets stand-ins for the few game files it reads (`try/standins.js`), made
   in code, none of them the game's.
