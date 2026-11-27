@@ -5,6 +5,12 @@ tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.c
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
 not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
+## 0.7.2
+
+- **Each texture at its own size.** The view draws a texture repeating every `metres` its library entry gives (4 when it
+  doesn't say), as the game's tiles do: the starter set's cliff rock, swamp rock and canyon rock repeat every 8 m
+  (plenarius/nwn-landscaper's matching change).
+
 ## 0.7.1
 
 - **The Ambience tool's kinds say which one the brush paints.** Each kind's tooltip said "The brush places it", the chosen one
