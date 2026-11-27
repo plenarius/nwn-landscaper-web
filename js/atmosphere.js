@@ -147,6 +147,21 @@ export function copyPreset(p) {
     return { preset: p.id, time: p.time, fogClip: p.fogClip, sun: { ...p.sun }, moon: { ...p.moon }, ...presetSky(p) };
 }
 
+/** How bright colour `hex` ('#rrggbb') is, 0 to 1, as typed (gamma). */
+const brightness = hex => {
+    const n = Number.parseInt(String(hex).slice(1), 16);
+    if (!Number.isFinite(n)) return 0;
+    return (0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255)) / 255;
+};
+
+/** The least light the view works in: a sun's or a moon's ambient and diffuse brightness added. The presets' nights are 0.27 to
+ *  0.36; the showcase's cave by night is 0.18, too dark to see the ground. */
+export const WORK_FLOOR = 0.3;
+
+/** How much of the view's working light stays on under light `s` (a sun's or a moon's settings) when the view shows the area's
+ *  light: none at WORK_FLOOR and over, all of it for black. Without it a dark cave opened as a black screen. */
+export const workShare = s => Math.max(0, Math.min(1, 1 - (brightness(s.ambient) + brightness(s.diffuse)) / WORK_FLOOR));
+
 /** The game's fog at the client (landscaper and Moonglow read it from its
  *  shader): linear, ending at the view distance, starting FogAmount metres
  *  nearer than 30 m from a camera kept near the player. */
