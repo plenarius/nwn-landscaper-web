@@ -15,7 +15,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW } from './area.js';
 import { waterMesh, WATER_FILM } from './watermesh.js';
 import { REACH, groundNormals } from './normals.js';
-import { fogRange } from './atmosphere.js';
+import { fogRange, workShare } from './atmosphere.js';
 import { BOUNCE, shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { lightTexels, LIGHT_HEIGHT, LIGHT_RADIUS } from './lights.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
@@ -39,6 +39,10 @@ const layersTexture = () => {
 /** The rectangle (i0..i1, j0..j1) covering rectangles `a` and `b`, either of which may be none (null or false). */
 const union = (a, b) =>
     a && b ? { i0: Math.min(a.i0, b.i0), i1: Math.max(a.i1, b.i1), j0: Math.min(a.j0, b.j0), j1: Math.max(a.j1, b.j1) } : a || b || null;
+// The working light: the view's own, when it doesn't show the area's light (setAtmosphere).
+const WORK_SUN = 2.2;
+const WORK_SKY = 1.0;
+const WORK_FOG = new THREE.Color(0x3a4048);
 // Multiplies the painted texture on ground too steep to walk.
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
 // Splat shading, as landscaper bakes it into the NWN tiles: each sample has
@@ -238,9 +242,9 @@ export class View {
         this.renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
         // The working light, and the area's own (setAtmosphere).
-        this.workSun = new THREE.DirectionalLight(0xffffff, 2.2);
+        this.workSun = new THREE.DirectionalLight(0xffffff, WORK_SUN);
         this.workSun.position.set(-0.6, 1.0, 0.5);
-        this.workSky = new THREE.HemisphereLight(0xcfe3ff, 0x3a3226, 1.0);
+        this.workSky = new THREE.HemisphereLight(0xcfe3ff, 0x3a3226, WORK_SKY);
         // The game's sun and moon shine from towards (4000, 4500, 7000).
         this.areaSun = new THREE.DirectionalLight(0xffffff, Math.PI);
         this.areaSun.position.set(4000, 7000, -4500).normalize();
@@ -335,7 +339,9 @@ export class View {
      */
     setAtmosphere(atmosphere, night) {
         const on = !!atmosphere;
-        this.workSun.visible = this.workSky.visible = !on;
+        this.workSun.visible = this.workSky.visible = true;
+        this.workSun.intensity = WORK_SUN;
+        this.workSky.intensity = WORK_SKY;
         this.areaSun.visible = this.areaAmbient.visible = this.areaBounce.visible = on;
         // (the particles' night look and night-only kinds, as the game shows them)
         if (this.night !== (on && !!night)) {
@@ -353,10 +359,16 @@ export class View {
         this.areaAmbient.color.set(s.ambient);
         this.areaSun.color.set(s.diffuse);
         this.areaBounce.groundColor.set(s.diffuse).multiplyScalar(BOUNCE);
+        // Light too dark to work in (a cave by night) keeps that share of the working light under it, its fog lifted as much.
+        const w = workShare(s);
+        this.workSun.visible = this.workSky.visible = w > 0;
+        this.workSun.intensity = WORK_SUN * w;
+        this.workSky.intensity = WORK_SKY * w;
         const f = fogRange(atmosphere, night);
         this.fog = f;
-        this.scene.fog = new THREE.Fog(new THREE.Color(f.color), f.start, f.end);
-        this.renderer.setClearColor(new THREE.Color(f.color));
+        const fog = new THREE.Color(f.color).lerp(WORK_FOG, w);
+        this.scene.fog = new THREE.Fog(fog, f.start, f.end);
+        this.renderer.setClearColor(fog);
     }
 
     /**

@@ -54,14 +54,16 @@ shutil.copy(pack / "CREDITS.md", out / "CREDITS.md")
 EOF
 
 # What the page reads first (js/start.js): where the engine and the pack are, and their SHA-256 (the pack's decides when
-# the browser builds its texture library again).
+# the browser builds its texture library again). `areaLinks`: the page opens an area its `?area=` names, which the handbook's
+# showcase looks for before it shows its "Open in Landscaper" links (editors older than that have no such key).
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 cat > "$out/try/site.json" << EOF
 {
     "engine": "landscaper.wasm",
     "engineSha256": "$(sha "$out/try/landscaper.wasm")",
     "pack": "demo/pack.json",
-    "packSha256": "$(sha "$out/try/demo/pack.json")"
+    "packSha256": "$(sha "$out/try/demo/pack.json")",
+    "areaLinks": true
 }
 EOF
 echo "$out: $(du -sh "$out" | cut -f1), $(find "$out" -type f | wc -l) files"

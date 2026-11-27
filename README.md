@@ -99,6 +99,10 @@ The engine is `landscaper.wasm` from a release's `landscaper-wasm.zip`, or built
 - File has **Download area** and **Open area from a file**, since the browser's storage is no backup; Export downloads a zip of
   the module and its haks (`try/zip.js`). The engine gets stand-ins for the few game files it reads (`try/standins.js`), made
   in code, none of them the game's.
+- A link with `?area=<address>` (the handbook's showcase) opens that area file: the page fetches it, keeps it in the browser's
+  storage and opens it, as **Open area from a file** would. Only files of the page's own site are fetched (`AREA_ORIGINS` in
+  `js/webdemo.js`). When the browser already has an area of that name, the visitor opens theirs, or the link's under a free
+  name (`lsvale2`); theirs is never replaced. `try/site.json`'s `areaLinks` tells the showcase the page can do this.
 - One tab at a time: a second tab waits until the first is closed, since both would write the same files.
 - Export asks for the visitor's game folder (`js/gamefolder.js`): its tiles' shaders are made from three of the game's
   files, which `try/shaders.js` reads from the game's keys and archives (the key's index and about 20 KB of shaders). They go

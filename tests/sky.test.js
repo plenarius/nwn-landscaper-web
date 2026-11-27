@@ -79,3 +79,19 @@ test("the area's sky survives saving and undo", () => {
     assert.equal(a.atmosphere.sky, 'swamp');
     assert.equal(a.atmosphere.skyRow, undefined);
 });
+
+const { workShare, WORK_FLOOR } = await import('../js/atmosphere.js');
+
+test("the view keeps some working light under an area's light only when it is too dark to work in", () => {
+    for (const p of PRESETS) {
+        assert.equal(workShare(p.sun), 0, `${p.id} by day`);
+        assert.ok(workShare(p.moon) <= 0.15, `${p.id} by night keeps its look`);
+    }
+    // The showcase's cave by night: its torchlit halls were a black screen.
+    const cave = workShare({ ambient: '#120c08', diffuse: '#2a1e14' });
+    assert.ok(cave > 0.3 && cave < 0.6, String(cave));
+    assert.equal(workShare({ ambient: '#000000', diffuse: '#000000' }), 1);
+    assert.equal(workShare({ ambient: '#ffffff', diffuse: '#ffffff' }), 0);
+    assert.equal(workShare({ ambient: 'nonsense', diffuse: '#000000' }), 1, 'an unreadable colour counts as black');
+    assert.ok(WORK_FLOOR > 0 && WORK_FLOOR < 1);
+});

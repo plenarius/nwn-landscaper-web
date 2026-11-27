@@ -253,9 +253,9 @@ export function initSky(c) {
             skyNight = b.dataset.night === '1';
             showSky();
         };
-    // Whether the view shows the area's light and fog (else a plain working
-    // light, no fog), remembered.
-    $('skyPreview').checked = store.get('landscaper.skyPreview') !== 'off';
+    // Whether the view shows the area's light and fog (else a plain working light, no fog), remembered. Off until the builder
+    // ticks it: an area always opens in light to work in, whatever its own (a cave by night opened black).
+    $('skyPreview').checked = store.get('landscaper.skyPreview') === 'on';
     $('skyPreview').onchange = () => {
         store.set('landscaper.skyPreview', $('skyPreview').checked ? 'on' : 'off');
         showSky();

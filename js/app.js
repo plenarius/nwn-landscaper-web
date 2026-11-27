@@ -31,7 +31,7 @@ import { initSky, showAreaSky, refreshSky, skyShowsNight } from './sky.js';
 import { initLightTool, showLightTool, lightPair } from './lighttool.js';
 import { initMenus } from './menus.js';
 import { initDesktop } from './help.js';
-import { initWebDemo } from './webdemo.js';
+import { initWebDemo, linkedArea } from './webdemo.js';
 import { web } from './web.js';
 import { showVersion } from './version.js';
 import { initActivity } from './activity.js';
@@ -933,11 +933,21 @@ let reviewArea = null;
 await loadCopies();
 if (!readOnly) await moveBrowserAreas();
 {
+    // (the browser page's ?area= link, from the showcase: that area instead of the last one)
+    let linked = null;
+    let linkFailed = null;
+    try {
+        linked = await linkedArea();
+    } catch (err) {
+        linkFailed = err;
+    }
     const current = reviewArea ?? (readOnly ? null : lastOpen());
     const local = !reviewArea && current && browserCopy(current);
     // The engine's copy when it has one, with its version: without it, Delete took the area for one saved from another tab
     // since, and its next save went unchecked.
-    const opened = current ? await openAtStart(current, local) : null;
+    const opened = linked ?? (current ? await openAtStart(current, local) : null);
     if (opened) setArea(opened);
     else showBlank();
+    if (linked) noteOpen(linked.name);
+    if (linkFailed) showError(linkFailed.message, "Couldn't open the area");
 }

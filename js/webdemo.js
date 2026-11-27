@@ -10,7 +10,7 @@ import { Area } from './area.js';
 import { ask } from './ask.js';
 import { $, el, say } from './dom.js';
 import { showError } from './report.js';
-import { flushSave, saveNew } from './save.js';
+import { browserCopies, flushSave, loadArea, saveNew } from './save.js';
 import { download, web } from './web.js';
 
 /** What the "No engine" line says when the engine couldn't start in this browser. */
@@ -52,6 +52,90 @@ export function nameFromFile(file) {
     return name || 'area';
 }
 
+/** The origins an `?area=` link may load an area from: this site's own, so no other site can make the page fetch a file. A
+ *  hosted library of areas would be added here, and to index.html's connect-src; it has to allow this page's origin (CORS). */
+export const AREA_ORIGINS = [location.origin];
+
+/** The area file `?area=` names in `search` (a page's query), as a URL from `base` (the page's address), or null when there is
+ *  none or it is from an origin `origins` doesn't list. */
+export function areaLink(search, base, origins = AREA_ORIGINS) {
+    const value = new URLSearchParams(search).get('area');
+    if (!value) return null;
+    try {
+        const url = new URL(value, base);
+        return origins.includes(url.origin) ? url : null;
+    } catch {
+        return null;
+    }
+}
+
+/** The first name from `name` that `taken` (a Set) hasn't got: `name2`, `name3`... cut to keep 9 characters at most. */
+export function freeName(name, taken) {
+    for (let n = 2; ; n++) {
+        const s = String(n);
+        const candidate = name.slice(0, 9 - s.length) + s;
+        if (!taken.has(candidate)) return candidate;
+    }
+}
+
+/** Area JSON `o` read from a file called `file`, as an Area (named from the file when it names none); throws when it isn't one. */
+function areaFrom(o, file) {
+    if (typeof o !== 'object' || !o || !o.heights) throw new Error('no heights');
+    o.name ||= nameFromFile(file);
+    return Area.fromJSON(o);
+}
+
+/** The names of the areas in this browser: the engine's, and the copies kept beside it. */
+async function areaNames() {
+    const names = new Set(browserCopies());
+    const res = await api('/api/areas');
+    if (!res.ok) throw new Error(await failure(res));
+    for (const a of (await res.json()).areas ?? []) names.add(a.name);
+    return names;
+}
+
+/**
+ * The area an `?area=` link names (the showcase's Open in Landscaper), saved into this browser, to open at the start; null when
+ * the page has no such link or the builder cancelled. Throws, saying why, when it couldn't open it (the caller shows that once
+ * an area is open, which would hide it). An area of the same name already here stays as it is: the builder opens theirs, or
+ * the link's under a free name. The link leaves the address, so a reload doesn't ask again.
+ */
+export async function linkedArea() {
+    const params = new URLSearchParams(location.search);
+    if (!web.on || !params.has('area')) return null;
+    const url = areaLink(location.search, location.href);
+    params.delete('area');
+    history.replaceState(null, '', `${location.pathname}${params.size ? `?${params}` : ''}${location.hash}`);
+    if (!url) throw new Error("The link names an area on another site, which this page doesn't open.");
+    const file = url.pathname.split('/').pop();
+    let a;
+    try {
+        // biome-ignore lint/plugin: a file of this site's (AREA_ORIGINS), not an engine request
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`.trim());
+        if (!AREA_ORIGINS.includes(new URL(res.url).origin)) throw new Error('it moved to another site');
+        a = areaFrom(await res.json(), file);
+    } catch (err) {
+        throw new Error(`${file} isn't an area this page could open (${err.message}).`);
+    }
+    if (!(await bigAreaOk(a.tiles, a.tilesY))) return null;
+    if (!(await saveNew(a))) {
+        const copy = freeName(a.name, await areaNames());
+        const answer = await ask({
+            title: 'An area of that name',
+            text: `This browser already has an area called ${a.name}. Open yours, or the one from the link as ${copy}?`,
+            ok: `Open the link's as ${copy}`,
+            cancel: `Open ${a.name}`,
+        });
+        if (answer === null) return null;
+        if (answer === false) return await loadArea(a.name);
+        a.name = copy;
+        if (!(await saveNew(a))) throw new Error(`${copy} was taken meanwhile: open the link again.`);
+    }
+    say(`Opened ${a.name} from ${file}.`);
+    return a;
+}
+
 /** Downloads the area open, as the engine keeps it. */
 async function downloadArea(ctx) {
     const a = ctx.area();
@@ -65,10 +149,7 @@ async function downloadArea(ctx) {
 async function openFile(ctx, file) {
     let a;
     try {
-        const o = JSON.parse(await file.text());
-        if (typeof o !== 'object' || !o || !o.heights) throw new Error('no heights');
-        o.name ||= nameFromFile(file.name);
-        a = Area.fromJSON(o);
+        a = areaFrom(JSON.parse(await file.text()), file.name);
     } catch (err) {
         showError(`${file.name} isn't an area the Landscaper saved (${err.message}).`, "Couldn't open the file");
         return;

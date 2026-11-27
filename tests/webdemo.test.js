@@ -267,3 +267,35 @@ test('in the browser an area over 16 by 16 asks first; up to it, and on the desk
         web.on = false;
     }
 });
+
+const { AREA_ORIGINS, areaLink, freeName } = await import('../js/webdemo.js');
+
+test("an ?area= link opens a file of the page's own site only", () => {
+    const page = 'https://plenarius.github.io/nwn-landscaper/try/';
+    const here = ['https://plenarius.github.io'];
+    assert.equal(
+        areaLink('?area=../assets/showcase/areas/lsvale.json', page, here)?.href,
+        'https://plenarius.github.io/nwn-landscaper/assets/showcase/areas/lsvale.json',
+    );
+    assert.equal(areaLink('?area=/x/a.json', page, here)?.pathname, '/x/a.json');
+    assert.equal(areaLink('?area=https://example.com/a.json', page, here), null, 'another site');
+    assert.equal(areaLink('?area=//example.com/a.json', page, here), null, 'another site, no scheme');
+    assert.equal(areaLink('?area=http://plenarius.github.io/a.json', page, here), null, 'another scheme');
+    assert.equal(areaLink('?area=data:application/json,{}', page, here), null);
+    assert.equal(areaLink('?area=', page, here), null);
+    assert.equal(areaLink('?review=a/b', page, here), null);
+    assert.equal(
+        areaLink('?area=https://library.test/a/1.json', page, [...here, 'https://library.test'])?.host,
+        'library.test',
+        'an origin the list adds',
+    );
+    assert.deepEqual(AREA_ORIGINS, [location.origin], "by default, the page's own");
+});
+
+test('a free name for a copy keeps to 9 characters and skips names taken', () => {
+    assert.equal(freeName('lsvale', new Set(['lsvale'])), 'lsvale2');
+    assert.equal(freeName('lsvale', new Set(['lsvale', 'lsvale2', 'lsvale3'])), 'lsvale4');
+    assert.equal(freeName('lsdescent', new Set(['lsdescent'])), 'lsdescen2');
+    const taken = new Set(['lsdescent', ...Array.from({ length: 8 }, (_, k) => `lsdescen${k + 2}`)]);
+    assert.equal(freeName('lsdescent', taken), 'lsdesce10');
+});
