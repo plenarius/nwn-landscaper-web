@@ -193,6 +193,14 @@
             <h4>Shadows</h4>
             <div class="slider"><label for="shadowStrength">Baked shadows</label> <output id="shadowOut"></output>
                 <input type="range" id="shadowStrength" min="0" max="1" step="0.05"></div>
+            <div id="grassBox">
+                <h4>Grass</h4>
+                <label class="check"><input type="checkbox" id="grassOn"> The game's grass <small>(on Grass textures)</small></label>
+                <div class="slider"><label for="grassDensity">Density</label> <output id="grassDensityOut"></output>
+                    <input type="range" id="grassDensity" min="1" max="10" step="0.5"></div>
+                <div class="slider"><label for="grassHeight">Height</label> <output id="grassHeightOut"></output>
+                    <input type="range" id="grassHeight" min="0.3" max="2" step="0.1"></div>
+            </div>
             <h4>View</h4>
             <div class="slider"><label for="skyClip">View distance</label> <output id="skyClipOut"></output>
                 <input type="range" id="skyClip" min="20" max="200" step="5"></div>
