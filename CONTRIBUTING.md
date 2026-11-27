@@ -21,6 +21,10 @@ Issues and pull requests are welcome. For a change to how areas are built, expor
   CHANGELOG.md itself: each pull request's own file means two of them never conflict there. The release folds the files into
   its section (`scripts/changelog.sh release X.Y.Z`); `scripts/changelog.sh preview` shows them as that section, and
   `scripts/changelog.sh check` (run by CI) checks them.
+- A change a builder sees also updates the handbook page that covers it, in the same piece of work. The handbook is
+  nwn-landscaper's [docs/handbook/](https://github.com/plenarius/nwn-landscaper/tree/master/docs/handbook), so that is a pull
+  request there, opened with this one and linked from it, with a new screenshot when the old one no longer shows the change.
+  CI warns (and doesn't fail) when a pull request adds a `changelog.d/` file, to remind you.
 - Don't change `STYLE.md` or the other shared files listed in it here alone: they are identical in every repository that
   follows it, and nwn-bake's copy is the master. `scripts/shared-files.sh` checks ours against nwn-bake's at the release
   pinned in `scripts/shared-files.sha256` (CI runs it with `--online`, which also checks the pins against nwn-bake). To take a

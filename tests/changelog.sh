@@ -85,4 +85,19 @@ run check && { echo "FAIL $name: passes a link from CHANGELOG.md's folder"; fail
 setup '# Changelog' '' '## 0.6.1' '' '- A fix.'
 run check && echo "ok   $name: entries wait without ## Unreleased" || { echo "FAIL $name: wants ## Unreleased"; failed=1; }
 
+# In a pull request: a new fragment without a change under docs/ warns about the handbook, and still passes.
+name="check, the handbook nudge"
+setup '# Changelog' '' '## 0.6.1' '' '- A fix.'
+nudge() { (cd "$tmp/r" && GITHUB_BASE_REF=master scripts/changelog.sh check 2>&1); }
+git -C "$tmp/r" init -q && git -C "$tmp/r" add -A && git -C "$tmp/r" -c user.name=t -c user.email=t@invalid commit -qm base &&
+    git -C "$tmp/r" update-ref refs/remotes/origin/master HEAD
+printf '%s\n' '- **New.** A change.' > "$tmp/r/changelog.d/c-new.md"
+git -C "$tmp/r" add -A && git -C "$tmp/r" -c user.name=t -c user.email=t@invalid commit -qm fragment
+if out=$(nudge) && [[ "$out" == *"changes nothing under docs/"* ]]; then echo "ok   $name: warns, passes"
+else echo "FAIL $name: $out"; failed=1; fi
+mkdir -p "$tmp/r/docs" && printf '%s\n' '# Page' > "$tmp/r/docs/page.md"
+git -C "$tmp/r" add -A && git -C "$tmp/r" -c user.name=t -c user.email=t@invalid commit -qm docs
+if out=$(nudge) && [[ "$out" != *"changes nothing under docs/"* ]]; then echo "ok   $name: quiet with docs/"
+else echo "FAIL $name: $out"; failed=1; fi
+
 exit "$failed"

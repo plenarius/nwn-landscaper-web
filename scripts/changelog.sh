@@ -13,7 +13,8 @@
 #   unreleased     folds the fragments into `## Unreleased` (made if missing) and deletes them, to read them in place
 #   preview        prints `## Unreleased` as the fold would make it, and changes nothing
 #   check          each fragment is a bullet list whose links start from changelog.d/. In a pull request's CI
-#                  (GITHUB_BASE_REF), warns when the pull request adds entries to CHANGELOG.md's `## Unreleased` instead.
+#                  (GITHUB_BASE_REF), warns when the pull request adds entries to CHANGELOG.md's `## Unreleased` instead, and
+#                  when it adds a fragment but changes nothing under docs/ (a change a builder sees updates the handbook).
 # Fragments fold in the order of their names (byte order), above the entries `## Unreleased` already has.
 # Exit status: 0 when it worked or the check passed, 1 otherwise, 2 for a wrong command.
 
@@ -109,6 +110,17 @@ case "$cmd" in
             if ((added)); then
                 echo "::warning file=$LOG::this pull request adds $added line(s) under ## Unreleased: put each entry in a file" \
                     "of its own in $DIR/ instead, so other pull requests don't conflict with it"
+            fi
+            # A nudge, never a failure: the builder's handbook is nwn-landscaper's docs/handbook/.
+            new=$(git diff --name-only --diff-filter=A "$from" HEAD -- "$DIR" | grep -c '\.md$')
+            if ((new)) && git diff --quiet "$from" HEAD -- docs; then
+                if [[ -d docs/handbook ]]; then
+                    where="the handbook page that covers it (docs/handbook/) in this pull request"
+                else
+                    where="the handbook page that covers it (nwn-landscaper's docs/handbook/), in a pull request there"
+                fi
+                echo "::warning::this pull request adds a changelog entry but changes nothing under docs/: if builders" \
+                    "see the change, update $where"
             fi
         fi
         exit "$bad"
