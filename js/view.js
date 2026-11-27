@@ -20,23 +20,31 @@ import { lightTexels, LIGHT_HEIGHT, LIGHT_RADIUS } from './lights.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
 import { triplanarGlsl } from './triplanar.js';
 import { AmbienceLayer } from './ambienceview.js';
+import { SOFT_GLSL, SoftGrid, edgeOf, seed } from './softpaint.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
 const ROCK = new THREE.Color(0x8a8378);
 const BLOCKED = new THREE.Color(0xc0503c);
 const WHITE = new THREE.Color(1, 1, 1);
+/** The soft paint's layer table (uLayers, softpaint.js): 256 texels, each palette index's edge, mean luminance and noise seed. */
+const layersTexture = () => {
+    const t = new THREE.DataTexture(new Float32Array(256 * 4), 256, 1, THREE.RGBAFormat, THREE.FloatType);
+    t.needsUpdate = true;
+    return t;
+};
 /** The rectangle (i0..i1, j0..j1) covering rectangles `a` and `b`, either of which may be none (null or false). */
 const union = (a, b) =>
     a && b ? { i0: Math.min(a.i0, b.i0), i1: Math.max(a.i1, b.i1), j0: Math.min(a.j0, b.j0), j1: Math.max(a.j1, b.j1) } : a || b || null;
 // Multiplies the painted texture on ground too steep to walk.
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
 // Splat shading, as landscaper bakes it into the NWN tiles: each sample has
-// a texture (an index into the area palette, stored in uMat); a point
-// blends its four surrounding samples' textures bilinearly, so painted
-// edges soften over one 0.625 m sample. Ground too steep to walk takes the
-// texture that weighs most in that blend, as landscaper cuts steep faces
-// (its split.rs; in a tie, the lower palette index). Every texture is drawn from three sides by
+// a texture (an index into the area palette, stored in uMat). Walkable
+// ground draws the paint smoothed (softpaint.js, uSoft), its edges crisp or
+// broken as the bake draws them. Ground too steep to walk takes the
+// texture that weighs most in the four samples round a point, blended
+// bilinearly, as landscaper cuts steep faces (its split.rs; in a tie, the
+// lower palette index). Every texture is drawn from three sides by
 // the ground's slope (triplanar.js), as the game's shader and landscaper's
 // bake draw it, so it keeps its size on every slope.
 // Baked shadows over the lit ground, as the game's shadow-map shader
@@ -136,6 +144,8 @@ ${triplanarGlsl('vNormalArea', 'vArea', 'vUp')}
             }
         }
         vec4 imported = texture2D(uImport, folded / uSize);
+        // (metres a pixel: worked out here, where every pixel of the ground takes the same branch)
+        float softPx = length(fwidth(vArea));
         vec4 splat;
         if (vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
             float wq[4] = float[4]((1.0 - t.x) * (1.0 - t.y), t.x * (1.0 - t.y), (1.0 - t.x) * t.y, t.x * t.y);
@@ -151,10 +161,9 @@ ${triplanarGlsl('vNormalArea', 'vArea', 'vUp')}
             }
             splat = heaviest == uImportLayer ? imported : TRIPLANAR(heaviest);
         } else {
-            splat = (m00 == uImportLayer ? imported : TRIPLANAR(m00)) * (1.0 - t.x) * (1.0 - t.y)
-                  + (m10 == uImportLayer ? imported : TRIPLANAR(m10)) * t.x * (1.0 - t.y)
-                  + (m01 == uImportLayer ? imported : TRIPLANAR(m01)) * (1.0 - t.x) * t.y
-                  + (m11 == uImportLayer ? imported : TRIPLANAR(m11)) * t.x * t.y;
+            // Walkable ground: the paint smoothed, its edges crisp or broken, as the export bakes it (softpaint.js).
+            #define SPLAT(l) ((l) == uImportLayer ? imported : TRIPLANAR(l))
+            SOFT_SPLAT(vArea, softPx, splat)
         }
         diffuseColor.rgb *= splat.rgb;
     }`;
@@ -260,6 +269,13 @@ export class View {
             uOrigin: { value: 0 },
             uSize: { value: new THREE.Vector2(1, 1) },
             uTextured: { value: false },
+            // The soft paint (softpaint.js, SoftGrid): each sample's two heaviest textures and their weights, the grid's samples,
+            // and samples from its first to the area's (the band's width when it has one).
+            uSoft: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) },
+            uSoftN: { value: new THREE.Vector2(2, 2) },
+            uSoftOrigin: { value: 0 },
+            // One texel a palette index: its edge (r: 1 broken), mean luminance (g) and noise seed (b, a: its low and high 16 bits).
+            uLayers: { value: layersTexture() },
             // Baked shadows (shade.js): a grid SHADE_STEP apart over the area.
             uShade: { value: null },
             uShadeCells: { value: new THREE.Vector2(1, 1) },
@@ -453,6 +469,7 @@ export class View {
         mat.unpackAlignment = 1;
         mat.needsUpdate = true;
         this.uniforms.uMat.value = mat;
+        this.buildSoft();
         this.uniforms.uN.value.set(nx, ny);
         this.uniforms.uSize.value.set(sizeX, sizeY);
         this.shadeDirty = null;
@@ -509,7 +526,7 @@ export class View {
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
+                    `#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nuniform sampler2D uSoft;\nuniform vec2 uSoftN;\nuniform float uSoftOrigin;\nuniform sampler2D uLayers;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;${SOFT_GLSL}`,
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`)
                 .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${LIGHTS_FRAGMENT}`);
@@ -673,6 +690,7 @@ export class View {
         this.uniforms.uImport.value = picture ?? new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1);
         this.uniforms.uImport.value.needsUpdate = !picture;
         this.uniforms.uImportLayer.value = picture ? at : -1;
+        this.setLayers(tex.userData.luma, picture && meanLuma(picture.image), at);
         const old = this.uniforms.uTex.value;
         this.uniforms.uTex.value = tex;
         old.dispose();
@@ -681,6 +699,22 @@ export class View {
             this.uniforms.uTextured.value = true;
             this.markDirty(this.everything(), false);
         }
+    }
+
+    /** Each palette index's edge (the catalog's; an import's is crisp), mean luminance (`luma`, by layer; the import's
+     *  `importLuma` at `importAt`) and noise seed, for the soft paint's edges. */
+    setLayers(luma, importLuma, importAt) {
+        const data = this.uniforms.uLayers.value.image.data;
+        data.fill(0);
+        for (const [k, id] of this.area.palette.entries()) {
+            if (k > 255) break;
+            const s = seed(id);
+            data[k * 4] = k !== importAt && edgeOf(this.library.byId.get(id)) === 'broken' ? 1 : 0;
+            data[k * 4 + 1] = k === importAt && importLuma != null ? importLuma : (luma?.[k] ?? 0.5);
+            data[k * 4 + 2] = s & 0xffff;
+            data[k * 4 + 3] = s >>> 16;
+        }
+        this.uniforms.uLayers.value.needsUpdate = true;
     }
 
     frame() {
@@ -880,6 +914,7 @@ export class View {
         }
         for (const a of [pos, gap, deep, col]) this.uploadRows(a, i0, i1, j0, j1);
         this.uploadPaint(i0, i1, j0, j1);
+        this.refreshSoft(r);
         // Only what the change reaches: on a 32×32 area each of these over the whole mesh took most of a 245 ms frame.
         this.updateNormals(i0 - REACH, i1 + REACH, j0 - REACH, j1 + REACH);
         this.updateBounds(i0, i1, j0, j1);
@@ -926,6 +961,35 @@ export class View {
         // (three.js counts a texture's ranges in RGBA components, 4 a texel, and uploads them in texels of the texture's own
         // format: one byte each here)
         for (let j = j0; j <= j1; j++) tex.addUpdateRange((j * nx + i0) * 4, (i1 - i0 + 1) * 4);
+    }
+
+    /** The soft paint (softpaint.js) for the area as it is now, sent to the GPU whole. */
+    buildSoft() {
+        this.soft = new SoftGrid(this.area, SPACING);
+        const { nx, ny, origin, out } = this.soft;
+        this.uniforms.uSoft.value.dispose();
+        const tex = new THREE.DataTexture(out, nx, ny, THREE.RGBAFormat, THREE.UnsignedByteType);
+        tex.minFilter = tex.magFilter = THREE.NearestFilter;
+        tex.needsUpdate = true;
+        this.uniforms.uSoft.value = tex;
+        this.uniforms.uSoftN.value.set(nx, ny);
+        this.uniforms.uSoftOrigin.value = origin;
+    }
+
+    /** The paint changed over area samples `r` (null: anywhere in the band): smoothed again as far as it reaches, and only that
+     *  sent to the GPU (a row at a time, as uploadPaint). */
+    refreshSoft(r) {
+        if (!this.soft?.fits(this.area)) {
+            this.buildSoft();
+            return;
+        }
+        const s = this.soft.refresh(r);
+        if (!s) return;
+        const tex = this.uniforms.uSoft.value,
+            { nx, ny } = this.soft;
+        tex.needsUpdate = true;
+        if (wholeLeft(tex, s.i0 === 0 && s.j0 === 0 && s.i1 === nx - 1 && s.j1 === ny - 1)) return;
+        for (let j = s.j0; j <= s.j1; j++) tex.addUpdateRange((j * nx + s.i0) * 4, (s.i1 - s.i0 + 1) * 4);
     }
 
     /** The samples whose ceiling or drawn height differ between ceiling fits `was` and `now` (i0..i1, j0..j1), null when none
@@ -1862,6 +1926,7 @@ export class View {
         geo.computeBoundingSphere();
         geo.computeBoundingBox();
         this.bandUniforms.uMat.value.needsUpdate = true;
+        this.refreshSoft(null);
         this.band.visible = !area.enclosed();
     }
 
@@ -2418,6 +2483,19 @@ function makeLabel(text, color) {
     );
     sprite.scale.set((0.024 * canvas.width) / canvas.height, 0.024, 1);
     return sprite;
+}
+
+/** The mean brightness (0..1, display values) of picture `image`, as the bake's means weigh it (softpaint.js). */
+function meanLuma(image) {
+    if (!image) return null;
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(image, 0, 0, 64, 64);
+    const px = ctx.getImageData(0, 0, 64, 64).data;
+    let sum = 0;
+    for (let k = 0; k < px.length; k += 4) sum += 0.3 * px[k] + 0.59 * px[k + 1] + 0.11 * px[k + 2];
+    return sum / (64 * 64 * 255);
 }
 
 /** The distance along the ray from `o` along `d` to triangle (a, b, c), seen from either side (the ground's material is
