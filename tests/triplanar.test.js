@@ -55,7 +55,11 @@ test('each projection keeps one repeat to 4 m of the ground it faces', () => {
 
 test('the view’s GLSL has the same projections, v negated for its texture array, and the same sharpness', () => {
     const glsl = triplanarGlsl('vN', 'vA', 'vU');
-    assert.match(glsl, new RegExp(`pow\\(abs\\(normalize\\(vN\\)\\), vec3\\(${SHARPNESS}\\.0\\)\\)`));
+    assert.match(glsl, new RegExp(`pow\\(abs\\(triN\\), vec3\\(${SHARPNESS}\\.0\\)\\)`));
+    // Blended by the smoothed normal vN, except at a crease, where by the face's own (from vA and vU's derivatives).
+    assert.match(glsl, /vec3 triS = normalize\(vN\);/);
+    assert.match(glsl, /cross\(dFdx\(vec3\(vA, vU\)\), dFdy\(vec3\(vA, vU\)\)\)/);
+    assert.match(glsl, /triN = mix\(triN, triS, smoothstep\(0\.90, 0\.98, abs\(dot\(triN, triS\)\)\)\);/);
     assert.match(glsl, /vec2 triX = vec2\(vA\.y, -vU\) \/ 4\.0;/);
     assert.match(glsl, /vec2 triY = vec2\(vA\.x, -vU\) \/ 4\.0;/);
     assert.match(glsl, /vec2 triZ = vec2\(vA\.x, -vA\.y\) \/ 4\.0;/);
