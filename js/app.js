@@ -66,8 +66,9 @@ import {
     unsaved,
 } from './save.js';
 import { initLive, showLive, checkSoon } from './live.js';
-import { initExport } from './export.js';
 import { initMissing, showMissing } from './missing.js';
+import { initExport } from './export.js';
+import { initMissingModels, showMissingModels } from './missingmodels.js';
 
 /** An icon from icons.js: fixed SVG markup, written in this repository (no data reaches it). */
 function setIcon(e, name) {
@@ -389,6 +390,7 @@ async function libraryChanged() {
 initPacks({ changed: libraryChanged });
 
 initPlace(editor);
+initMissingModels({ area: () => area, models });
 
 initImport({ ...editor, openArea });
 
@@ -606,6 +608,7 @@ function setArea(a, blank = false) {
     if (tool === 'ambience' && !skyOpen) showAmbienceTool();
     if (tool === 'light' && !skyOpen) showLightTool();
     if (!blank) checkSoon();
+    showMissingModels();
     underlayAreaChanged();
 }
 
@@ -628,7 +631,7 @@ async function loadMe() {
     viewing.user = me.viewing || null;
     showWho();
     showEngine();
-    showNoGame(engine.up && me.game === false);
+    showNoGame(engine.up && me.game === false, !!me.stock);
     showVersion(engine.up ? me.version : null);
 }
 

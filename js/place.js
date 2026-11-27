@@ -178,7 +178,7 @@ export async function placeDown(e, p) {
     if (hit) {
         // Its undo step is taken when the drag first moves it: a click that only selects it makes none.
         selectObject(hit);
-        return { object: hit, flat: await models.flat(hit.model), from: p, move: { dx: hit.x - p.x, dy: hit.y - p.y } };
+        return { object: hit, flat: await models.shape(hit.model), from: p, move: { dx: hit.x - p.x, dy: hit.y - p.y } };
     }
     if (e.shiftKey) {
         let best = null,
@@ -255,7 +255,7 @@ export async function changeSelected(change, step = true) {
     if (!o) return false;
     if (step) ctx.area().beginStroke();
     change(o);
-    o.z = settle(o, await models.flat(o.model));
+    o.z = settle(o, await models.shape(o.model));
     ctx.view.moveObject(o);
     saveSoon();
     return true;
@@ -280,7 +280,7 @@ export function initPlace(c) {
     transformer = new Transformer({
         view: ctx.view,
         area: () => ctx.area(),
-        flat: o => models.flat(o.model),
+        flat: o => models.shape(o.model),
         settle: (o, flat) => settle(o, flat),
         say,
         changed: (o, final) => {

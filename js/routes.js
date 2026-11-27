@@ -8,6 +8,11 @@
  *  straight there, as from one end of a long descent to the other. */
 export function liveState(report) {
     const { ok, total, long = 0 } = report.routes;
+    // (Placeables whose models the engine lacks block nothing in its check: said, but no fault of the ground.)
+    const missing = report.missing_models?.length ?? 0;
+    const unchecked = missing
+        ? ` Placeables of ${missing} model${missing > 1 ? 's' : ''} the engine doesn't have (the boxes) don't block paths in this check.`
+        : '';
     const warnings = report.warnings || [];
     const failed = total - ok - long,
         others = warnings.length - warnings.filter(w => w.kind === 'failed_route').length;
@@ -18,16 +23,17 @@ export function liveState(report) {
         return [
             'bad',
             `${failed} blocked`,
-            `${ok + long} of ${total} test routes reach their goal; red pillars mark where the ${failed} blocked ones stop.`,
+            `${ok + long} of ${total} test routes reach their goal; red pillars mark where the ${failed} blocked ones stop.${unchecked}`,
         ];
     if (others)
         return [
             'warn',
             `${others} spot${others > 1 ? 's' : ''}`,
-            `All ${total} test routes get there; orange pillars mark ${others} spot(s) to look at (Check paths explains).${tooLong}`,
+            `All ${total} test routes get there; orange pillars mark ${others} spot(s) to look at (Check paths explains).${tooLong}${unchecked}`,
         ];
-    if (long) return ['ok', 'Paths OK', `${ok} of ${total} test routes work in one click.${tooLong}`];
-    return ['ok', 'Paths OK', `All ${total} test routes work.`];
+    const state = missing ? 'warn' : 'ok';
+    if (long) return [state, 'Paths OK', `${ok} of ${total} test routes work in one click.${tooLong}${unchecked}`];
+    return [state, 'Paths OK', `All ${total} test routes work.${unchecked}`];
 }
 
 /** How many clicks routes too long for one click take, in words: "2", "2 or 3", "2 to 4". */
