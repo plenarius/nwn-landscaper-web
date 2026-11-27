@@ -10,6 +10,23 @@ import { api } from './api.js';
 
 const LAYER = 512;
 
+/** Squares a side of the missing look's checker: 1 m squares, as a layer repeats every 4 m (triplanar.js). */
+const CHECKER = 4;
+let missingPixels = null;
+
+/** The layer of a texture the library hasn't got: a magenta and black checker, as nothing on the ground looks like it. */
+export function missingLayer() {
+    if (missingPixels) return missingPixels;
+    missingPixels = new Uint8Array(LAYER * LAYER * 4);
+    const square = LAYER / CHECKER;
+    for (let y = 0; y < LAYER; y++)
+        for (let x = 0; x < LAYER; x++) {
+            const on = (Math.floor(x / square) + Math.floor(y / square)) % 2 === 0;
+            missingPixels.set(on ? [255, 0, 255, 255] : [20, 0, 20, 255], (y * LAYER + x) * 4);
+        }
+    return missingPixels;
+}
+
 /** The texture library: its catalog from the engine, and each texture's pixels at the layer size, loaded once and kept. */
 export class TextureLibrary {
     constructor() {
@@ -67,7 +84,8 @@ export class TextureLibrary {
         return this.pixels.get(id);
     }
 
-    /** A texture array with layer k = palette[k]; unknown ids are grey. */
+    /** A texture array with layer k = palette[k]. An id the library hasn't got is a magenta checker (missing.js says which):
+     *  grey passed for ground. An imported area's own ground stays grey here, as the view draws it from the import's picture. */
     async buildArray(palette) {
         const data = new Uint8Array(LAYER * LAYER * 4 * palette.length);
         // Each layer's mean brightness (display values), as the bake's soft paint reads it (softpaint.js).
@@ -86,7 +104,8 @@ export class TextureLibrary {
                     let sum = 0;
                     for (let p = 0; p < px.length; p += 4) sum += 0.3 * px[p] + 0.59 * px[p + 1] + 0.11 * px[p + 2];
                     luma[k] = sum / (LAYER * LAYER * 255);
-                } else data.fill(128, k * LAYER * LAYER * 4, (k + 1) * LAYER * LAYER * 4);
+                } else if (id.startsWith('@import:')) data.fill(128, k * LAYER * LAYER * 4, (k + 1) * LAYER * LAYER * 4);
+                else data.set(missingLayer(), k * LAYER * LAYER * 4);
             }),
         );
         const tex = new THREE.DataArrayTexture(data, LAYER, LAYER, palette.length);

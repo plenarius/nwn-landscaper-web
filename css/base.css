@@ -16,6 +16,8 @@
     /* Red text on the panels: 4.5:1 or better against --panel (#ff6a55: 5.0:1); --bad-fill is red behind white text. */
     --bad: #ff6a55;
     --bad-fill: #b8321f;
+    /* A texture the library hasn't got: the magenta of its checker on the ground (missing.js). */
+    --missing: #ff5cff;
 }
 
 * {
