@@ -14,6 +14,33 @@ const sky = (ambient, diffuse, fog, fogAmount, shadows = true) => ({ ambient, di
 
 const NIGHT = sky('#000000', '#505050', '#1e1e1e', 7);
 
+/** The looks the area's water can take (the atmosphere's `water`, which the export gives the water's meshes: a game water
+ *  texture, a tint it is multiplied by): `water` null is the rural tiles' clear water, as areas had before looks. `view` is
+ *  how the editor draws it, near enough. */
+export const WATER_LOOKS = [
+    { id: 'clear', name: 'Clear', water: null, view: { color: 0x2c6a86, opacity: 0.62 } },
+    { id: 'murky', name: 'Murky', water: { texture: 'trm02_water01', tint: '#a09880' }, view: { color: 0x403c2a, opacity: 0.88 } },
+    {
+        id: 'stagnant',
+        name: 'Stagnant green',
+        water: { texture: 'tds01_water01', tint: '#948c70' },
+        view: { color: 0x2f3a24, opacity: 0.92 },
+    },
+    { id: 'dark', name: 'Dark pool', water: { texture: 'ttf01_water01' }, view: { color: 0x1a2024, opacity: 0.85 } },
+];
+
+/** The look of area atmosphere `a`'s water: one of WATER_LOOKS, or `null` for one set by hand that matches none. */
+export function waterLook(a) {
+    const w = a?.water ?? null;
+    return WATER_LOOKS.find(l => (l.water === null ? w === null : w && l.water.texture === w.texture && l.water.tint === w.tint)) ?? null;
+}
+
+/** How the editor draws atmosphere `a`'s water: `{ color, opacity }` (a look set by hand is drawn as the look of its texture). */
+export function waterView(a) {
+    const look = waterLook(a) ?? WATER_LOOKS.find(l => l.water?.texture === a?.water?.texture) ?? WATER_LOOKS[0];
+    return look.view;
+}
+
 export const PRESETS = [
     {
         id: 'clear',
@@ -72,6 +99,7 @@ export const PRESETS = [
         fogClip: 150,
         sky: 'swamp',
         skyRow: 2,
+        water: 'murky',
         sun: sky('#4e3127', '#b4c594', '#6b844a', 10),
         moon: sky('#302821', '#425238', '#183117', 10),
     },
@@ -144,7 +172,16 @@ export function presetSky(p) {
 
 /** An area's light and fog from preset `p`: a copy, so changing it leaves the preset alone. */
 export function copyPreset(p) {
-    return { preset: p.id, time: p.time, fogClip: p.fogClip, sun: { ...p.sun }, moon: { ...p.moon }, ...presetSky(p) };
+    const water = WATER_LOOKS.find(l => l.id === p.water)?.water;
+    return {
+        preset: p.id,
+        time: p.time,
+        fogClip: p.fogClip,
+        sun: { ...p.sun },
+        moon: { ...p.moon },
+        ...presetSky(p),
+        ...(water ? { water: { ...water } } : {}),
+    };
 }
 
 /** How bright colour `hex` ('#rrggbb') is, 0 to 1, as typed (gamma). */

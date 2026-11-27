@@ -7,7 +7,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './browser.js';
 
-const { PRESETS, copyPreset, presetSky, setInstalledSkies, installedSkies } = await import('../js/atmosphere.js');
+const { PRESETS, WATER_LOOKS, copyPreset, presetSky, setInstalledSkies, installedSkies, waterLook, waterView } = await import(
+    '../js/atmosphere.js'
+);
 const { chosenSky, skyPicture } = await import('../js/sky.js');
 const { Area } = await import('../js/area.js');
 
@@ -94,4 +96,19 @@ test("the view keeps some working light under an area's light only when it is to
     assert.equal(workShare({ ambient: '#ffffff', diffuse: '#ffffff' }), 0);
     assert.equal(workShare({ ambient: 'nonsense', diffuse: '#000000' }), 1, 'an unreadable colour counts as black');
     assert.ok(WORK_FLOOR > 0 && WORK_FLOOR < 1);
+});
+
+test("the swamp's water is murky, every other preset's clear, and an area saved without a look keeps today's water", () => {
+    for (const p of PRESETS) assert.equal(waterLook(copyPreset(p)).id, p.id === 'swamp' ? 'murky' : 'clear', p.id);
+    const swamp = copyPreset(PRESETS.find(p => p.id === 'swamp'));
+    assert.deepEqual(swamp.water, { texture: 'trm02_water01', tint: '#a09880' });
+    // (a copy: changing the area's leaves the look alone)
+    swamp.water.tint = '#000000';
+    assert.equal(WATER_LOOKS.find(l => l.id === 'murky').water.tint, '#a09880');
+    assert.equal(waterLook(swamp), null);
+    assert.equal(waterView(swamp), WATER_LOOKS.find(l => l.id === 'murky').view);
+    // An area from before looks: no `water`, drawn and exported as before.
+    const old = { preset: 'swamp', time: 'cycle', fogClip: 150 };
+    assert.equal(waterLook(old).id, 'clear');
+    assert.deepEqual(waterView(old), { color: 0x2c6a86, opacity: 0.62 });
 });
