@@ -89,19 +89,25 @@ export const hexCells = (uv, cells) => {
     return out;
 };
 
+/** The least sum of the weights the shader divides by (GLSL's max(total, ...)). */
+export const VARY_FLOOR = 1e-6;
+
 /** The varied colour at `uv`: `tap(u, v)` at the three cells' offsets, blended by their shares to VARY_SHARPNESS, the brighter
- *  winning. */
+ *  winning. The shares are scaled so the largest is 1 first: in the middle of a cell's triangle each is a third, a third to the
+ *  14th is 2e-7, and the weights' sum fell under VARY_FLOOR there, darkening a dot every cell on every varied texture. */
 export const varied = (uv, cells, tap) => {
     const sum = [0, 0, 0];
     let total = 0;
-    for (const [v, w] of hexCells(uv, cells)) {
+    const around = hexCells(uv, cells);
+    const most = Math.max(...around.map(([, w]) => w));
+    for (const [v, w] of around) {
         const o = cellOffset(v);
         const c = tap(uv[0] + o[0], uv[1] + o[1]);
-        const weight = w ** VARY_SHARPNESS * (VARY_LIGHT + 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]);
+        const weight = (w / most) ** VARY_SHARPNESS * (VARY_LIGHT + 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]);
         for (let k = 0; k < 3; k++) sum[k] += c[k] * weight;
         total += weight;
     }
-    return sum.map(c => c / Math.max(total, Number.MIN_VALUE));
+    return sum.map(c => c / Math.max(total, VARY_FLOOR));
 };
 
 /** The slow change of a varied texture's brightness at area point `p` (metres), a factor about 1. */
@@ -126,6 +132,7 @@ vec4 triVaried(vec2 uv, float layer, float cells) {
     float s = 1.0 - step(0.0, fz);
     float s2 = 2.0 * s - 1.0;
     vec3 w = vec3(-fz * s2, s - f.y * s2, s - f.x * s2);
+    w /= max(w.x, max(w.y, w.z));
     vec2 v1 = b + vec2(s, s), v2 = b + vec2(s, 1.0 - s), v3 = b + vec2(1.0 - s, s);
     vec3 cls = vec3(triClass(v1), triClass(v2), triClass(v3));
     vec4 sum = vec4(0.0);
@@ -138,7 +145,7 @@ vec4 triVaried(vec2 uv, float layer, float cells) {
         sum += c * weight;
         total += weight;
     }
-    return sum / max(total, 1e-6);
+    return sum / max(total, ${g(VARY_FLOOR)});
 }
 float triShade(vec3 p) {
     return 1.0 + ${g(VARY_SHADE)} * (${SHADE_WAVES.map(([a, b, c, d]) => `0.5 * sin(p.x * ${g(a)} + p.y * ${g(b)} + p.z * ${g(c)} + ${g(d)})`).join(' + ')});

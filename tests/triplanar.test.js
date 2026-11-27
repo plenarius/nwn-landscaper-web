@@ -9,8 +9,10 @@ import assert from 'node:assert/strict';
 
 const {
     SHARPNESS,
+    SKEW,
     TEXTURE_METRES,
     VARY_CELLS,
+    VARY_FLOOR,
     cellOffset,
     hexCells,
     metresOf,
@@ -24,6 +26,12 @@ const {
 } = await import('../js/triplanar.js');
 
 const close = (a, b) => Math.abs(a - b) < 1e-6;
+
+/** The texture point (repeats, `cells` a repeat) at skewed-grid point `k`: hexCells' skew undone. */
+const unskew = (k, cells) => {
+    const sv = k[1] / SKEW[1];
+    return [(k[0] + SKEW[0] * sv) / cells, sv / cells];
+};
 
 test('flat ground is drawn from above alone', () => {
     assert.deepEqual(weights([0, 0, 1]), [0, 0, 1]);
@@ -135,4 +143,21 @@ test('a varied repeat keeps a flat colour, breaks a grid, and matches landscaper
     assert.equal(varyOf({}, 'crisp'), 0);
     assert.equal(varyOf({ vary: false }, 'broken'), 0);
     assert.equal(varyOf({ vary: true }, 'crisp'), 1.5);
+});
+
+test('a varied repeat keeps a dark colour in the middle of a cell’s triangle, where the three shares are a third each', () => {
+    // A third to the 14th is 2e-7: weighed by the shares as they are, the sum fell under the shader's floor and the middle of
+    // every triangle drew dark (dots 1.25 m apart on all natural ground, the /try/ page's lake vale).
+    for (const colour of [0.02, 0.2, 0.6]) {
+        const p = unskew([2 + 1 / 3, 3 + 1 / 3], VARY_CELLS);
+        assert.ok(
+            hexCells(p, VARY_CELLS).every(([, w]) => Math.abs(w - 1 / 3) < 1e-4),
+            `${p}`,
+        );
+        const c = varied(p, VARY_CELLS, () => [colour, colour, colour]);
+        assert.ok(close(c[0], colour), `${colour}: ${c}`);
+    }
+    // The shader scales its shares alike, and divides by no less than the same floor.
+    assert.match(variedGlsl, /w \/= max\(w\.x, max\(w\.y, w\.z\)\);/);
+    assert.ok(variedGlsl.includes(`max(total, ${VARY_FLOOR.toFixed(8)})`));
 });
