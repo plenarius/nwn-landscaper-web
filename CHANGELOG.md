@@ -5,8 +5,81 @@ tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.c
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
 not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
-## Unreleased
+## 0.7.0
 
+- **The Ambience tool (A) places particles.** A palette of the particle pack's kinds; **Fill** puts the ticked ones where the
+  area calls for them (mist on water, more where it is wide; spray where water drops; leaves under trees; fireflies on grass
+  near water; motes and light shafts in gaps in the trees and at cave mouths; sand on dune crests; snow on ridges; ground fog in
+  hollows), at a density the builder sets, with the wind's bearing for snow and sand. The brush adds the chosen kind, Shift-drag
+  clears it. The panel counts the particles alive by day and at night against the area's cap of 1,500, and Fill and the brush
+  stop there. The view draws them as moving points in each kind's colour, night-only kinds by night. The area keeps them, with
+  undo, and an export sends them as `ambience`, each standing on the ground or water as it is then. Needs the engine's
+  `/api/particles` and baked emitters.
+- **Delete works on the area the page opens at its start.** The area last open, opened again when the page starts (a reload,
+  or the browser reloading a tab it put to sleep), didn't keep which copy of it the engine had. Delete then said another tab
+  or computer had saved it when none had, until the area was opened again from File, Open, or changed. Its first save after
+  the start is checked now too.
+- **The editor in the desktop app.** Opened by the app (at `/?app`), the editor has a Help menu with the handbook, the data
+  folder and the log, and an Area, Game folders… item that shows the app's page for the game's folders again. It leaves out
+  "How to start the engine", since the app starts its engine, and says to restart the app if that engine stops answering. In a
+  browser the editor is as before. Needs the app's engine for the menu's items (the engine's step 2 of
+  [DESIGN-desktop-app.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/DESIGN-desktop-app.md)).
+- **Dig's edges are clean outdoors.** In an outdoor area a dug edge is now a steep bank (about 63°, still too steep to walk)
+  that climbs from the floor to the ground around it, instead of a saw-tooth of drops straight down that followed the grid's
+  0.625 m steps. The edge keeps its ragged outline. In a cave or an interior, Dig's walls go straight down as before.
+- **Tool keys work after Sky & fog.** A tool's letter (B Light, A Ambience and the others) picks the tool right after a click
+  on a slider, radio button or tick box in a panel, which used to swallow it until a click in the view; text and number boxes
+  still keep every key. Picking a tool closes Sky & fog, which lay over the tool's panel.
+- **A small Valley with a lake can be walked.** Its hills rose 15 m wherever the area was, so in an 8 by 8 area they made a
+  ring of slopes too steep to climb, with gaps the game can't path through: Check paths showed up to 50 blocked routes, most
+  into a corner cut off behind it. Under 16 tiles across the hills are now lower, as steep as in the 16 by 16 sample and no
+  steeper; 100 new 8 by 8 valleys had no blocked routes. The 16 by 16 sample and larger are unchanged.
+- **The Light tool (B) paints local light.** Each tile has two lights, and the tool gives the tiles under the brush two of
+  the game's 32 tile light colours (`lightcolor.2da`); Shift-drag turns them off, and Whole area and All off do the whole area
+  as one undo step. Presets per kind of area (none outdoors by day, warm pools in a village at night, cold blue in a cave, and
+  more), outlined when they suit the open area. A tile is 10 m, so this is a broad wash: lamps stay placeables. The view draws
+  the wash on the ground, and the area keeps the colours and sends them with an export as `lights`. Needs the engine of this
+  release (an older one leaves the lights off).
+- **The Light brush lights the hall the pointer is over in a cave.** A cave's rock tops are drawn black, so from a slanted
+  camera a lower hall shows through the space above the rock in front of it; the brush lit the rock's tiles there, where no
+  light shows, and the hall stayed dark (a *Descending cave*'s bottom hall, say). It now looks through rock tops to the
+  ground behind them. The other tools still stop at the rock.
+- **A long descent no longer shows as blocked.** A new *Descending cave* showed "68 blocked" in the live check, though every
+  route in it is walkable: NWN's route search gives up when the way is about 20 tiles longer than going straight there, so
+  one click from one end of the descent to the other stops, and two or three shorter clicks get there. With an engine that
+  tells these routes apart (`routes.long`), the live check says *Paths OK* and its tooltip counts them, and Check paths says
+  how many are too long for one click and how many clicks they take. Blocked routes stay red as before.
+- **Place, Scatter, Things, Scripts and Import say when they need the game.** With an engine that has none of the game's
+  files (the coming web demo; `/api/me` answers `"game": false`), each says so plainly, in place of lists that would stay
+  empty, with a **Use my game folder** button. Reading the game folder in the page comes later; for now the button says so.
+- **The snowy pass and rough hills can be walked everywhere.** The pass's cliffs rose 30 to 46 m over 26 m, eased at both
+  ends, so a lower cliff was hardly steeper than walkable ground but in its middle, and the shoulder's wandering width
+  flattened ledges into it: Check paths showed blocked routes onto them in about 1 in 6 new passes. Its cliffs now rise half
+  straight, half eased, over 16 m, too steep to climb from foot to top. Rough hills scattered small patches too steep to walk
+  over their slopes, and NWN's route search got lost among the holes they left: 15 blocked and 25 too-long routes in 32 new
+  areas. Patches under about 16 m² are now smoothed away (the hills keep their whole height). Over 24 new areas of each, both
+  have no blocked routes; the other samples are unchanged.
+- **Sky & fog picks the sky.** Each preset names its sky, so choosing a preset sets the sky too: the Preset skies pack's when it
+  is installed, else the game's nearest one. A Sky row shows the sky's picture and lists the installed skies and the game's, to
+  pick another; Area settings no longer has a sky box of its own. The 3D view draws the sky around its camera, by day or by
+  night, so the horizon looks as in the game. A new preset, Dawn, goes with the pack's Dawn haze sky, and the sample landscapes
+  take their presets' skies. Needs the engine of this release (an older one shows no pictures and keeps the area's sky box).
+- **Steep ground lit and painted as the engine exports it.** A steep face slanting across the samples, like a river's bank,
+  takes its slope over 1.25 m each way for its light, blended in between 15 and 30 degrees, as the engine now gives the game:
+  each sample's own slope swung from one to the next there and showed as dark blotches along the face. Gentler ground is lit
+  as before, and whether ground is too steep to walk still goes by each sample's own slope. Steep ground now takes the texture
+  that weighs most where the four samples around it blend, as the engine cuts it, instead of the nearest sample's.
+- **The editor can run its engine in the browser**, with nothing to install: the coming "try it" page (the engine's
+  [DESIGN-web-demo.md](https://github.com/plenarius/nwn-landscaper/blob/master/docs/DESIGN-web-demo.md)). The engine built for
+  WebAssembly runs in a Worker of the page, a Service Worker passes it the editor's requests, and the areas and the texture
+  library stay in the browser's storage between visits. File has **Download area** and **Open area from a file**; Export
+  downloads a zip of the module and its haks. `scripts/try-site.sh` makes the page from a release's engine and the demo
+  texture pack. From `landscaper serve` and the desktop app the editor is as before.
+- **A yes-or-no question no longer shows an empty text box** (Delete area, replacing an area of the same name).
+- **In the browser, Export asks for your game folder**, so the area draws right in the game: its tiles' shaders are made from
+  three small files of the game, read from your own install and kept only while the page is open. Chromium remembers the
+  folder; Firefox and Safari ask each visit. Without it the export still downloads, with a line saying it needs them.
+- **In the browser, an area over 16 by 16 asks first**: exporting it may need more memory than the browser has.
 - **Water too shallow to see is drawn dry.** Ground under less than 15 cm of water shows as dry ground, as the engine now
   exports it and the game shows it: the game draws water that shallow almost clear. A click there starts a new body of water
   instead of taking the one around it, and a body's level can't be dragged below 20 cm over the ground clicked. Needs the
