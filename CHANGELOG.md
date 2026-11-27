@@ -5,6 +5,25 @@ tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.c
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
 not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
+## 0.7.3
+
+- **Grass in the Sky & fog panel.** A tick turns on the game's own animated grass for the area, with its density and height;
+  off by default. Picking a look keeps it. It needs the engine's grass (nwn-landscaper 0.7.3 or later).
+- **The browser page opens an area from a link.** `?area=<address>` (the handbook showcase's **Open in Landscaper**) fetches
+  that area file from the page's own site, keeps it in the browser and opens it. If the browser already has an area of that
+  name, you choose to open yours or the link's under a free name; yours is never replaced.
+- **The browser page links to the desktop app.** A small "Download to desktop" badge under the title opens the handbook's
+  page on installing it for each system.
+- **Natural ground and rock hide their repeat.** The view draws a natural texture's repeat in small hex cells, each shifted its
+  own way and blended into its neighbours, with a slow change of brightness, as the game's tiles do
+  (plenarius/nwn-landscaper's matching change); laid surfaces keep their regular pattern, and a texture's `vary` in the catalog
+  sets it.
+- **Water that isn't clear.** Sky & fog has **Water**: Clear, Murky, Stagnant green or Dark pool, saved in the area's light and
+  fog (`atmosphere.water`) and drawn in its colour in the view. The Swamp look picks Murky; an area without one stays Clear.
+- **An area always opens in light to work in.** Sky & fog's **Show in the view** starts off, so an area opens in the view's
+  working light; tick it to see the area's own light and fog, and the page remembers that. Light too dark to work in (a cave by
+  night) keeps some of the working light under it, its fog lifted as much: such a cave drew as a black screen.
+
 ## 0.7.2
 
 - **Each texture at its own size.** The view draws a texture repeating every `metres` its library entry gives (4 when it
