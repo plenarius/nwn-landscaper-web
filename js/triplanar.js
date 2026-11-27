@@ -9,8 +9,15 @@
 // Area frame here: x east, y north, z up (metres). The view's texture array runs its rows top first, the game's bottom first, so
 // the view negates v (GLSL below); the functions here give the game's coordinates.
 
-/** Metres one texture repeat covers (landscaper's TEXTURE_METRES). */
+/** Metres one texture repeat covers (landscaper's TEXTURE_METRES), unless its catalog entry's `metres` says more (metresOf). */
 export const TEXTURE_METRES = 4;
+
+/** The metres one repeat of a catalog entry's picture covers: its `metres` (1 to 64; the starter set's cliff rock has 8, its fine
+ *  layers at 4 m blurring into streaks up a tall wall), else TEXTURE_METRES. As landscaper's paint.rs, `metres_of`. */
+export const metresOf = entry => {
+    const m = entry?.metres;
+    return typeof m === 'number' && m >= 1 && m <= 64 ? m : TEXTURE_METRES;
+};
 
 /** How sharply the projections blend: each weighs as the normal's part along its axis to this power (landscaper's SHARPNESS). With 4,
  *  ground at 45 degrees takes the top and a side evenly, and ground 30 degrees from flat takes 90% from the top. */
@@ -26,9 +33,9 @@ export const weights = n => {
 };
 
 /** The texture coordinates of area point `p` ([x, y, z], metres) in projection `axis` (0 along x, 1 along y, 2 from above), in
- *  repeats, as the game has them: (y, z), (x, z), (x, y). */
-export const uv = (axis, p) => {
-    const [x, y, z] = p.map(c => c / TEXTURE_METRES);
+ *  repeats of `metres` (the texture's, metresOf), as the game has them: (y, z), (x, z), (x, y). */
+export const uv = (axis, p, metres = TEXTURE_METRES) => {
+    const [x, y, z] = p.map(c => c / metres);
     return axis === 0 ? [y, z] : axis === 1 ? [x, z] : [x, y];
 };
 
@@ -39,7 +46,8 @@ export const CREASE = [0.9, 0.98];
 
 /**
  * GLSL for a fragment shader's main(): the weights `triW` from the varying `normal` (area frame) and the macro `TRIPLANAR(layer)`,
- * layer `layer` of the sampler2DArray `uTex` drawn from three sides at the area point (`area`, a vec2, and `up`, its height).
+ * layer `layer` of the sampler2DArray `uTex` drawn from three sides at the area point (`area`, a vec2, and `up`, its height), a
+ * repeat every `TRI_METRES(layer)` metres (a macro the shader defines before this; else TEXTURE_METRES).
  * At a crease the face's own normal (from the area point's screen derivatives) takes over from the smoothed one: blended by the
  * smoothed normal, flat floor at a wall's foot took the side's projection and smeared into stripes, the wall's foot the one from
  * above.
@@ -51,7 +59,10 @@ export const triplanarGlsl = (normal, area, up) => `
         triN = mix(triN, triS, smoothstep(${CREASE[0].toFixed(2)}, ${CREASE[1].toFixed(2)}, abs(dot(triN, triS))));
         vec3 triW = pow(abs(triN), vec3(${SHARPNESS.toFixed(1)}));
         triW /= triW.x + triW.y + triW.z;
-        vec2 triX = vec2(${area}.y, -${up}) / ${TEXTURE_METRES.toFixed(1)};
-        vec2 triY = vec2(${area}.x, -${up}) / ${TEXTURE_METRES.toFixed(1)};
-        vec2 triZ = vec2(${area}.x, -${area}.y) / ${TEXTURE_METRES.toFixed(1)};
-        #define TRIPLANAR(layer) (${['x', 'y', 'z'].map(a => `texture(uTex, vec3(tri${a.toUpperCase()}, layer)) * triW.${a}`).join(' + ')})`;
+        vec2 triX = vec2(${area}.y, -${up});
+        vec2 triY = vec2(${area}.x, -${up});
+        vec2 triZ = vec2(${area}.x, -${area}.y);
+        #ifndef TRI_METRES
+        #define TRI_METRES(layer) ${TEXTURE_METRES.toFixed(1)}
+        #endif
+        #define TRIPLANAR(layer) (${['x', 'y', 'z'].map(a => `texture(uTex, vec3(tri${a.toUpperCase()} / TRI_METRES(layer), layer)) * triW.${a}`).join(' + ')})`;
