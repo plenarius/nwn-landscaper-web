@@ -15,7 +15,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW } from './area.js';
 import { waterMesh, WATER_FILM } from './watermesh.js';
 import { REACH, groundNormals } from './normals.js';
-import { fogRange, workShare } from './atmosphere.js';
+import { fogRange, waterView, workShare } from './atmosphere.js';
 import { BOUNCE, shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
 import { lightTexels, LIGHT_HEIGHT, LIGHT_RADIUS } from './lights.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
@@ -2064,12 +2064,13 @@ export class View {
         geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
         geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(depth, 1));
         geo.computeVertexNormals();
+        const look = waterView(this.area.atmosphere);
         const material = new THREE.MeshPhongMaterial({
-            color: 0x2c6a86,
+            color: look.color,
             specular: 0x557788,
             shininess: 60,
             transparent: true,
-            opacity: 0.62,
+            opacity: look.opacity,
             depthWrite: false,
             side: THREE.DoubleSide,
         });

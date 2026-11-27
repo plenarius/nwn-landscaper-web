@@ -7,7 +7,7 @@
 // The sky: a preset sets it (atmosphere.js), and the Sky row shows it and offers the others, the engine's installed
 // Landscaper skies and the module's own skyboxes.2da rows (/api/skies), with a strip of its picture (/api/sky-picture/).
 
-import { PRESETS, copyPreset, installedSkies, setInstalledSkies } from './atmosphere.js';
+import { PRESETS, WATER_LOOKS, copyPreset, installedSkies, setInstalledSkies, waterLook } from './atmosphere.js';
 import { api } from './api.js';
 import { $, el, store } from './dom.js';
 
@@ -120,6 +120,9 @@ function showSky() {
     $('skyShadows').checked = s.shadows;
     $('shadowStrength').value = ctx.area().shadow;
     $('shadowOut').textContent = ctx.area().shadow > 0 ? `${Math.round(ctx.area().shadow * 100)}%` : 'off';
+    const look = waterLook(a);
+    if (!look && !$('skyWater').querySelector('option[value=""]')) $('skyWater').append(new Option('Set by hand', ''));
+    $('skyWater').value = look?.id ?? '';
     $('skyClip').value = a.fogClip;
     $('skyClipOut').textContent = `${a.fogClip} m`;
     ctx.view.setAtmosphere($('skyPreview').checked ? a : null, skyNight);
@@ -179,11 +182,24 @@ export function initSky(c) {
             step(b, false);
             ctx.area().atmosphere = copyPreset(p);
             skyNight = p.time === 'night';
+            ctx.view.updateWater();
             skyChanged();
         };
         $('skyPresets').appendChild(b);
     }
 
+    for (const l of WATER_LOOKS) $('skyWater').append(new Option(l.name, l.id));
+    // The water's look: one undo step; the preset stays (water is not part of a preset's light).
+    $('skyWater').onchange = e => {
+        const l = WATER_LOOKS.find(w => w.id === e.target.value);
+        if (!l) return;
+        step(e.target, false);
+        const a = ctx.area().atmosphere;
+        if (l.water) a.water = { ...l.water };
+        else delete a.water;
+        ctx.view.updateWater();
+        skyChanged();
+    };
     $('skyPick').onchange = e => {
         step(e.target, false);
         const a = ctx.area().atmosphere,
