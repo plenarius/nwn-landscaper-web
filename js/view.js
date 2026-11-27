@@ -1975,16 +1975,25 @@ export class View {
         }
     }
 
-    /** Area point (NWN metres) under the mouse, or null. The answer is kept while the pointer, the camera and the ground stay
-     *  as they are: the view asks every frame, and a drag asks again on each pointer move. */
-    pick(clientX, clientY) {
+    /** Area point (NWN metres) under the mouse, or null. With `open`, a cave's or an interior's rock tops (solid rock, drawn
+     *  black) are looked through to the ground behind them: the Light brush's, as only open ground can show a tile's light. The
+     *  answer is kept while the pointer, the camera and the ground stay as they are: the view asks every frame, and a drag asks
+     *  again on each pointer move. */
+    pick(clientX, clientY, open = false) {
         this.aim(clientX, clientY);
         const { origin, direction } = this.raycaster.ray,
             last = this.lastPick;
-        if (!last || last.ground !== this.groundVersion || !last.origin.equals(origin) || !last.direction.equals(direction)) {
-            const hit = this.groundHit(origin, direction);
+        if (
+            !last ||
+            last.ground !== this.groundVersion ||
+            last.open !== open ||
+            !last.origin.equals(origin) ||
+            !last.direction.equals(direction)
+        ) {
+            const hit = this.groundHit(origin, direction, open);
             this.lastPick = {
                 ground: this.groundVersion,
+                open,
                 origin: origin.clone(),
                 direction: direction.clone(),
                 point: hit && { x: hit.x, y: this.area.sizeY - hit.z, z: hit.y },
@@ -2009,11 +2018,12 @@ export class View {
     /** Where the ray from `o` along `d` first meets the ground as drawn, in three.js's frame (or null). It walks the cells the
      *  ray crosses in order (a 2D DDA over the sample grid) and tests each cell's two triangles, as PlaneGeometry splits it:
      *  three.js's raycast tests every triangle (524,288 on a 32×32 area, 41 ms a pick), this about as many cells as the ray
-     *  crosses. */
-    groundHit(o, d) {
+     *  crosses. With `open`, a triangle of rock top (each corner void, see aGap) lets the ray through. */
+    groundHit(o, d, open = false) {
         const { nx, ny, sizeX, sizeY } = this.area,
             y = this.mesh.geometry.attributes.position.array,
-            box = this.mesh.geometry.boundingBox;
+            box = this.mesh.geometry.boundingBox,
+            gap = open ? this.mesh.geometry.attributes.aGap.array : null;
         // The part of the ray over the area, between the ground's lowest and highest point.
         let t0 = 0,
             t1 = Infinity;
@@ -2047,12 +2057,22 @@ export class View {
             const v = (k * nx + i) * 3;
             return [y[v], y[v + 1], y[v + 2]];
         };
+        const rock = (...corners) => gap && corners.every(([i, k]) => gap[k * nx + i] <= VOID_BELOW);
         for (;;) {
             const a = corner(cx, cz),
                 b = corner(cx, cz + 1),
                 c = corner(cx + 1, cz + 1),
                 e = corner(cx + 1, cz);
-            const t = Math.min(rayTriangle(o, d, a, b, e), rayTriangle(o, d, b, c, e));
+            const [ka, kb, kc, ke] = [
+                [cx, cz],
+                [cx, cz + 1],
+                [cx + 1, cz + 1],
+                [cx + 1, cz],
+            ];
+            const t = Math.min(
+                rock(ka, kb, ke) ? Infinity : rayTriangle(o, d, a, b, e),
+                rock(kb, kc, ke) ? Infinity : rayTriangle(o, d, b, c, e),
+            );
             if (t < Infinity) return new THREE.Vector3().copy(o).addScaledVector(d, t);
             const across = nextX < nextZ;
             if ((across ? nextX : nextZ) > t1) return null;

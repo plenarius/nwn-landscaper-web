@@ -541,7 +541,11 @@ export function initStrokes(c) {
         if (ctx.view.selected) transformer.place(ctx.view.selected);
         ctx.thingsTool.frame();
         if (!ctx.area() || !mouse) return;
-        const p = stroke?.tool === 'chasm' ? ctx.view.pickLevel(mouse.x, mouse.y, stroke.level) : ctx.view.pick(mouse.x, mouse.y);
+        // (The Light brush looks through rock tops to the floor behind: the hall the pointer is over, not the rock in front.)
+        const p =
+            stroke?.tool === 'chasm'
+                ? ctx.view.pickLevel(mouse.x, mouse.y, stroke.level)
+                : ctx.view.pick(mouse.x, mouse.y, ctx.tool() === 'light');
         const radius = +ctx.sizeIn.value;
         ctx.view.setCursor(p, radius);
         if (p) {
