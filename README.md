@@ -40,8 +40,7 @@ the calls in nwn-landscaper's [REVIEW-SERVICE.md](https://github.com/plenarius/n
 Install the Landscaper app from nwn-landscaper's [releases](https://github.com/plenarius/nwn-landscaper/releases): an installer
 for Windows (`-setup.exe`), a `.dmg` for macOS, and an AppImage or a `.deb` for Linux. It opens this editor in a window of its
 own, with the engine inside it. The handbook's
-[Getting started](https://plenarius.github.io/nwn-landscaper/handbook/getting-started/) has a page for each system. The Windows
-and macOS downloads are signed (and notarized by Apple on macOS).
+[Getting started](https://plenarius.github.io/nwn-landscaper/handbook/getting-started/) has a page for each system.
 
 Each release also has the program alone, for the command line, a server or your own browser: an archive with the engine and this
 editor in `web/` beside it. Unpack it anywhere and start `landscaper.exe` on Windows or `landscaper` on macOS and Linux; your
