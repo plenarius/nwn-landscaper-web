@@ -30,7 +30,20 @@ function castShadow(x, y, z, height) {
     return dark;
 }
 
+/** How far the ground at (x, y) turns towards the sun, against flat ground: 1 flat or turned to it, 0 turned away (the game
+ *  lights that with its ambient light alone, so a cast shadow has nothing more to take). */
+function facing(x, y, height) {
+    const D = 0.5;
+    const gx = (height(x + D, y) - height(x - D, y)) / (2 * D),
+        gy = (height(x, y + D) - height(x, y - D)) / (2 * D);
+    const nDotL = (SUN[2] - gx * SUN[0] - gy * SUN[1]) / Math.sqrt(gx * gx + gy * gy + 1);
+    return Math.min(1, Math.max(0, nDotL / SUN[2]));
+}
+
 const STEPS = [0.5, 1, 1.75, 2.75, 4, 6, 9, 13];
+
+/** How much of the sun or moon a vertical face takes back from the ground, half of it (landscaper shared.rs, BOUNCE). */
+export const BOUNCE = 0.5;
 
 function occlusion(x, y, z, height) {
     let sum = 0;
@@ -45,10 +58,11 @@ function occlusion(x, y, z, height) {
     return sum / 8;
 }
 
-/** What the terrain does to (x, y): how much of the sun it hides (0 underground, with `sun` false) and of the sky. */
+/** What the terrain does to (x, y): how much of the sun it hides, as far as the ground faces the sun (0 underground, with
+ *  `sun` false), and of the sky. */
 function terrain(x, y, height, sun) {
     const z = height(x, y);
-    return [sun ? castShadow(x, y, z, height) : 0, occlusion(x, y, z, height)];
+    return [sun ? castShadow(x, y, z, height) * facing(x, y, height) : 0, occlusion(x, y, z, height)];
 }
 
 /** The shadow-map value from terrain()'s two: 1 unshaded; `strength` 0..1. */
