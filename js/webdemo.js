@@ -8,7 +8,7 @@
 import { api, failure } from './api.js';
 import { Area } from './area.js';
 import { ask } from './ask.js';
-import { $, say } from './dom.js';
+import { $, el, say } from './dom.js';
 import { showError } from './report.js';
 import { flushSave, saveNew } from './save.js';
 import { download, web } from './web.js';
@@ -99,6 +99,9 @@ export async function downloadExport(report) {
     return zip.name;
 }
 
+/** The handbook's page for installing the app on each system. */
+export const DESKTOP_URL = 'https://plenarius.github.io/nwn-landscaper/handbook/getting-started/';
+
 /** Sets up the browser's items when the engine runs in this page; does nothing otherwise. `ctx`: area(), setArea(a). */
 export function initWebDemo(ctx) {
     if (!web.on) return;
@@ -107,6 +110,12 @@ export function initWebDemo(ctx) {
     $('menuHelp').hidden = false;
     for (const id of ['helpData', 'helpLog', 'sepHelp']) $(id).hidden = true;
     $('helpSource').hidden = false;
+    // Under the title: where to get the app for the desktop.
+    document
+        .querySelector('#topbar .brand')
+        .append(
+            el('a', { className: 'brand-badge', href: DESKTOP_URL, target: '_blank', rel: 'noopener', textContent: 'Download to desktop' }),
+        );
     // (Texture packs come from the Internet, which the engine here can't reach yet.)
     $('btnPacks').hidden = true;
     for (const id of ['sepAreaFile', 'btnDownloadArea', 'btnOpenFile']) $(id).hidden = false;

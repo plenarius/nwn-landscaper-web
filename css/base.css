@@ -73,6 +73,22 @@ body {
     grid-area: name;
     color: var(--accent);
 }
+.brand-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 2px;
+    padding: 1px 7px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    color: var(--accent);
+    font-size: 11px;
+    line-height: 1.5;
+    text-decoration: none;
+}
+.brand-badge:hover {
+    background: var(--accent);
+    color: var(--panel);
+}
 .spacer {
     flex: 1;
 }
