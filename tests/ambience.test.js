@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// The Ambience tool (ambience.js, area.js, export.js): Fill's rules on small made-up areas, the cap, the brush, undo, the JSON
+// The Ambience tool (ambience.js, area.js, export.js): Fill's rules on small made-up areas, no cap, the brush, undo, the JSON
 // round trip and what an export sends.
 
 import { test } from 'node:test';
@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import './browser.js';
 
 const { Area, SPACING } = await import('../js/area.js');
-const { kindsOf, liveOf, propose, fill, clearKinds, ambienceStamp, seeded, surfaceAt, SUN_BEARING, AREA_LIVE_MAX } = await import(
+const { kindsOf, liveOf, propose, fill, clearKinds, ambienceStamp, seeded, surfaceAt, SUN_BEARING, AREA_LIVE_HEAVY } = await import(
     '../js/ambience.js'
 );
 const { initExport, areaRequest } = await import('../js/export.js');
@@ -234,40 +234,39 @@ test('embers over each fire', () => {
     assert.deepEqual([embers[0].x, embers[0].y], [10, 10]);
 });
 
-test("Fill replaces the ticked kinds' placements and keeps the rest, stopping at the cap", () => {
+test("Fill replaces the ticked kinds' placements and keeps the rest, never stopping on a count", () => {
     const a = lake();
     a.ambience = [{ kind: 'leaves', x: 1, y: 1, z: 5, scale: 1, seed: 1 }];
     const r = fill(a, KINDS, ['mist', 'fireflies'], { rand: seeded(11) });
-    assert.equal(r.placed, r.proposed);
+    assert.equal(r.placed, r.byKind.get('mist') + r.byKind.get('fireflies'));
     assert.equal(a.ambience[0].kind, 'leaves');
     assert.equal(a.ambience.length, 1 + r.placed);
     assert.equal(a.ambience.filter(p => p.kind === 'mist').length, r.byKind.get('mist'));
     // Again: the same kinds replaced, not added to.
     const again = fill(a, KINDS, ['mist'], { rand: seeded(12) });
     assert.equal(a.ambience.filter(p => p.kind === 'mist').length, again.placed);
-    // A cap of 200 particles: fewer placed than proposed, the live count under it by day and at night.
-    const capped = fill(a, KINDS, ['mist', 'fireflies'], { density: 2, rand: seeded(13), cap: 200 });
-    assert.ok(capped.placed < capped.proposed);
+    // Dense, past what the design calls heavy: every proposed place is kept.
+    const dense = fill(a, KINDS, ['mist', 'fireflies'], { density: 20, rand: seeded(13) });
     const live = liveOf(a.ambience, KINDS);
-    assert.ok(live.day <= 200 && live.night <= 200, JSON.stringify(live));
-    assert.ok(capped.byKind.get('mist') > 0 && capped.byKind.get('fireflies') > 0, 'both kinds, not the first one only');
-    assert.equal(clearKinds(a, ['mist', 'fireflies']), capped.placed);
+    assert.ok(Math.max(live.day, live.night) > AREA_LIVE_HEAVY, JSON.stringify(live));
+    assert.ok(dense.byKind.get('mist') > 0 && dense.byKind.get('fireflies') > 0);
+    assert.equal(clearKinds(a, ['mist', 'fireflies']), dense.placed);
     assert.deepEqual(
         a.ambience.map(p => p.kind),
         ['leaves'],
     );
 });
 
-test('the live count: night-only kinds count at night, day-only by day, and the area cap is 1,500', () => {
+test('the live count: night-only kinds count at night, day-only by day; heavy past 1,500 is a guide', () => {
     const list = [{ kind: 'fireflies' }, { kind: 'motes' }, { kind: 'mist' }, { kind: 'nothing' }];
     assert.deepEqual(liveOf(list, KINDS), { day: 48, night: 36 });
-    assert.equal(AREA_LIVE_MAX, 1500);
+    assert.equal(AREA_LIVE_HEAVY, 1500);
 });
 
-test('the brush adds the chosen kind apart from its own, Shift clears only that kind, and it stops at the cap', () => {
+test('the brush adds the chosen kind apart from its own, Shift clears only that kind, and it never stops on a count', () => {
     const a = area(4);
     const rand = seeded(14);
-    for (let k = 0; k < 60; k++) ambienceStamp(a, KINDS, kind('fireflies'), 20, 20, 8, { rand });
+    for (let k = 0; k < 60; k++) ambienceStamp(a, kind('fireflies'), 20, 20, 8, { rand });
     const flies = a.ambience.filter(p => p.kind === 'fireflies');
     assert.ok(flies.length >= 4, `${flies.length}`);
     for (const p of flies) {
@@ -275,18 +274,20 @@ test('the brush adds the chosen kind apart from its own, Shift clears only that 
         for (const q of flies) if (p !== q) assert.ok(Math.hypot(p.x - q.x, p.y - q.y) >= 6 - 0.02);
     }
     // Snow takes the wind's bearing.
-    ambienceStamp(a, KINDS, kind('snow'), 5, 5, 2, { rand, wind: Math.PI / 2 });
+    ambienceStamp(a, kind('snow'), 5, 5, 2, { rand, wind: Math.PI / 2 });
     assert.equal(a.ambience.find(p => p.kind === 'snow').bearing, 1.57);
-    const r = ambienceStamp(a, KINDS, kind('fireflies'), 20, 20, 30, { erase: true });
+    const r = ambienceStamp(a, kind('fireflies'), 20, 20, 30, { erase: true });
     assert.equal(r.removed, flies.length);
     assert.deepEqual(
         a.ambience.map(p => p.kind),
         ['snow'],
     );
-    // At the cap a try is refused, and says so.
-    const capped = ambienceStamp(a, KINDS, kind('mist'), 20, 20, 10, { rand, cap: 60 });
-    assert.equal(capped.added, 0);
-    assert.equal(capped.capped, true);
+    // Past what the design calls heavy, the brush still adds.
+    for (let k = 0; k < 100; k++) a.ambience.push({ kind: 'mist', x: 1, y: 1, z: 0, scale: 1, seed: k });
+    assert.ok(liveOf(a.ambience, KINDS).day > AREA_LIVE_HEAVY);
+    let added = 0;
+    for (let k = 0; k < 20; k++) added += ambienceStamp(a, kind('fireflies'), 20, 20, 10, { rand }).added;
+    assert.ok(added > 0);
 });
 
 test('placements are one undo step, keep through a save, and export standing on the ground as it is now', () => {
@@ -295,7 +296,7 @@ test('placements are one undo step, keep through a save, and export standing on 
     fill(a, KINDS, ['mist'], { rand: seeded(15) });
     const n = a.ambience.length;
     a.beginStroke();
-    ambienceStamp(a, KINDS, kind('leaves'), 5, 5, 3, { rand: seeded(16) });
+    ambienceStamp(a, kind('leaves'), 5, 5, 3, { rand: seeded(16) });
     assert.equal(a.ambience.length, n + 1);
     a.undo();
     assert.equal(a.ambience.length, n);
