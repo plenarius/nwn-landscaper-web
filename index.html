@@ -52,6 +52,10 @@
                 <button type="button" class="menu-item" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span><span>Open…</span><kbd>O</kbd></button>
                 <button type="button" class="menu-item" id="btnVersion" hidden title="Keep this version of the area in the team's history (autosave doesn't)"><span>Save version</span></button>
                 <button type="button" class="menu-item" id="btnDelete" title="Delete the area open: it leaves your areas, and its last copy is kept to bring back"><span>Delete area…</span></button>
+                <hr class="menu-sep" id="sepAreaFile" hidden>
+                <button type="button" class="menu-item" id="btnDownloadArea" hidden title="Save the area open as a file on your computer: the browser's storage is no backup"><span>Download area</span></button>
+                <button type="button" class="menu-item" id="btnOpenFile" hidden title="Open an area from a file you downloaded"><span>Open area from a file…</span></button>
+                <input type="file" id="areaFile" accept=".json,application/json" hidden>
                 <hr class="menu-sep" id="sepFile" hidden>
                 <button type="button" class="menu-item" id="btnActivity" hidden title="Who searched, imported and exported what (admins)"><span>Activity (admins)</span></button>
             </div>
@@ -107,7 +111,8 @@
             <button class="top-btn menu-btn" type="button" aria-haspopup="true" aria-expanded="false">Help</button>
             <div class="menu-list" hidden>
                 <a class="menu-item" href="https://plenarius.github.io/nwn-landscaper/" target="_blank" rel="noopener">Handbook</a>
-                <hr class="menu-sep">
+                <a class="menu-item" id="helpSource" hidden href="https://github.com/plenarius/nwn-landscaper" target="_blank" rel="noopener" title="The engine running in this page is free software (GPL-3.0): its source">Source code</a>
+                <hr class="menu-sep" id="sepHelp">
                 <button type="button" class="menu-item" id="helpData" title="Your areas, workspaces, texture library and exports"><span>Open the data folder</span></button>
                 <button type="button" class="menu-item" id="helpLog" title="What the engine wrote in this start and the one before: landscaper.log in the data folder"><span>Open the log</span></button>
             </div>
@@ -569,6 +574,6 @@
         </div>
     </div>
 
-    <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/start.js"></script>
 </body>
 </html>

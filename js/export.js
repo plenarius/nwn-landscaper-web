@@ -9,6 +9,8 @@ import { ambienceForExport } from './ambience.js';
 import { api, engine, failure } from './api.js';
 import { $, say } from './dom.js';
 import { showReport, showError } from './report.js';
+import { web } from './web.js';
+import { downloadExport } from './webdemo.js';
 
 /** What app.js gives this file (initExport): `area()`, `readOnly()` and `view`. */
 let ctx = null;
@@ -78,6 +80,8 @@ export function initExport(c) {
         say(`Exporting ${a.name}…`);
         try {
             const report = await sendArea('export');
+            // (In the browser the export is a download: its zip, named in the report.)
+            if (web.on) report.download = await downloadExport(report);
             showReport(report);
             showMarkers(a, report);
         } catch (err) {
