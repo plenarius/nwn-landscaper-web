@@ -75,6 +75,15 @@ function showLive(a) {
     return live;
 }
 
+/** A kind's tooltip: where Fill puts it, and whether clicking makes it the brush's kind. */
+const kindTip = (k, active) =>
+    [
+        k.where && `${k.where[0].toUpperCase()}${k.where.slice(1)}.`,
+        active ? 'The brush paints this.' : 'Click to paint this with the brush.',
+    ]
+        .filter(Boolean)
+        .join(' ');
+
 /** Shows the panel for the open area: each kind with how many it has, the brush's kind, and the live count. */
 export function showAmbienceTool() {
     const a = ctx?.area();
@@ -100,7 +109,7 @@ export function showAmbienceTool() {
         const hours = k.shows === 'night' ? ' (night)' : k.shows === 'day' ? ' (day)' : '';
         const pick = el(
             'button',
-            { type: 'button', className: `amb-kind${k.id === brushKind ? ' active' : ''}`, title: `${k.where}. The brush places it.` },
+            { type: 'button', className: `amb-kind${k.id === brushKind ? ' active' : ''}`, title: kindTip(k, k.id === brushKind) },
             dot,
             el('span', { className: 'amb-name', textContent: `${k.name}${hours}` }),
             el('small', { textContent: count.get(k.id) ? String(count.get(k.id)) : '' }),
