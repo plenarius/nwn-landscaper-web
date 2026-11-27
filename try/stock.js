@@ -4,26 +4,31 @@
 // The game's stock placeables, when the page has them in stock/ (the engine's `landscaper demo-stock`, which its
 // scripts/try-page.sh puts there): each model's files go into the engine's `override` when a request first needs them, so
 // stock trees and rocks draw, block paths and export as on the desktop. The tables and shaders the engine reads with them go
-// in at the start, and the Place panel's lists are answered from the files the engine made with the game.
+// in at the start, and the Place panel's lists are answered from the files the engine made with the game. Every file of stock/ is
+// kept in Cache Storage under the bundle's SHA-256 (site.json's `stockSha256`, kept.js), so a repeat visit fetches none.
+
+import { Kept } from './kept.js';
 
 /** The answers that are files of stock/, made by the engine with the game: path -> file. */
 const LISTS = { '/api/placeables': 'placeables.json', '/api/placeable-groups': 'placeable-groups.json' };
 
 export class Stock {
-    /** The stock placeables beside the page at `site` (a URL), or null when the page has none. */
-    static async open(site, log) {
+    /** The stock placeables beside the page at `site` (a URL), kept by `hash` (site.json's `stockSha256`), or null when the page
+     *  has none. */
+    static async open(site, hash, log) {
         const base = new URL('stock/', site);
+        const kept = await Kept.open('stock', hash, log);
         try {
-            // biome-ignore lint/plugin: the page's own files, not an engine request
-            const res = await fetch(new URL('index.json', base));
-            return res.ok ? new Stock(base, await res.json(), log) : null;
+            const res = await kept.get(new URL('index.json', base));
+            return res.ok ? new Stock(base, kept, await res.json(), log) : null;
         } catch {
             return null;
         }
     }
 
-    constructor(base, index, log) {
+    constructor(base, kept, index, log) {
         this.base = base;
+        this.kept = kept;
         this.index = index;
         this.log = log;
         this.put = new Set(); // files already in the engine's override
@@ -42,8 +47,7 @@ export class Stock {
                 .map(async f => {
                     this.put.add(f);
                     try {
-                        // biome-ignore lint/plugin: the page's own files, not an engine request
-                        const res = await fetch(new URL(`res/${encodeURIComponent(f)}`, this.base));
+                        const res = await this.kept.get(new URL(`res/${encodeURIComponent(f)}`, this.base));
                         if (!res.ok) throw new Error(`${res.status}`);
                         engine.put(`user/override/${f}`, new Uint8Array(await res.arrayBuffer()));
                     } catch (err) {
@@ -78,8 +82,7 @@ export class Stock {
     async answer(m) {
         const file = m.method === 'GET' && LISTS[new URL(m.path, 'http://page').pathname];
         if (!file) return null;
-        // biome-ignore lint/plugin: the page's own files, not an engine request
-        const res = await fetch(new URL(file, this.base));
+        const res = await this.kept.get(new URL(file, this.base));
         if (!res.ok) return null;
         return {
             status: 200,

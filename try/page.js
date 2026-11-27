@@ -57,12 +57,23 @@ async function lock(card) {
     );
 }
 
+/** Asks the browser to keep this site's storage (the areas, the texture library, the kept engine and models) when it is short
+ *  of space, where it decides alone: Chrome, Edge and Safari. Firefox would ask the visitor, so it isn't asked. */
+async function keepStorage() {
+    const storage = navigator.storage;
+    if (!storage?.persist || /\bFirefox\//.test(navigator.userAgent)) return;
+    try {
+        if (!(await storage.persisted())) await storage.persist();
+    } catch {
+        /* not kept: as before */
+    }
+}
+
 /** Starts the engine for `site` (try/site.json); the editor then starts whether or not it could. */
 export async function startEngine(site) {
     const t0 = performance.now();
     const card = startCard();
-    // (So the browser keeps the areas when it is short of space; some browsers ask, some decide alone.)
-    navigator.storage?.persist?.().catch(() => {});
+    keepStorage();
     try {
         await lock(card);
         await serviceWorker();

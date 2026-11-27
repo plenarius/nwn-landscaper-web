@@ -7,6 +7,7 @@
 // zip. One at a time in a browser: page.js holds the lock that keeps a second tab waiting.
 
 import { Engine } from './engine.js';
+import { Kept, sha256 } from './kept.js';
 import { Store } from './opfs.js';
 import { Stock } from './stock.js';
 import { zip } from './zip.js';
@@ -70,15 +71,17 @@ async function start(site) {
     let t = performance.now();
     say('Starting the engine…');
     const url = new URL(site.engine, SITE);
+    // (Kept by its SHA-256, checked before it is kept; compiled from the stream either way, so Chrome keeps its code too.)
+    const kept = await Kept.open('engine', site.engineSha256, log);
+    const check = async bytes => (await sha256(bytes)) === site.engineSha256;
     let module;
     try {
-        // biome-ignore lint/plugin: the engine's own file, not an engine request
-        module = await WebAssembly.compileStreaming(fetch(url));
+        module = await WebAssembly.compileStreaming(kept.get(url, check));
     } catch {
         // (A server that doesn't call it application/wasm.)
-        // biome-ignore lint/plugin: the engine's own file, not an engine request
-        module = await WebAssembly.compile(await (await fetch(url)).arrayBuffer());
+        module = await WebAssembly.compile(await (await kept.get(url, check)).arrayBuffer());
     }
+    boot.engineKept = kept.hits > 0;
     boot.engine = performance.now() - t;
     engine = new Engine(module, log);
     t = performance.now();
@@ -93,11 +96,11 @@ async function start(site) {
     boot.storage = performance.now() - t;
     boot.textures = await library(site);
     t = performance.now();
-    stock = await Stock.open(SITE, log);
+    stock = await Stock.open(SITE, site.stockSha256, log);
     if (stock) {
         await stock.start(engine);
         shaders = true;
-        boot.stock = { models: stock.models, shaders };
+        boot.stock = { models: stock.models, shaders, kept: stock.kept.hits, fetched: stock.kept.fetched };
     }
     boot.stockStart = performance.now() - t;
     t = performance.now();
