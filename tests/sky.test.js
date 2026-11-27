@@ -112,3 +112,11 @@ test("the swamp's water is murky, every other preset's clear, and an area saved 
     assert.equal(waterLook(old).id, 'clear');
     assert.deepEqual(waterView(old), { color: 0x2c6a86, opacity: 0.62 });
 });
+
+test("the game's grass is off in a new area and survives saving", () => {
+    const a = Area.create('aa', 3, 'flat', 5);
+    assert.equal(a.atmosphere.grass, undefined, 'off unless turned on');
+    a.atmosphere.grass = { on: true, density: 6, height: 0.7 };
+    const back = Area.fromJSON(JSON.parse(JSON.stringify(a.toJSON())));
+    assert.deepEqual(back.atmosphere.grass, { on: true, density: 6, height: 0.7 });
+});

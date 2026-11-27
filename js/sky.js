@@ -125,6 +125,15 @@ function showSky() {
     $('skyWater').value = look?.id ?? '';
     $('skyClip').value = a.fogClip;
     $('skyClipOut').textContent = `${a.fogClip} m`;
+    // The game's grass (atmosphere.grass): off unless turned on; none under ground.
+    const g = { ...GRASS, ...a.grass };
+    $('grassBox').hidden = ctx.area().enclosed();
+    $('grassOn').checked = !!a.grass?.on;
+    $('grassDensity').value = g.density;
+    $('grassDensityOut').textContent = String(g.density);
+    $('grassHeight').value = g.height;
+    $('grassHeightOut').textContent = `${g.height} m`;
+    $('grassDensity').disabled = $('grassHeight').disabled = !a.grass?.on;
     ctx.view.setAtmosphere($('skyPreview').checked ? a : null, skyNight);
     showSkyRow();
 }
@@ -165,6 +174,8 @@ function editSky(e, change) {
     skyChanged();
 }
 let shadeTimer = null;
+/** The game's grass as it starts when turned on (the engine's defaults). */
+const GRASS = { on: false, density: 5, height: 0.9 };
 
 /** Builds the presets and wires the panel's fields. `c`: { area(), view, saveSoon() } from app.js. */
 export function initSky(c) {
@@ -180,7 +191,10 @@ export function initSky(c) {
         b.append(look, el('span', { textContent: p.name }));
         b.onclick = () => {
             step(b, false);
+            // (A look sets the light, not the ground: the grass stays.)
+            const grass = ctx.area().atmosphere.grass;
             ctx.area().atmosphere = copyPreset(p);
+            if (grass) ctx.area().atmosphere.grass = grass;
             skyNight = p.time === 'night';
             ctx.view.updateWater();
             skyChanged();
@@ -242,6 +256,22 @@ export function initSky(c) {
         editSky(e, a => {
             a.fogClip = +e.target.value;
         });
+    const grassEdit = change => e => {
+        step(e.target, e.type === 'input');
+        const a = ctx.area().atmosphere;
+        a.grass = { ...GRASS, ...a.grass };
+        change(a.grass);
+        skyChanged();
+    };
+    $('grassOn').onchange = grassEdit(g => {
+        g.on = $('grassOn').checked;
+    });
+    $('grassDensity').oninput = grassEdit(g => {
+        g.density = +$('grassDensity').value;
+    });
+    $('grassHeight').oninput = grassEdit(g => {
+        g.height = +$('grassHeight').value;
+    });
     // Not part of the .are's settings: baked into the tiles.
     $('shadowStrength').oninput = e => {
         step(e.target, true);
@@ -252,7 +282,7 @@ export function initSky(c) {
         ctx.saveSoon();
     };
     // The end of a drag: the next change is another step.
-    for (const id of ['skyAmbient', 'skyDiffuse', 'skyFog', 'skyFogAmount', 'skyClip', 'shadowStrength'])
+    for (const id of ['skyAmbient', 'skyDiffuse', 'skyFog', 'skyFogAmount', 'skyClip', 'shadowStrength', 'grassDensity', 'grassHeight'])
         $(id).addEventListener('change', () => {
             if (dragging === $(id)) dragging = null;
         });
