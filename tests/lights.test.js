@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Tile lights (area.js, lights.js, export.js): the brush's reach, turning them off, undo, the JSON round trip, what an export
-// sends, the view's wash colours and the presets.
+// sends, the view's wash colours and the presets; where the brush lands in a cave (view.js).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,6 +11,9 @@ import { engine } from './browser.js';
 const { Area, MAX_LIGHT } = await import('../js/area.js');
 const { lightStamp, lightFill, litTiles, lightTexels, lightKind, LIGHT_COLORS, LIGHT_PRESETS } = await import('../js/lights.js');
 const { initExport, sendArea } = await import('../js/export.js');
+const { View } = await import('../js/view.js');
+const THREE = await import('three');
+const { SPACING, VOID_BELOW } = await import('../js/area.js');
 
 let open = null;
 initExport({ area: () => open, readOnly: () => false, view: { setMarkers() {} } });
@@ -147,4 +150,41 @@ test('lights and particles in one area: each keeps its own undo step, save and e
         json.ambience.map(p => p.kind),
         ['fireflies'],
     );
+});
+
+test('in a cave the brush looks through the rock in front to the hall behind it, as the view draws that rock black', () => {
+    // Across x (three.js's frame): a hall at 0 m (x 0 to 6, a 5 m ceiling), rock whose top is void (6 to 12), a hall 5 m lower
+    // behind it (12 to 20), as a descent's halls lie.
+    const [sizeX, sizeY] = [20, 10],
+        [nx, ny] = [sizeX / SPACING + 1, sizeY / SPACING + 1];
+    const geo = new THREE.PlaneGeometry(sizeX, sizeY, nx - 1, ny - 1);
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(sizeX / 2, 0, sizeY / 2);
+    const gap = new Float32Array(nx * ny);
+    for (let v = 0; v < nx * ny; v++) {
+        const x = geo.attributes.position.getX(v);
+        const [h, g] = x < 6 ? [0, 5] : x < 12 ? [5, 0] : [-5, 10];
+        geo.attributes.position.setY(v, h);
+        gap[v] = g;
+    }
+    geo.setAttribute('aGap', new THREE.BufferAttribute(gap, 1));
+    geo.computeBoundingBox();
+    const view = Object.assign(Object.create(View.prototype), { area: { nx, ny, sizeX, sizeY }, mesh: { geometry: geo } });
+    // The pointer over the lower hall, the camera over the upper one: the ray meets the rock's top first.
+    const o = new THREE.Vector3(-10, 30, 5),
+        d = new THREE.Vector3(26, -35, 0).normalize();
+    const top = view.groundHit(o, d);
+    assert.ok(top.x > 6 && top.x < 12 && Math.abs(top.y - 5) < 1e-6, `the rock's top: ${top.x}, ${top.y}`);
+    assert.ok(gap[0] > VOID_BELOW);
+    // Looking through it: the lower hall's wall, in the hall's tile (x 10 to 20).
+    const open = view.groundHit(o, d, true);
+    assert.ok(open.x >= 11.8 && open.x < 12.6 && open.y < 5, `behind the rock: ${open.x}, ${open.y}`);
+    assert.equal(Math.floor(open.x / 10), 1);
+    // Straight down onto the rock: no ground behind it.
+    const down = new THREE.Vector3(0, -1, 0);
+    assert.equal(view.groundHit(new THREE.Vector3(9, 30, 5), down, true), null);
+    assert.equal(view.groundHit(new THREE.Vector3(9, 30, 5), down).y, 5);
+    // Over the halls, both find the floor.
+    assert.equal(view.groundHit(new THREE.Vector3(16, 30, 5), down, true).y, -5);
+    assert.equal(view.groundHit(new THREE.Vector3(3, 30, 5), down, true).y, 0);
 });
