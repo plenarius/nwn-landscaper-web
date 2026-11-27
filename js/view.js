@@ -12,7 +12,8 @@ import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { KEEP_BUFFER } from './desktop.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK } from './area.js';
+import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW } from './area.js';
+import { waterMesh, WATER_FILM } from './watermesh.js';
 import { REACH, groundNormals } from './normals.js';
 import { fogRange } from './atmosphere.js';
 import { shadeArea, shadeChanged, SHADE_STEP } from './shade.js';
@@ -20,23 +21,31 @@ import { lightTexels, LIGHT_HEIGHT, LIGHT_RADIUS } from './lights.js';
 import { at as entranceAt, groundBehind, scenery as entranceScenery } from './entrance.js';
 import { triplanarGlsl } from './triplanar.js';
 import { AmbienceLayer } from './ambienceview.js';
+import { SOFT_GLSL, SoftGrid, edgeOf, seed } from './softpaint.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
 const ROCK = new THREE.Color(0x8a8378);
 const BLOCKED = new THREE.Color(0xc0503c);
 const WHITE = new THREE.Color(1, 1, 1);
+/** The soft paint's layer table (uLayers, softpaint.js): 256 texels, each palette index's edge, mean luminance and noise seed. */
+const layersTexture = () => {
+    const t = new THREE.DataTexture(new Float32Array(256 * 4), 256, 1, THREE.RGBAFormat, THREE.FloatType);
+    t.needsUpdate = true;
+    return t;
+};
 /** The rectangle (i0..i1, j0..j1) covering rectangles `a` and `b`, either of which may be none (null or false). */
 const union = (a, b) =>
     a && b ? { i0: Math.min(a.i0, b.i0), i1: Math.max(a.i1, b.i1), j0: Math.min(a.j0, b.j0), j1: Math.max(a.j1, b.j1) } : a || b || null;
 // Multiplies the painted texture on ground too steep to walk.
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
 // Splat shading, as landscaper bakes it into the NWN tiles: each sample has
-// a texture (an index into the area palette, stored in uMat); a point
-// blends its four surrounding samples' textures bilinearly, so painted
-// edges soften over one 0.625 m sample. Ground too steep to walk takes the
-// texture that weighs most in that blend, as landscaper cuts steep faces
-// (its split.rs; in a tie, the lower palette index). Every texture is drawn from three sides by
+// a texture (an index into the area palette, stored in uMat). Walkable
+// ground draws the paint smoothed (softpaint.js, uSoft), its edges crisp or
+// broken as the bake draws them. Ground too steep to walk takes the
+// texture that weighs most in the four samples round a point, blended
+// bilinearly, as landscaper cuts steep faces (its split.rs; in a tie, the
+// lower palette index). Every texture is drawn from three sides by
 // the ground's slope (triplanar.js), as the game's shader and landscaper's
 // bake draw it, so it keeps its size on every slope.
 // Baked shadows over the lit ground, as the game's shadow-map shader
@@ -136,6 +145,8 @@ ${triplanarGlsl('vNormalArea', 'vArea', 'vUp')}
             }
         }
         vec4 imported = texture2D(uImport, folded / uSize);
+        // (metres a pixel: worked out here, where every pixel of the ground takes the same branch)
+        float softPx = length(fwidth(vArea));
         vec4 splat;
         if (vNormalUp < ${WALKABLE_NZ.toFixed(2)}) {
             float wq[4] = float[4]((1.0 - t.x) * (1.0 - t.y), t.x * (1.0 - t.y), (1.0 - t.x) * t.y, t.x * t.y);
@@ -151,10 +162,9 @@ ${triplanarGlsl('vNormalArea', 'vArea', 'vUp')}
             }
             splat = heaviest == uImportLayer ? imported : TRIPLANAR(heaviest);
         } else {
-            splat = (m00 == uImportLayer ? imported : TRIPLANAR(m00)) * (1.0 - t.x) * (1.0 - t.y)
-                  + (m10 == uImportLayer ? imported : TRIPLANAR(m10)) * t.x * (1.0 - t.y)
-                  + (m01 == uImportLayer ? imported : TRIPLANAR(m01)) * (1.0 - t.x) * t.y
-                  + (m11 == uImportLayer ? imported : TRIPLANAR(m11)) * t.x * t.y;
+            // Walkable ground: the paint smoothed, its edges crisp or broken, as the export bakes it (softpaint.js).
+            #define SPLAT(l) ((l) == uImportLayer ? imported : TRIPLANAR(l))
+            SOFT_SPLAT(vArea, softPx, splat)
         }
         diffuseColor.rgb *= splat.rgb;
     }`;
@@ -260,6 +270,13 @@ export class View {
             uOrigin: { value: 0 },
             uSize: { value: new THREE.Vector2(1, 1) },
             uTextured: { value: false },
+            // The soft paint (softpaint.js, SoftGrid): each sample's two heaviest textures and their weights, the grid's samples,
+            // and samples from its first to the area's (the band's width when it has one).
+            uSoft: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) },
+            uSoftN: { value: new THREE.Vector2(2, 2) },
+            uSoftOrigin: { value: 0 },
+            // One texel a palette index: its edge (r: 1 broken), mean luminance (g) and noise seed (b, a: its low and high 16 bits).
+            uLayers: { value: layersTexture() },
             // Baked shadows (shade.js): a grid SHADE_STEP apart over the area.
             uShade: { value: null },
             uShadeCells: { value: new THREE.Vector2(1, 1) },
@@ -453,6 +470,7 @@ export class View {
         mat.unpackAlignment = 1;
         mat.needsUpdate = true;
         this.uniforms.uMat.value = mat;
+        this.buildSoft();
         this.uniforms.uN.value.set(nx, ny);
         this.uniforms.uSize.value.set(sizeX, sizeY);
         this.shadeDirty = null;
@@ -509,7 +527,7 @@ export class View {
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
+                    `#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nuniform sampler2D uSoft;\nuniform vec2 uSoftN;\nuniform float uSoftOrigin;\nuniform sampler2D uLayers;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;${SOFT_GLSL}`,
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`)
                 .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${LIGHTS_FRAGMENT}`);
@@ -673,6 +691,7 @@ export class View {
         this.uniforms.uImport.value = picture ?? new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1);
         this.uniforms.uImport.value.needsUpdate = !picture;
         this.uniforms.uImportLayer.value = picture ? at : -1;
+        this.setLayers(tex.userData.luma, picture && meanLuma(picture.image), at);
         const old = this.uniforms.uTex.value;
         this.uniforms.uTex.value = tex;
         old.dispose();
@@ -681,6 +700,22 @@ export class View {
             this.uniforms.uTextured.value = true;
             this.markDirty(this.everything(), false);
         }
+    }
+
+    /** Each palette index's edge (the catalog's; an import's is crisp), mean luminance (`luma`, by layer; the import's
+     *  `importLuma` at `importAt`) and noise seed, for the soft paint's edges. */
+    setLayers(luma, importLuma, importAt) {
+        const data = this.uniforms.uLayers.value.image.data;
+        data.fill(0);
+        for (const [k, id] of this.area.palette.entries()) {
+            if (k > 255) break;
+            const s = seed(id);
+            data[k * 4] = k !== importAt && edgeOf(this.library.byId.get(id)) === 'broken' ? 1 : 0;
+            data[k * 4 + 1] = k === importAt && importLuma != null ? importLuma : (luma?.[k] ?? 0.5);
+            data[k * 4 + 2] = s & 0xffff;
+            data[k * 4 + 3] = s >>> 16;
+        }
+        this.uniforms.uLayers.value.needsUpdate = true;
     }
 
     frame() {
@@ -880,6 +915,7 @@ export class View {
         }
         for (const a of [pos, gap, deep, col]) this.uploadRows(a, i0, i1, j0, j1);
         this.uploadPaint(i0, i1, j0, j1);
+        this.refreshSoft(r);
         // Only what the change reaches: on a 32×32 area each of these over the whole mesh took most of a 245 ms frame.
         this.updateNormals(i0 - REACH, i1 + REACH, j0 - REACH, j1 + REACH);
         this.updateBounds(i0, i1, j0, j1);
@@ -926,6 +962,35 @@ export class View {
         // (three.js counts a texture's ranges in RGBA components, 4 a texel, and uploads them in texels of the texture's own
         // format: one byte each here)
         for (let j = j0; j <= j1; j++) tex.addUpdateRange((j * nx + i0) * 4, (i1 - i0 + 1) * 4);
+    }
+
+    /** The soft paint (softpaint.js) for the area as it is now, sent to the GPU whole. */
+    buildSoft() {
+        this.soft = new SoftGrid(this.area, SPACING);
+        const { nx, ny, origin, out } = this.soft;
+        this.uniforms.uSoft.value.dispose();
+        const tex = new THREE.DataTexture(out, nx, ny, THREE.RGBAFormat, THREE.UnsignedByteType);
+        tex.minFilter = tex.magFilter = THREE.NearestFilter;
+        tex.needsUpdate = true;
+        this.uniforms.uSoft.value = tex;
+        this.uniforms.uSoftN.value.set(nx, ny);
+        this.uniforms.uSoftOrigin.value = origin;
+    }
+
+    /** The paint changed over area samples `r` (null: anywhere in the band): smoothed again as far as it reaches, and only that
+     *  sent to the GPU (a row at a time, as uploadPaint). */
+    refreshSoft(r) {
+        if (!this.soft?.fits(this.area)) {
+            this.buildSoft();
+            return;
+        }
+        const s = this.soft.refresh(r);
+        if (!s) return;
+        const tex = this.uniforms.uSoft.value,
+            { nx, ny } = this.soft;
+        tex.needsUpdate = true;
+        if (wholeLeft(tex, s.i0 === 0 && s.j0 === 0 && s.i1 === nx - 1 && s.j1 === ny - 1)) return;
+        for (let j = s.j0; j <= s.j1; j++) tex.addUpdateRange((j * nx + s.i0) * 4, (s.i1 - s.i0 + 1) * 4);
     }
 
     /** The samples whose ceiling or drawn height differ between ceiling fits `was` and `now` (i0..i1, j0..j1), null when none
@@ -1862,6 +1927,7 @@ export class View {
         geo.computeBoundingSphere();
         geo.computeBoundingBox();
         this.bandUniforms.uMat.value.needsUpdate = true;
+        this.refreshSoft(null);
         this.band.visible = !area.enclosed();
     }
 
@@ -1904,28 +1970,6 @@ export class View {
             prev = t;
         }
         return null;
-    }
-
-    /** The band's water: a quad at the level over each of its cells beyond the area with a corner under water, as the engine
-     *  draws the halo's. */
-    addBandWater(pos) {
-        const area = this.area,
-            band = area.band,
-            { n, nx, ny, waterLevel: L } = band,
-            size = area.sizeY,
-            top = (a, b) => (Number.isNaN(b) || b < a ? a : b);
-        for (let j = 0; j < ny - 1; j++)
-            for (let i = 0; i < nx - 1; i++) {
-                if (i >= n && j >= n && i + 1 <= n + area.nx - 1 && j + 1 <= n + area.ny - 1) continue;
-                const k = j * nx + i,
-                    level = top(top(top(top(-Infinity, L[k]), L[k + 1]), L[k + nx]), L[k + nx + 1]);
-                if (level === -Infinity) continue;
-                const x0 = (i - n) * SPACING,
-                    x1 = x0 + SPACING,
-                    z0 = size - (j - n) * SPACING,
-                    z1 = z0 - SPACING;
-                pos.push(x0, level, z0, x1, level, z0, x1, level, z1, x0, level, z0, x1, level, z1, x0, level, z1);
-            }
     }
 
     updateSkirt() {
@@ -1984,95 +2028,45 @@ export class View {
         this.skirt.geometry.computeBoundingSphere();
     }
 
-    /** The water's surface: a flat quad at the level over each cell with a
-     *  corner under water, as landscaper builds it (the ground hides it
-     *  beyond the shore). */
+    /** The water's surface (watermesh.js): over the shallows up to the bank, faint where it is shallow and gone where the
+     *  ground comes up through it, as the game draws it. */
     updateWater() {
-        const area = this.area,
-            n = area.nx,
-            rows = area.ny,
-            size = area.sizeY,
-            sx = area.sizeX,
-            L = area.waterLevel;
         if (this.water) {
             this.scene.remove(this.water);
             this.water.geometry.dispose();
             this.water.material.dispose();
         }
         this.water = null;
-        const pos = [];
-        // The higher of two levels, a dry one (NaN) counting as none.
-        const top = (a, b) => (Number.isNaN(b) || b < a ? a : b);
-        for (let j = 0; j < rows - 1; j++) {
-            for (let i = 0; i < n - 1; i++) {
-                // The wet corners' highest level. (Without a list of the four for each cell: it was most of a water drag's
-                // redraw.)
-                const k = j * n + i,
-                    level = top(top(top(top(-Infinity, L[k]), L[k + 1]), L[k + n]), L[k + n + 1]);
-                if (level === -Infinity) continue;
-                const x0 = i * SPACING,
-                    x1 = x0 + SPACING,
-                    z0 = size - j * SPACING,
-                    z1 = size - (j + 1) * SPACING;
-                pos.push(x0, level, z0, x1, level, z0, x1, level, z1, x0, level, z0, x1, level, z1, x0, level, z1);
-            }
-        }
-        if (area.band) {
-            this.addBandWater(pos);
-            this.finishWater(pos);
-            return;
-        }
-        // Carried out past the edge, as the edge scenery has it.
-        const D = 50;
-        const quad = (x0, y0, x1, y1, l) =>
-            pos.push(x0, l, size - y0, x1, l, size - y0, x1, l, size - y1, x0, l, size - y0, x1, l, size - y1, x0, l, size - y1);
-        const wet = (i, j) => L[j * n + i];
-        const lv = (a, b) => Math.max(Number.isNaN(a) ? -Infinity : a, Number.isNaN(b) ? -Infinity : b);
-        // A strip at the level l, when either of the two edge samples is wet.
-        const strip = (l, x0, y0, x1, y1) => {
-            if (l > -Infinity) quad(x0, y0, x1, y1, l);
-        };
-        for (let k = 0; k < rows - 1; k++) {
-            const t0 = k * SPACING,
-                t1 = t0 + SPACING;
-            strip(lv(wet(0, k), wet(0, k + 1)), -D, t0, 0, t1);
-            strip(lv(wet(n - 1, k), wet(n - 1, k + 1)), sx, t0, sx + D, t1);
-        }
-        for (let k = 0; k < n - 1; k++) {
-            const t0 = k * SPACING,
-                t1 = t0 + SPACING;
-            strip(lv(wet(k, 0), wet(k + 1, 0)), t0, -D, t1, 0);
-            strip(lv(wet(k, rows - 1), wet(k + 1, rows - 1)), t0, size, t1, size + D);
-        }
-        for (const [i, j, x0, y0, x1, y1] of [
-            [0, 0, -D, -D, 0, 0],
-            [0, rows - 1, -D, size, 0, size + D],
-            [n - 1, 0, sx, -D, sx + D, 0],
-            [n - 1, rows - 1, sx, size, sx + D, size + D],
-        ]) {
-            if (!Number.isNaN(wet(i, j))) quad(x0, y0, x1, y1, wet(i, j));
-        }
-        this.finishWater(pos);
-    }
-
-    /** The water's mesh from `pos` (three vertices a triangle, three.js's frame), when there is any. */
-    finishWater(pos) {
+        const { pos, depth } = waterMesh(this.area, this.drawn ?? this.area.heights);
         if (!pos.length) return;
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('aDepth', new THREE.Float32BufferAttribute(depth, 1));
         geo.computeVertexNormals();
-        this.water = new THREE.Mesh(
-            geo,
-            new THREE.MeshPhongMaterial({
-                color: 0x2c6a86,
-                specular: 0x557788,
-                shininess: 60,
-                transparent: true,
-                opacity: 0.62,
-                depthWrite: false,
-                side: THREE.DoubleSide,
-            }),
-        );
+        const material = new THREE.MeshPhongMaterial({
+            color: 0x2c6a86,
+            specular: 0x557788,
+            shininess: 60,
+            transparent: true,
+            opacity: 0.62,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+        });
+        // Where the ground is over the level, nothing (the ground hid it, flickering where the two all but met); a film over the
+        // shallows, deepening to the full colour where it is too deep to walk.
+        material.onBeforeCompile = shader => {
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <common>', '#include <common>\nattribute float aDepth;\nvarying float vDepth;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDepth = aDepth;');
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <common>', '#include <common>\nvarying float vDepth;')
+                .replace(
+                    '#include <color_fragment>',
+                    `#include <color_fragment>\nif (vDepth <= 0.0) discard;\ndiffuseColor.a *= mix(${WATER_FILM.toFixed(3)}, 1.0, smoothstep(0.0, ${SHALLOW.toFixed(3)}, vDepth));`,
+                );
+        };
+        material.customProgramCacheKey = () => 'landscaper-water';
+        this.water = new THREE.Mesh(geo, material);
         this.water.renderOrder = 1;
         this.scene.add(this.water);
     }
@@ -2418,6 +2412,19 @@ function makeLabel(text, color) {
     );
     sprite.scale.set((0.024 * canvas.width) / canvas.height, 0.024, 1);
     return sprite;
+}
+
+/** The mean brightness (0..1, display values) of picture `image`, as the bake's means weigh it (softpaint.js). */
+function meanLuma(image) {
+    if (!image) return null;
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(image, 0, 0, 64, 64);
+    const px = ctx.getImageData(0, 0, 64, 64).data;
+    let sum = 0;
+    for (let k = 0; k < px.length; k += 4) sum += 0.3 * px[k] + 0.59 * px[k + 1] + 0.11 * px[k + 2];
+    return sum / (64 * 64 * 255);
 }
 
 /** The distance along the ray from `o` along `d` to triangle (a, b, c), seen from either side (the ground's material is

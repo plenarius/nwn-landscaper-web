@@ -88,6 +88,8 @@ export class TextureLibrary {
      *  grey passed for ground. An imported area's own ground stays grey here, as the view draws it from the import's picture. */
     async buildArray(palette) {
         const data = new Uint8Array(LAYER * LAYER * 4 * palette.length);
+        // Each layer's mean brightness (display values), as the bake's soft paint reads it (softpaint.js).
+        const luma = new Float32Array(palette.length).fill(0.5);
         await Promise.all(
             palette.map(async (id, k) => {
                 let px;
@@ -97,8 +99,12 @@ export class TextureLibrary {
                     console.warn(err.message);
                     px = null;
                 }
-                if (px) data.set(px, k * LAYER * LAYER * 4);
-                else if (id.startsWith('@import:')) data.fill(128, k * LAYER * LAYER * 4, (k + 1) * LAYER * LAYER * 4);
+                if (px) {
+                    data.set(px, k * LAYER * LAYER * 4);
+                    let sum = 0;
+                    for (let p = 0; p < px.length; p += 4) sum += 0.3 * px[p] + 0.59 * px[p + 1] + 0.11 * px[p + 2];
+                    luma[k] = sum / (LAYER * LAYER * 255);
+                } else if (id.startsWith('@import:')) data.fill(128, k * LAYER * LAYER * 4, (k + 1) * LAYER * LAYER * 4);
                 else data.set(missingLayer(), k * LAYER * LAYER * 4);
             }),
         );
@@ -112,6 +118,7 @@ export class TextureLibrary {
         tex.generateMipmaps = true;
         tex.anisotropy = 4;
         tex.needsUpdate = true;
+        tex.userData.luma = luma;
         return tex;
     }
 }

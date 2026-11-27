@@ -39,6 +39,7 @@ import { initPublish } from './publish.js';
 import { initScripts } from './scripts.js';
 import { initReport, showError } from './report.js';
 import { initNewArea } from './newarea.js';
+import { unlistedOf, unlistedRows } from './unlisted.js';
 import { initHeightmap } from './heightmap.js';
 import { initUnderlay, underlayAreaChanged, underlayEscape, toggleUnderlay, showUnderlay, hideUnderlay } from './underlay.js';
 import { initPlace, selectObject, removeObject, changeSelected, transformer, showPlaceables, models } from './place.js';
@@ -396,8 +397,11 @@ $('btnOpen').onclick = async () => {
     list.textContent = 'Loading…';
     $('openDialog').showModal();
     let areas = [];
+    let unlisted = [];
     try {
-        areas = (await (await api('/api/areas')).json()).areas ?? [];
+        const answer = await (await api('/api/areas')).json();
+        areas = answer.areas ?? [];
+        unlisted = unlistedOf(answer);
     } catch {
         /* none */
     }
@@ -452,6 +456,7 @@ $('btnOpen').onclick = async () => {
         list.appendChild(row);
     }
     if (!areas.length) list.textContent = engine.up ? 'No areas yet: export one first.' : NEEDS_ENGINE;
+    list.append(...unlistedRows(unlisted));
 };
 
 // How many times Open has been asked: each opening's answer counts only if no later one was asked meanwhile.
