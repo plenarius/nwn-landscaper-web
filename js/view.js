@@ -12,7 +12,7 @@ import { THING_COLOURS } from './thingcolours.js';
 import * as THREE from 'three';
 import { KEEP_BUFFER } from './desktop.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW } from './area.js';
+import { SPACING, TILE, VOID_BELOW, WALKABLE_NZ, CHASM_DARK, SHALLOW, uprightShift } from './area.js';
 import { waterMesh, WATER_FILM } from './watermesh.js';
 import { REACH, groundNormals } from './normals.js';
 import { fogRange, waterView, workShare } from './atmosphere.js';
@@ -122,6 +122,7 @@ const UNDERLAY_FRAGMENT = `
 
 const SPLAT_VERTEX = `
     vArea = vec2(transformed.x, uSize.y - transformed.z);
+    vPaint = vArea - aShift;
     vUp = transformed.y;
     vGap = aGap;
     vDeep = aDeep;
@@ -129,7 +130,7 @@ const SPLAT_VERTEX = `
     vNormalArea = vec3(normal.x, -normal.z, normal.y);`;
 const SPLAT_FRAGMENT = `
     if (uTextured) {
-        vec2 f = clamp(vArea / ${SPACING.toFixed(4)} + uOrigin, vec2(0.0), uN - 1.0);
+        vec2 f = clamp(vPaint / ${SPACING.toFixed(4)} + uOrigin, vec2(0.0), uN - 1.0);
         vec2 base = min(floor(f), uN - 2.0);
         vec2 t = f - base;
         ivec2 b = ivec2(base);
@@ -481,6 +482,9 @@ export class View {
         geo.setAttribute('aDeep', new THREE.BufferAttribute(new Float32Array(nx * ny), 1));
         // Each sample's own slope's up part: whether it is too steep to walk (its normal, steep ground's taken wider, isn't).
         geo.setAttribute('aUp', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1), 1));
+        // How far an interior's wall top was moved onto its foot's line (uprightShift; m east, north): its paint is read where
+        // it was.
+        geo.setAttribute('aShift', new THREE.BufferAttribute(new Float32Array(nx * ny * 2), 2));
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
         this.uniforms.uMat.value?.dispose();
         const mat = new THREE.DataTexture(area.materials, nx, ny, THREE.RedFormat, THREE.UnsignedByteType);
@@ -539,13 +543,13 @@ export class View {
             shader.vertexShader = shader.vertexShader
                 .replace(
                     '#include <common>',
-                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nattribute float aUp;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
+                    '#include <common>\nuniform vec2 uSize;\nattribute float aGap;\nattribute float aDeep;\nattribute float aUp;\nattribute vec2 aShift;\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying vec2 vPaint;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;',
                 )
                 .replace('#include <begin_vertex>', `#include <begin_vertex>${SPLAT_VERTEX}`);
             shader.fragmentShader = shader.fragmentShader
                 .replace(
                     '#include <common>',
-                    `#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nuniform sampler2D uSoft;\nuniform vec2 uSoftN;\nuniform float uSoftOrigin;\nuniform sampler2D uLayers;\n#define TRI_METRES(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).r\n#define TRI_VARY(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).g\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;${SOFT_GLSL}${variedGlsl}`,
+                    `#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uTex;\nuniform sampler2D uMat;\nuniform vec2 uN;\nuniform float uOrigin;\nuniform bool uTextured;\nuniform sampler2D uShade;\nuniform vec2 uShadeCells;\nuniform bool uObjectShadows;\nuniform float uShadowStrength;\nuniform sampler2D uImport;\nuniform float uImportLayer;\nuniform sampler2D uUnder;\nuniform mat3 uUnderM;\nuniform float uUnderOpacity;\nuniform vec2 uSize;\nuniform sampler2D uLights;\nuniform vec2 uLightTiles;\nuniform bool uLightsOn;\nuniform sampler2D uSoft;\nuniform vec2 uSoftN;\nuniform float uSoftOrigin;\nuniform sampler2D uLayers;\n#define TRI_METRES(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).r\n#define TRI_VARY(layer) texelFetch(uLayers, ivec2(int(layer), 1), 0).g\nvarying float vGap;\nvarying float vDeep;\nvarying vec2 vArea;\nvarying vec2 vPaint;\nvarying float vUp;\nvarying float vNormalUp;\nvarying vec3 vNormalArea;${SOFT_GLSL}${variedGlsl}`,
                 )
                 .replace('#include <color_fragment>', `#include <color_fragment>${SPLAT_FRAGMENT}${UNDERLAY_FRAGMENT}${SHADE_FRAGMENT}`)
                 .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>${LIGHTS_FRAGMENT}`);
@@ -898,6 +902,8 @@ export class View {
             j1 = Math.min(area.ny - 1, r.j1 + 1);
         const gap = this.mesh.geometry.attributes.aGap,
             deep = this.mesh.geometry.attributes.aDeep,
+            shift = this.mesh.geometry.attributes.aShift,
+            upright = area.kind === 'interior',
             shownHeights = chasm ? chasm.shown : fit ? fit.shown : area.heights;
         // (the edge scenery carries these out)
         this.drawn = shownHeights;
@@ -917,6 +923,11 @@ export class View {
                     z = area.heights[j * n + i],
                     shown = shownHeights[j * n + i];
                 pos.setY(v, shown);
+                // An interior's walls upright, as the game draws them.
+                const [dx, dy] = upright ? uprightShift(shownHeights, n, area.ny, i, j) : [0, 0];
+                pos.setX(v, i * SPACING + dx);
+                pos.setZ(v, area.sizeY - j * SPACING - dy);
+                shift.setXY(v, dx, dy);
                 gap.setX(v, !area.enclosed() ? 1e9 : fit ? fit.ceiling[j * n + i] - shown : area.roof - shown);
                 deep.setX(v, chasm ? chasm.deep[j * n + i] : 0);
                 // Under water the water shows it; no red tint. (Nor in a chasm: it is dark.)
@@ -934,7 +945,7 @@ export class View {
                 col.setXYZ(v, c.r, c.g, c.b);
             }
         }
-        for (const a of [pos, gap, deep, col]) this.uploadRows(a, i0, i1, j0, j1);
+        for (const a of [pos, gap, deep, col, shift]) this.uploadRows(a, i0, i1, j0, j1);
         this.uploadPaint(i0, i1, j0, j1);
         this.refreshSoft(r);
         // Only what the change reaches: on a 32×32 area each of these over the whole mesh took most of a 245 ms frame.
@@ -1394,7 +1405,7 @@ export class View {
         }
         const area = this.area,
             size = area.sizeY;
-        const at = (x, y, lift = 0) => new THREE.Vector3(x, area.heightAt(x, y) + lift, size - y);
+        const at = (x, y, lift = 0) => new THREE.Vector3(x, area.floorAt(x, y) + lift, size - y);
         const GREY = new THREE.Color(0x8a929b);
         // The colour a thing is drawn in: its kind's, or white when selected; an original's is the kind's washed toward grey.
         const tone = (kind, sel, ghost) => {
@@ -1564,7 +1575,12 @@ export class View {
         const draw = (t, id, sel, ghost) => {
             const c = tone(t.kind, sel, ghost);
             const hasOutline = t.outline?.length >= 3;
-            const p = hasOutline ? at(t.outline[0][0], t.outline[0][1]) : at(t.x, t.y);
+            // (a door pushed into an interior's wall goes onto its line, as the engine places it)
+            const p = hasOutline
+                ? at(t.outline[0][0], t.outline[0][1])
+                : t.kind === 'door' && !ghost
+                  ? at(...area.wallFoot(t.x, t.y))
+                  : at(t.x, t.y);
             // A door or placeable as its model, once it is in (its marker until then, and when it has none).
             if (!hasOutline && models.put(t, id, p, sel, ghost)) return;
             marker(t.kind, p, c, sel, ghost, id);
@@ -2103,8 +2119,6 @@ export class View {
     updateGrid(r = this.everything()) {
         const area = this.area,
             { nx, ny } = area,
-            size = area.sizeY,
-            h = area.heights,
             per = Math.round(TILE / SPACING); // samples along a tile
         // Segments: lines of constant x (running north, ny - 1 each), then of constant y (running east, nx - 1 each).
         const north = (area.tiles + 1) * (ny - 1),
@@ -2117,28 +2131,46 @@ export class View {
             this.grid.geometry.setAttribute('position', attr);
             r = this.everything();
         }
-        const a = attr.array;
-        const put = (seg, x0, y0, z0, x1, y1, z1) => a.set([x0, z0 + 0.05, size - y0, x1, z1 + 0.05, size - y1], seg * 6);
+        const a = attr.array,
+            ground = this.mesh.geometry.attributes.position.array,
+            shift = this.mesh.geometry.attributes.aShift.array;
+        // Each segment between two samples as the ground draws them, lifted off it. One up an interior's upright wall
+        // (uprightShift) is moved off the wall into the room instead, the way its top was moved: on the wall, the wall hid it.
+        const put = (seg, i0, j0, i1, j1) => {
+            const p = this.vertex(i0, j0),
+                q = this.vertex(i1, j1);
+            const dx = shift[p * 2] + shift[q * 2],
+                dy = shift[p * 2 + 1] + shift[q * 2 + 1],
+                d = Math.hypot(dx, dy);
+            const [ox, oz, up] = d > 0 ? [(0.05 * dx) / d, (-0.05 * dy) / d, 0] : [0, 0, 0.05];
+            a.set(
+                [
+                    ground[p * 3] + ox,
+                    ground[p * 3 + 1] + up,
+                    ground[p * 3 + 2] + oz,
+                    ground[q * 3] + ox,
+                    ground[q * 3 + 1] + up,
+                    ground[q * 3 + 2] + oz,
+                ],
+                seg * 6,
+            );
+        };
         // (only the segments moved go to the GPU, a range a line, as uploadRows sends the ground)
         attr.needsUpdate = true;
         const whole = wholeLeft(attr, r.i0 <= 0 && r.j0 <= 0 && r.i1 >= nx - 1 && r.j1 >= ny - 1);
         const upload = (seg, count) => !whole && count > 0 && attr.addUpdateRange(seg * 6, count * 6);
         for (let t = Math.ceil(r.i0 / per); t * per <= r.i1 && t <= area.tiles; t++) {
             const i = t * per,
-                along = t * TILE,
                 k0 = Math.max(0, r.j0 - 1),
                 k1 = Math.min(ny - 2, r.j1);
-            for (let k = k0; k <= k1; k++)
-                put(t * (ny - 1) + k, along, k * SPACING, h[k * nx + i], along, (k + 1) * SPACING, h[(k + 1) * nx + i]);
+            for (let k = k0; k <= k1; k++) put(t * (ny - 1) + k, i, k, i, k + 1);
             upload(t * (ny - 1) + k0, k1 - k0 + 1);
         }
         for (let t = Math.ceil(r.j0 / per); t * per <= r.j1 && t <= area.tilesY; t++) {
             const j = t * per,
-                along = t * TILE,
                 k0 = Math.max(0, r.i0 - 1),
                 k1 = Math.min(nx - 2, r.i1);
-            for (let k = k0; k <= k1; k++)
-                put(north + t * (nx - 1) + k, k * SPACING, along, h[j * nx + k], (k + 1) * SPACING, along, h[j * nx + k + 1]);
+            for (let k = k0; k <= k1; k++) put(north + t * (nx - 1) + k, k, j, k + 1, j);
             upload(north + t * (nx - 1) + k0, k1 - k0 + 1);
         }
     }

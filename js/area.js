@@ -33,6 +33,23 @@ export function dryShallows(surface, heights, out) {
 // under the roof up) are void, drawn black (landscaper's VOID_BELOW).
 export const CAVE_ROCK = 6;
 export const VOID_BELOW = 0.3;
+// A sample cell rising more than this (m) in an interior is a wall, which the game draws upright (landscaper's WALL_RISE).
+export const WALL_RISE = 1.5;
+
+/** How far (m east, m north) the view moves sample (i, j)'s vertex of an interior's `heights` (nx a row, ny rows) so its walls
+ *  stand upright on the room's edge, as the game draws them (landscaper's Heightmap::upright): a wall's top goes onto its foot's
+ *  line. [0, 0] elsewhere, and for a top with a foot each way (a wall a sample thick), which can't go to both. */
+export function uprightShift(heights, nx, ny, i, j) {
+    const k = j * nx + i,
+        h = heights[k];
+    const axis = (lower, higher, d) => {
+        const down = lower && h - heights[k - d] > WALL_RISE,
+            up = higher && h - heights[k + d] > WALL_RISE;
+        return up && !down ? SPACING : down && !up ? -SPACING : 0;
+    };
+    return [axis(i > 0, i < nx - 1, 1), axis(j > 0, j < ny - 1, nx)];
+}
+
 // A chasm drops this far under its rim (the nearest ground that isn't chasm), and ground more than CHASM_BELOW under its rim is in
 // it: nobody walks there. Its walls fade to black, all black from CHASM_DARK of the way down (landscaper's CHASM_DEPTH,
 // CHASM_BELOW and CHASM_DARK).
@@ -296,6 +313,26 @@ export class Area {
         const a = h[j * n + i] + (h[j * n + i + 1] - h[j * n + i]) * tx;
         const b = h[(j + 1) * n + i] + (h[(j + 1) * n + i + 1] - h[(j + 1) * n + i]) * tx;
         return a + (b - a) * ty;
+    }
+
+    /** In an interior, (x, y) in a wall's cell moved onto the wall's foot, where the wall is drawn upright (uprightShift); else
+     *  [x, y] (landscaper's Heightmap::wall_foot). */
+    wallFoot(x, y) {
+        if (this.kind !== 'interior') return [x, y];
+        const foot = (u, h) => {
+            const a = Math.floor(u / SPACING) * SPACING,
+                b = a + SPACING;
+            if (u - a <= 1e-3 || b - u <= 1e-3) return u;
+            const [ha, hb] = [h(a), h(b)];
+            return hb - ha > WALL_RISE ? a : ha - hb > WALL_RISE ? b : u;
+        };
+        return [foot(x, u => this.heightAt(u, y)), foot(y, v => this.heightAt(x, v))];
+    }
+
+    /** The ground a thing at (x, y) stands on: in an interior, one in a wall's cell stands at the wall's foot (wallFoot), not
+     *  up its slope; elsewhere heightAt (landscaper's Heightmap::floor_at). */
+    floorAt(x, y) {
+        return this.heightAt(...this.wallFoot(x, y));
     }
 
     /** Each body's samples: joined to its own (4-connected) through samples
