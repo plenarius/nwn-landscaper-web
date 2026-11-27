@@ -408,3 +408,21 @@ dialog button.busy:disabled {
 #askOk.danger:hover {
     background: var(--bad-fill);
 }
+.open-unlisted-head {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 0.9em;
+}
+.open-unlisted {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    border: 1px dashed #000;
+    border-radius: 8px;
+    opacity: 0.6;
+    cursor: default;
+}
+.open-unlisted small {
+    margin-left: 0;
+}
