@@ -14,13 +14,7 @@ function startCard() {
     const card = el(
         'div',
         { className: 'web-start', id: 'webStart' },
-        el(
-            'div',
-            {},
-            el('h2', {}, 'NWN ', el('b', { textContent: 'Landscaper' })),
-            line,
-            el('small', { textContent: 'Everything runs in this browser: nothing to install.' }),
-        ),
+        el('div', {}, el('h2', {}, 'NWN ', el('b', { textContent: 'Landscaper' })), line),
     );
     card.setAttribute('role', 'status');
     document.body.append(card);
