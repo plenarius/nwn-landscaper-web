@@ -5,6 +5,44 @@ tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.c
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
 not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
+## 0.7.1
+
+- **The Ambience tool's kinds say which one the brush paints.** Each kind's tooltip said "The brush places it", the chosen one
+  or not; now the chosen kind says the brush paints it, and the others say a click makes it the brush's.
+- **Ambience: no particle cap.** The brush and Fill no longer stop at 1,500 particles alive: how busy an area is, is the
+  builder's call. The panel still counts them by day and at night, and past 1,500 notes the area may be heavy on slower
+  machines, as a guide rather than a limit.
+- **Cliffs turned from the sun are lit as the export lights them.** The view's shade no longer darkens ground turned away
+  from the game's sun for the shadow it casts on itself (the sun doesn't reach it anyway), and steep ground takes some of the
+  sun or moon bounced off the ground below it, as the game's tiles now do (plenarius/nwn-landscaper's matching change).
+- **A placeable whose model the engine doesn't have shows as a box.** An area from another install drew nothing where those
+  stood; now each is a translucent box you can see, select and move, one line over the view names the models once for the area,
+  and Live stays green or amber instead of red.
+- **The browser page uses its stock placeables.** With the game's stock models beside it, the page fetches each one when an area
+  or a panel first needs it, Place and Scatter work, and Export takes the page's own shaders without asking for the game folder.
+- **Missing textures:** an area painted with textures the library hasn't got draws them as a magenta checker, not grey ground,
+  and a notice says which and how much of the ground each covers. Its dialog adds starter ones from the game (an admin, with an
+  engine that can) or swaps each for a library texture, as one step of undo. Export refuses with the same words.
+- **The view draws painted edges as the export now bakes them.** Where two textures meet, the view showed the paint's 0.625 m
+  grid, the same sawtooth the game did. It now smooths each texture's paint over about 1.5 m and draws the edge there, by the
+  engine's own rule: sharp on a smooth line for laid surfaces (cobbles, flagstones, floors, planks), ragged by the same noise and
+  by the textures' own light and dark for natural ground, as the texture catalog's `edge` (or the texture's category) says.
+  What the view shows is what the game will show after export, to a few millimetres. Specks a sample or two across, like the mix
+  brush's soft edge, are smoothed away in the view as in the game. Steep ground keeps its one texture a face. Needs the engine's
+  soft paint bake (nwn-landscaper #95).
+- **Walls meet the floor without stripes in the view.** At a crease, where the face's own slope and the smoothed one part (a
+  cave wall's foot, a cliff's base), a texture's three projections blend by the face's own, as the export now blends them in
+  the game. Blended by the smoothed normal, the wall's foot streaked in a band where it met the floor.
+- **The browser page's start card no longer says there is nothing to install.**
+- **Open shows the area files it can't open.** Below your areas, greyed, each `.json` of the areas folder the engine leaves out
+  of its list, with the reason: a name longer than 9 characters, broken JSON, or a `name` that isn't the file's name. A file
+  copied in by hand used to vanish from Open without a word. Needs the engine's `unlisted` (nwn-landscaper #94); with an older
+  engine Open is as before.
+- **A lake's shore is smooth in the view, not a sawtooth.** The water stopped at the 0.625 m cells where the shallows under 15 cm
+  began, so its edge stepped along the grid. It now runs on over the shallows to where the ground comes up through it, as the
+  game draws it (nwn-landscaper #89): a ford shows a faint film of water, and the band's and the edge scenery's water follow. The
+  shallows stay dry to walk on and paint.
+
 ## 0.7.0
 
 - **Every area has a band of ground round it, shown past its edge in the game.** 50 m beyond each side, drawn round the area in
