@@ -92,7 +92,7 @@ export class ThingsTool {
             area: () => this.area(),
             selected: () => this.handle,
             flat: async () => null,
-            settle: o => this.area().heightAt(o.x, o.y),
+            settle: o => this.area().floorAt(o.x, o.y),
             moved: o => this.putHandle(o),
             say: text => ctx.say(text),
             changed: (_o, final) => final && this.changed(),
@@ -238,7 +238,7 @@ export class ThingsTool {
         const t = a && this.active && !this.draft && !this.ctx.readOnly?.() ? (this.selected() ?? this.selectedGhost()) : null;
         const on = t && MODEL_KINDS.has(t.kind) && !(t.outline?.length >= 3) ? t : null;
         const who = on ? (on.key ?? `#${on.id}`) : null;
-        const where = on && { x: on.x, y: on.y, z: a.heightAt(on.x, on.y), bearing: on.bearing ?? 0 };
+        const where = on && { x: on.x, y: on.y, z: a.floorAt(on.x, on.y), bearing: on.bearing ?? 0 };
         if (who !== this.handleFor) {
             this.handleFor = who;
             this.handle = on ? { ...where, scale: 1, id: on.key ? null : on.id, key: on.key ?? null } : null;

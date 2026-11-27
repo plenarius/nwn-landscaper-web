@@ -254,3 +254,30 @@ test('a new hilly area that is not square spans the whole height of its hills, a
         }
     }
 });
+
+test("an interior's wall tops move onto their foot's line, as the game draws them upright", async () => {
+    const { uprightShift, SPACING } = await import('../js/area.js');
+    const { roomRect, cutRoom } = await import('../js/tools.js');
+    const a = Area.create('up', 4, 'interior');
+    cutRoom(a, roomRect({ x: 10, y: 10 }, { x: 30, y: 26.25 }, a.sizeX, a.sizeY), a.roof - 6);
+    const at = (x, y) => uprightShift(a.heights, a.nx, a.ny, Math.round(x / SPACING), Math.round(y / SPACING));
+    // The west wall's top (a sample out from the floor) goes east onto the room's edge, the east wall's west, the south's north.
+    assert.deepEqual(at(10 - SPACING, 18), [SPACING, 0]);
+    assert.deepEqual(at(30 + SPACING, 18), [-SPACING, 0]);
+    assert.deepEqual(at(20, 10 - SPACING), [0, SPACING]);
+    // The floor, the rock behind the top and the rock off a corner stay.
+    for (const [x, y] of [
+        [10, 18],
+        [20, 20],
+        [10 - 2 * SPACING, 18],
+        [10 - SPACING, 10 - SPACING],
+    ])
+        assert.deepEqual(at(x, y), [0, 0]);
+    // A door pushed into a wall goes onto its foot, and anything there stands on the floor, as the game places them.
+    assert.deepEqual(a.wallFoot(9.8, 18), [10, 18]);
+    assert.equal(a.floorAt(9.8, 18), a.roof - 6);
+    assert.equal(a.floorAt(10 - 1.5 * SPACING, 18), a.roof);
+    // A wall one sample thick between two rooms: its top can't go to both feet.
+    cutRoom(a, { x0: 0, x1: 10 - 2 * SPACING, y0: 10, y1: 26.25 }, a.roof - 6);
+    assert.deepEqual(at(10 - SPACING, 18), [0, 0]);
+});
