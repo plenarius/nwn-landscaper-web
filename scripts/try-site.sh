@@ -13,12 +13,13 @@
 #   LANDSCAPER_WASM  the engine for the browser (landscaper-wasm.zip's landscaper.wasm, or scripts/build-wasm.sh's)
 #   PACK_DIR         the demo texture pack (the engine's packs/demo: pack.json, pictures/, CREDITS.md)
 set -euo pipefail
-cd "$(dirname "$0")/.."
 if (($# != 3)); then
     sed -n '/^# Usage/,/^set /p' "$0" | sed '$d' >&2
     exit 2
 fi
-out=$1 wasm=$2 pack=$3
+# (The paths as given, from where it was started; then the editor's own files from its folder.)
+out=$(realpath -m "$1") wasm=$(realpath -m "$2") pack=$(realpath -m "$3")
+cd "$(dirname "$0")/.."
 [[ -f "$wasm" ]] || { echo "no engine at $wasm" >&2; exit 1; }
 [[ -f "$pack/pack.json" ]] || { echo "no pack.json in $pack" >&2; exit 1; }
 if [[ -e "$out" && -n "$(ls -A "$out")" ]]; then

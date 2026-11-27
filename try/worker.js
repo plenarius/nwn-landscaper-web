@@ -20,6 +20,8 @@ let engine = null;
 let store = null;
 let started = null;
 let queue = Promise.resolve();
+// Whether the visitor's game gave the export's shaders this visit (they are in the engine's override, in memory only).
+let shaders = false;
 
 const say = text => self.postMessage({ kind: 'progress', text });
 const log = text => self.postMessage({ kind: 'log', text: String(text) });
@@ -103,6 +105,14 @@ async function answer(m) {
     return r;
 }
 
+/** The game's shaders (shaders.js: { name: bytes }) where the engine reads them before the game's own: the user folder's
+ *  `override`, in memory. Not in OPFS: nothing of the game's is kept past the visit. */
+function putShaders(files) {
+    for (const [name, bytes] of Object.entries(files)) engine.put(`user/override/${name}.shd`, bytes);
+    shaders = true;
+    return true;
+}
+
 /** The export of area `name` into module file `module` (the report's path), as a zip: { name, blob }. */
 async function exportZip(name, module) {
     const rel = module.replace(/^\/work\//, '');
@@ -116,10 +126,13 @@ async function exportZip(name, module) {
         'Put the files of hak/ in the hak folder of your Neverwinter Nights user folder, and the module in its modules folder',
         '(Documents/Neverwinter Nights on Windows and macOS, ~/.local/share/Neverwinter Nights on Linux).',
         '',
-        "This page has none of the game's files, so the tiles' shaders in this export are stand-ins: the area doesn't draw",
-        'right in the game yet. Export it again from the Landscaper on your computer, or from this page once it can use your',
-        'game folder.',
-        '',
+        ...(shaders
+            ? []
+            : [
+                  "This export was made without your game folder, so the tiles' shaders in it are stand-ins: the area doesn't draw",
+                  'right in the game. Export it again and choose your game folder when the page asks.',
+                  '',
+              ]),
     ].join('\r\n');
     const t = performance.now();
     const blob = zip([
@@ -160,7 +173,11 @@ self.onmessage = ev => {
     } else if (m.kind === 'call') {
         const run = queue
             .then(() => started)
-            .then(() => (m.what === 'export-zip' ? exportZip(...m.args) : Promise.reject(new Error(m.what))));
+            .then(() => {
+                if (m.what === 'export-zip') return exportZip(...m.args);
+                if (m.what === 'shaders') return putShaders(...m.args);
+                throw new Error(`no call ${m.what}`);
+            });
         queue = run.catch(() => {});
         run.then(
             value => self.postMessage({ kind: 'reply', id: m.id, value }),

@@ -17,6 +17,24 @@ import { download, web } from './web.js';
 export const NO_ENGINE_HERE = reason =>
     `The engine couldn't start in this browser${reason ? ` (${reason})` : ''}, so exporting, the path check and the texture library are off. Sculpting works, and the browser keeps your area. A current Chrome, Edge, Firefox or Safari runs it.`;
 
+/** The largest area, in tiles a side, the page makes without asking first: an export of 16 by 16 needs about 0.4 GB. */
+export const BROWSER_TILES = 16;
+
+/** About how many GB an export of a `w` by `h` area needs in the page (measured: 16 by 16 0.39 GB, 32 by 32 1.17 GB). */
+export const exportGb = (w, h) => Math.max(0.1, 0.39 + ((w * h - 256) * (1.17 - 0.39)) / (1024 - 256));
+
+/** Whether to make or open a `w` by `h` area: at once up to BROWSER_TILES a side, or outside the browser; else asks first. */
+export async function bigAreaOk(w, h) {
+    if (!web.on || (w <= BROWSER_TILES && h <= BROWSER_TILES)) return true;
+    const answer = await ask({
+        title: 'A big area for a browser',
+        text: `Exporting a ${w}×${h} area needs about ${exportGb(w, h).toFixed(1)} GB of memory in this page (16×16 needs 0.4 GB). A phone or a small laptop may not have that much, and the export then stops with "too big for this browser". The Landscaper on your computer has no such limit.`,
+        ok: 'Make it anyway',
+        cancel: 'Cancel',
+    });
+    return answer === true;
+}
+
 /** The engine's source at version `version` (as /api/me gives it): its tag for a release, else the main branch. */
 export function sourceUrl(version) {
     const repo = 'https://github.com/plenarius/nwn-landscaper';
@@ -55,6 +73,7 @@ async function openFile(ctx, file) {
         showError(`${file.name} isn't an area the Landscaper saved (${err.message}).`, "Couldn't open the file");
         return;
     }
+    if (!(await bigAreaOk(a.tiles, a.tilesY))) return;
     try {
         if (!(await saveNew(a))) {
             const yes = await ask({

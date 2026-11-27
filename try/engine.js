@@ -79,16 +79,17 @@ export class Engine {
         fds[1] = ConsoleStdout.lineBuffered(said);
         fds[2] = ConsoleStdout.lineBuffered(said);
         const wasi = new WASI(['landscaper', ...args], env, fds, { debug: false });
-        const inst = await WebAssembly.instantiate(this.module, { wasi_snapshot_preview1: wasi.wasiImport });
+        let inst;
         let code;
         try {
+            inst = await WebAssembly.instantiate(this.module, { wasi_snapshot_preview1: wasi.wasiImport });
             code = wasi.start(inst);
         } catch (e) {
             // (A trap: a panic that aborts, or memory that can't grow, which Rust says before it aborts.)
             this.log(`the engine stopped: ${e}`);
             code = outOfMemory || e instanceof RangeError ? 'memory' : 101;
         }
-        this.memory = Math.max(this.memory, inst.exports.memory.buffer.byteLength);
+        if (inst) this.memory = Math.max(this.memory, inst.exports.memory.buffer.byteLength);
         const out = wasi.fds[6]?.dir?.contents ?? new Map();
         return { code, files: new Map([...out].map(([n, f]) => [n, f.data])) };
     }

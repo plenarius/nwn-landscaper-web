@@ -62,7 +62,7 @@ export function showReport(r, checkOnly = false) {
             ...(checkOnly
                 ? [p('note', 'Nothing was exported: this only checks.')]
                 : [
-                      ...updated(r.updated),
+                      ...updated(r.updated, !!r.download),
                       r.added_to_module &&
                           el(
                               'p',
@@ -89,9 +89,10 @@ export function showReport(r, checkOnly = false) {
                                 el('code', { textContent: r.installed_module || r.module }),
                             ),
                       r.download &&
+                          !r.shaders &&
                           p(
                               'warn',
-                              "● Made without the game's files: the tiles' shaders are stand-ins, so the area doesn't draw right in the game yet. Export it from the Landscaper on your computer to play it.",
+                              "● Made without your game folder: the tiles' shaders are stand-ins, so the area doesn't draw right in the game. Export again to choose it.",
                           ),
                   ]),
         ].filter(Boolean),
@@ -100,7 +101,8 @@ export function showReport(r, checkOnly = false) {
 }
 
 // What happened to a module that was already installed (and maybe built on): its paragraphs.
-function updated(u) {
+// `download`: the export is a download (the page in the browser), so no module of the visitor's own was changed on disk.
+function updated(u, download = false) {
     if (!u) return [];
     const p = (className, text) => el('p', { className, textContent: text });
     const out = [
@@ -132,7 +134,7 @@ function updated(u) {
             '',
             u.atmosphere ? 'Light and fog: set from the editor.' : 'Light and fog: unchanged in the editor, so the module keeps its own.',
         ),
-        p('note', 'Close the module in the toolset before exporting, or saving there will overwrite this update.'),
+        !download && p('note', 'Close the module in the toolset before exporting, or saving there will overwrite this update.'),
     );
     return out;
 }
