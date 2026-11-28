@@ -97,7 +97,7 @@ function progressBox(name, cancel) {
               },
           })
         : null;
-    const title = el('h3', { textContent: `Exporting ${name}` });
+    const title = el('h3', { className: 'export-title', textContent: `Exporting ${name}` });
     $('reportBody').replaceChildren(title, estimate, bar, step, ...(stop ? [stop] : []));
     $('report').hidden = false;
     // (The bar never goes back: a slower tile than expected stretches the time left, not the work done.)
