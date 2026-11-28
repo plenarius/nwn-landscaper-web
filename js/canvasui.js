@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // New canvas, Open canvas and Make a canvas from this area (File menu), and the view's detail button while a canvas is open. A
-// canvas is sculpted and painted with the area tools and cut into pieces in Pieces mode (piecesui.js); its export and publish
-// come with step 7.
+// canvas is sculpted and painted with the area tools and cut into pieces in Pieces mode (piecesui.js); Export, Check paths and
+// Publish take its pieces.
 
 import { CanvasArea, MAX_TILES, MIN_TILES, canvasNameOk } from './canvas.js';
 import { createCanvas, listCanvases, loadCanvas } from './canvassave.js';
@@ -20,8 +20,8 @@ const NEW_NOTE =
 /** The least room round an area made a canvas: its band, so the piece cut out carries the same halo. */
 const MIN_ROOM = 5;
 
-// Buttons that act on one area, off while a canvas is open: a canvas is exported, checked and published by its pieces.
-const AREA_ONLY = ['btnExport', 'btnCheck', 'btnPublish', 'btnDelete', 'btnVersion'];
+// Buttons that act on one area, off while a canvas is open (Export, Check paths and Publish take the canvas's pieces).
+const AREA_ONLY = ['btnDelete', 'btnVersion'];
 
 export function initCanvas(c) {
     ctx = c;

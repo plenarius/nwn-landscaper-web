@@ -592,6 +592,22 @@
         </form>
     </dialog>
 
+    <dialog id="canvasPubDialog" aria-labelledby="cpTitle">
+        <form method="dialog">
+            <h2 id="cpTitle">Send the canvas for review</h2>
+            <p class="note" id="cpIntro">Pieces go out together, as one module, so their crossings and edges match. Ticked: the ones that changed since the last publish, and the ones whose edge scenery or crossings show a neighbour's change.</p>
+            <div class="cp-table-box"><table class="cp-table"><thead><tr><th></th><th>Piece</th><th>Since the last publish</th></tr></thead><tbody id="cpRows"></tbody></table></div>
+            <label class="check"><input type="checkbox" id="cpEvery"> Send every piece <small id="cpEveryCount"></small></label>
+            <ul class="findings" id="cpNotes" hidden></ul>
+            <p class="note" id="cpText"></p>
+            <div class="progress" id="cpBar" hidden><span></span></div>
+            <label id="cpNoteRow">Note to the reviewer <small>(optional)</small>
+                <input type="text" id="cpNote" maxlength="300" autocomplete="off"></label>
+            <div id="cpLinks"></div>
+            <div class="dialog-buttons"><button type="submit" value="cancel" id="cpClose">Close</button><button type="button" id="cpExport" hidden title="Export every piece again, then come back">Export again</button><button type="button" id="cpTry" hidden title="Put the ticked pieces on the dev server together, to walk them in the game first">Try on dev</button><button type="button" id="cpPackage" title="A zip of the ticked pieces' module and haks to add by hand: it doesn't count as a publish">Download a package</button><button type="button" class="primary" id="cpGo">Check</button></div>
+        </form>
+    </dialog>
+
     <dialog id="activityDialog" aria-labelledby="activityTitle">
         <form method="dialog">
             <h2 id="activityTitle">Activity</h2>
