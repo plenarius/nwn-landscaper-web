@@ -136,3 +136,55 @@ test('Keep it longer touches the trial; Release ends it', async () => {
     assert.equal($('pubTrial').hidden, true);
     assert.match($('pubText').textContent, /^Released/);
 });
+
+test('a check refused for its size alone says so and still offers Try on dev', async () => {
+    serve(null);
+    const detail = 'bay1: the tile files are 476 MB, more than the 200 MB a publish takes';
+    engine.routes.set('POST /api/publish', () => [
+        {
+            plan: null,
+            pr_urls: null,
+            too_large: { detail, code: 'too_large', size: 499122176, limit: 209715200, unit: 'bytes' },
+            findings: [],
+        },
+    ]);
+    await open();
+    assert.equal($('pubText').textContent, `Too large to publish: ${detail}. You can still try it on dev, which takes any size.`);
+    assert.equal($('pubGo').hidden, true, 'no pull requests');
+    assert.equal($('pubTry').disabled, false, 'Try on dev takes any size');
+    // The check's errors still come first.
+    engine.routes.set('POST /api/publish', () => [
+        { plan: null, too_large: { detail }, findings: [{ level: 'error', what: 'door', msg: 'leads nowhere' }] },
+    ]);
+    await open();
+    assert.match($('pubText').textContent, /Fix the 1 problem below first\.$/);
+    assert.equal($('pubTry').disabled, true);
+    // Any other refusal keeps both shut.
+    engine.routes.set('POST /api/publish', () => [{ error: 'the publishing service said 422: bad area name' }, 400]);
+    await open();
+    assert.equal($('pubText').textContent, "Can't publish yet: the publishing service said 422: bad area name");
+    assert.equal($('pubTry').disabled, true);
+});
+
+test("a canvas too large to publish can still go on dev, and isn't sent for review", async () => {
+    const { openCanvasPublish, initCanvasPublish } = await import('../js/canvaspubui.js');
+    initCanvasPublish(() => {});
+    engine.routes.set('GET /api/dev-trial', () => [{ enabled: true, trial: null }]);
+    engine.routes.set('GET /api/canvas-changes', () => [
+        {
+            canvas: 'rivl',
+            ticked: ['rivl01'],
+            pieces: [{ name: 'rivl01', exported: true, stale: false, published: null, changed: true, why: [] }],
+        },
+    ]);
+    engine.routes.set('POST /api/canvas-check', () => [{ routes: { problems: [] } }]);
+    const detail = 'the areas are 14, more than the 12 a publish takes';
+    engine.routes.set('POST /api/canvas-publish', () => [{ plan: null, too_large: { detail }, findings: [], pieces: ['rivl01'] }]);
+    await openCanvasPublish({ area: () => ({ name: 'rivl', canvas: { pieces: [] } }), me: () => me });
+    assert.equal($('cpTry').disabled, true, 'not before a check');
+    await $('cpGo').onclick();
+    assert.equal($('cpText').textContent, `Too large to publish: ${detail}. You can still try it on dev, which takes any size.`);
+    assert.equal($('cpTry').disabled, false);
+    assert.match($('cpGo').textContent, /^Check/, 'Send stays a check: nothing goes for review');
+    $('canvasPubDialog').close();
+});

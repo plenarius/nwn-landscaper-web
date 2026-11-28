@@ -149,3 +149,6 @@ dialog label.check {
 dialog label.check input {
     width: auto;
 }
+dialog label.check[hidden] {
+    display: none; /* (display: flex above would show it: "Publish the whole module" showed for a lone area) */
+}
