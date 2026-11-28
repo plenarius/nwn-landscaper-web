@@ -872,7 +872,7 @@ export class Area {
             shadow: this.shadow,
             lights: this.lightsForExport(),
             entrances: this.entrances,
-            objects: this.objects,
+            objects: this.objects.map(savedObject),
             nextObjectId: this.nextObjectId,
             ambience: this.ambience,
             kind: this.kind,
@@ -886,7 +886,7 @@ export class Area {
             originals: this.originals,
             created: this.created,
             underlay: this.underlay,
-            band: this.band?.toJSON() ?? null,
+            band: this.band?.toJSON(this) ?? null,
         };
     }
 
@@ -903,7 +903,7 @@ export class Area {
         if (validLights(o.lights, area.tiles * area.tilesY)) area.lights = o.lights;
         if (o.entrances) area.entrances = o.entrances;
         area.giveEntranceIds(o.entranceNextId);
-        if (o.objects) area.objects = o.objects;
+        if (Array.isArray(o.objects)) area.objects = o.objects.map(x => ({ ...OBJECT_DEFAULTS, ...x }));
         if (validAmbience(o.ambience)) area.ambience = o.ambience;
         if (o.kind) {
             area.kind = o.kind;
@@ -919,16 +919,36 @@ export class Area {
         if (o.originals)
             area.originals = { removed: o.originals.removed ?? [], moved: o.originals.moved ?? {}, edited: o.originals.edited ?? {} };
         area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;
-        // (an area saved before bands gets its first fill: every area shows real ground past its edge)
-        if (!area.enclosed()) {
-            const band = Band.fromJSON(o.band, area);
-            // (A band still as the first fill left it, before the fill was eased, is filled again: nobody shaped it.)
-            area.band = band && !band.same(Band.extruded(area), area) ? band : Band.fill(area);
-        }
+        // (before the band's fill, which keeps the beds of rivers running out past the edge)
         if (o.water) area.water = o.water;
+        // (an area saved before bands, or whose band was the untouched first fill, gets its first fill)
+        if (!area.enclosed()) {
+            let band = Band.fromJSON(o.band, area);
+            // (A band saved whole as the first fill left it, before the fill was eased or after, is the fill: nobody shaped it.)
+            if (band?.legacy && band.same(Band.extruded(area), area)) band = null;
+            if (band?.legacy) {
+                const fill = Band.fill(area);
+                if (band.same(fill, area)) band = fill;
+            }
+            area.band = band ?? Band.fill(area);
+        }
         area.floodWater();
         return area;
     }
+}
+
+/** An object's fields a save leaves out when they hold these: the engine reads a missing one the same (heightmap.rs). */
+const OBJECT_DEFAULTS = { bearing: 0, scale: 1, solid: true, baked: true };
+/** How finely a save keeps an object's numbers (one over the step): its point to the millimetre; its bearing and scale to a
+ *  ten-thousandth, which moves the tip of a 20 m tree 1 mm at most. */
+const OBJECT_STEPS = { x: 1000, y: 1000, z: 1000, bearing: 10000, scale: 10000 };
+
+/** Object `o` as a save keeps it (OBJECT_STEPS, OBJECT_DEFAULTS): placed by the thousand, objects were most of a save. */
+function savedObject(o) {
+    const out = { ...o };
+    for (const [f, per] of Object.entries(OBJECT_STEPS)) if (Number.isFinite(out[f])) out[f] = Math.round(out[f] * per) / per || 0;
+    for (const [f, v] of Object.entries(OBJECT_DEFAULTS)) if (out[f] === v) delete out[f];
+    return out;
 }
 
 /** Whether `v` is a list of particle placements as an area keeps them (ambience.js): each a kind and a point. */

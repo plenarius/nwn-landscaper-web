@@ -7,9 +7,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './browser.js';
 
-const { Area, SPACING } = await import('../js/area.js');
+const { Area, SPACING, toBase64 } = await import('../js/area.js');
 const { Band, BAND } = await import('../js/band.js');
 const { stamp } = await import('../js/tools.js');
+
+/** Area `a` as editors before 0.8 saved it: its band whole, every bit of its heights. */
+const savedWhole = a => {
+    const b = a.band;
+    b.sync(a);
+    return {
+        ...a.toJSON(),
+        band: { n: b.n, heights: toBase64(new Uint8Array(b.heights.buffer.slice(0))), materials: toBase64(b.materials) },
+    };
+};
+const reopen = o => Area.fromJSON(JSON.parse(JSON.stringify(o)));
 
 /** A 3 by 3 area whose heights rise to the east, one sample's metres a sample. */
 function ramp() {
@@ -48,8 +59,68 @@ test('an area saved before bands gets its first fill, and a band keeps through a
     a.band.heights[0] = 42;
     const kept = Area.fromJSON(JSON.parse(JSON.stringify(a.toJSON())));
     assert.equal(kept.band.heights[0], 42);
-    // A band of another size (the area resized since) is filled again.
-    assert.equal(Band.fromJSON({ n: 16, heights: a.toJSON().band.heights }, a), null);
+    // A band of another size (the area resized since) is filled again, saved either way.
+    assert.equal(Band.fromJSON({ ...a.toJSON().band, n: 16 }, a), null);
+    assert.equal(Band.fromJSON({ ...savedWhole(a).band, n: 16 }, a), null);
+});
+
+test('an untouched band saves nothing and comes back the same, river beds and all', () => {
+    const a = Area.create('ut', 4, 'hills', 5);
+    // A lake by the west edge, which runs on into the band (its bed kept by the fill).
+    a.water.push({ i: 2, j: 30, level: a.heights[30 * a.nx + 2] + 1 });
+    a.band = Band.fill(a);
+    a.floodWater();
+    assert.equal(a.toJSON().band, null);
+    const back = reopen(a.toJSON());
+    assert.deepEqual(back.band.heights, a.band.heights);
+    assert.deepEqual(back.band.materials, a.band.materials);
+    // Shaped, it is saved; shaped back as it was (an undo), it is the fill again.
+    const was = a.band.heights[3];
+    a.band.heights[3] += 2;
+    assert.ok(a.toJSON().band);
+    a.band.heights[3] = was;
+    assert.equal(a.toJSON().band, null);
+    // The ground inside the area changed: the fill doesn't read it, so the band is still the fill.
+    a.heights[40 * a.nx + 40] += 3;
+    assert.equal(a.toJSON().band, null);
+    assert.deepEqual(reopen(a.toJSON()).band.heights, a.band.heights);
+    // The area's edge changed under it: no longer the fill of the area as it is, so it is kept as it is.
+    a.heights[0] += 3;
+    assert.ok(a.toJSON().band);
+    assert.ok(Math.abs(reopen(a.toJSON()).band.heights[0] - a.band.heights[0]) <= 0.005);
+});
+
+test("a shaped band saves its own samples to the centimetre; ground out of the centimetres' range keeps every bit", () => {
+    const a = Area.create('sh', 4, 'hills', 5),
+        b = a.band;
+    for (let k = 0; k < b.heights.length; k += 7) b.heights[k] += Math.sin(k) * 30;
+    b.materials[0] = a.materialIndex('rock');
+    const saved = a.toJSON().band;
+    assert.equal(saved.heights, undefined);
+    const back = reopen(a.toJSON()).band;
+    b.sync(a);
+    let worst = 0;
+    for (let k = 0; k < b.heights.length; k++) worst = Math.max(worst, Math.abs(back.heights[k] - b.heights[k]));
+    assert.ok(worst <= 0.005 + 1e-5, `${worst} m off`);
+    assert.deepEqual(back.materials, b.materials);
+    // Two bytes a sample for heights instead of four, and only the band's own samples.
+    assert.ok(JSON.stringify(saved).length < JSON.stringify(savedWhole(a).band).length * 0.6);
+    // 1000 m above the rest: whole, as before.
+    b.heights[0] = 1000;
+    assert.equal(typeof a.toJSON().band.heights, 'string');
+    assert.equal(reopen(a.toJSON()).band.heights[0], 1000);
+});
+
+test('a band an older editor saved whole as the eased first fill is the fill again, and its next save leaves it out', () => {
+    const a = Area.create('ol', 4, 'hills', 5);
+    const back = reopen(savedWhole(a));
+    assert.deepEqual(back.band.heights, a.band.heights);
+    assert.equal(back.toJSON().band, null);
+    // Shaped: kept, and saved.
+    a.band.heights[1] += 1;
+    const shaped = reopen(savedWhole(a));
+    assert.equal(shaped.band.heights[1], a.band.heights[1]);
+    assert.ok(shaped.toJSON().band);
 });
 
 test('a brush past the edge shapes the band, and undo takes it back with the area', () => {
@@ -109,10 +180,10 @@ test('a band saved as the old first fill left it is filled again; one someone sh
     const a = Area.create('rf', 4, 'flat', 5);
     for (let j = 0; j < a.ny; j++) a.heights[j * a.nx] = j % 4 < 2 ? 2 : 0;
     a.band = Band.extruded(a);
-    const back = Area.fromJSON(JSON.parse(JSON.stringify(a.toJSON())));
+    const back = reopen(savedWhole(a));
     assert.ok(back.band.same(Band.fill(a), a), 'eased');
     a.band.heights[5] += 1;
-    const kept = Area.fromJSON(JSON.parse(JSON.stringify(a.toJSON())));
+    const kept = reopen(savedWhole(a));
     assert.equal(kept.band.heights[5], a.band.heights[5]);
     assert.ok(kept.band.same(a.band, a));
 });

@@ -53,7 +53,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: scripts/shared-files.sh --online
+      # Saves of every kind the editor has written, for tests/showcase.test.js to open and save again.
+      - name: The engine's showcase areas
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/plenarius/nwn-landscaper "$RUNNER_TEMP/engine"
+          git -C "$RUNNER_TEMP/engine" sparse-checkout set docs/assets/showcase/areas
       - name: Tests
+        env:
+          LANDSCAPER_SHOWCASE: ${{ runner.temp }}/engine/docs/assets/showcase/areas
         run: node --test 'tests/*.test.js'
       # The changelog's fragments (changelog.d/): bullets, `## Unreleased` while they wait, and the fold's own test. In a pull
       # request it warns when entries go into CHANGELOG.md instead of a fragment.
