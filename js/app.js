@@ -33,6 +33,7 @@ import { initMenus } from './menus.js';
 import { initDesktop } from './help.js';
 import { initWebDemo, linkedArea } from './webdemo.js';
 import { web } from './web.js';
+import { initUpdate } from './update.js';
 import { showVersion } from './version.js';
 import { initActivity } from './activity.js';
 import { initPublish } from './publish.js';
@@ -79,8 +80,9 @@ for (const e of document.querySelectorAll('[data-icon]')) setIcon(e, e.dataset.i
 // A dialog's Close button names its dialog (`data-close`): the page's Content-Security-Policy runs no inline `onclick`.
 for (const b of document.querySelectorAll('[data-close]')) b.onclick = () => $(b.dataset.close).close();
 
-// The desktop app's items and words (help.js), before anything below can stop the page.
+// The desktop app's items and words (help.js) and its updates (update.js), before anything below can stop the page.
 initDesktop();
+initUpdate();
 
 // No WebGL: say why instead of showing a blank page.
 const probe = document.createElement('canvas');

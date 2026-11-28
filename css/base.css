@@ -385,6 +385,20 @@ input[type="range"] {
 .version-lines p {
     margin: 0 0 4px;
 }
+/* In the app, a newer version is out: a dot on the version, and its item in the menu. */
+.menu-btn.version-btn.has-update::after {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-left: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: middle;
+}
+.menu-item.update-item {
+    color: var(--accent);
+}
 a.menu-item {
     color: var(--text);
     font-size: 14px;
