@@ -85,6 +85,7 @@ export async function startEngine(site) {
                 const m = ev.data;
                 if (m.kind === 'progress') card.say(m.text);
                 else if (m.kind === 'log') console.debug(`[engine] ${m.text}`);
+                else if (m.kind === 'export-progress') web.progress?.(m.progress);
                 else if (m.kind === 'ready') done(m.boot);
                 else if (m.kind === 'failed') fail(new Error(m.error));
                 else if (m.kind === 'reply') {

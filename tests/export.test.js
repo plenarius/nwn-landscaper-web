@@ -67,3 +67,49 @@ test("a cave's kind and roof go in the query string", async () => {
     assert.equal(sent.query.get('roof'), '6');
     assert.equal(sent.query.has('entrances'), false);
 });
+
+/** Clicks Export and waits for it to finish (the button is enabled again). */
+async function clickExport() {
+    const btn = document.getElementById('btnExport');
+    btn.disabled = false;
+    await btn.onclick();
+}
+
+test('Export runs as a job and follows its progress until the report comes', async () => {
+    open = Area.create('ex', 3, 'flat');
+    const result = { name: 'ex', routes: { ok: 3, total: 3, long: 0 }, warnings: [] };
+    let polls = 0;
+    engine.routes.set('POST /api/export/job', () => [{ job: 1, running: true, progress: { step: 'preparing', done: 0, total: 0 } }, 202]);
+    engine.routes.set('GET /api/export/job', () => {
+        polls++;
+        return polls < 2
+            ? [{ job: 1, running: true, progress: { step: 'tiles', done: 4, total: 9, cached: 2, elapsed: 3, estimate: 10, left: 7 } }]
+            : [{ job: 1, running: false, progress: { step: 'done', done: 9, total: 9, left: 0 }, result }];
+    });
+    await clickExport();
+    assert.equal(polls, 2, 'asked until it ended');
+    assert.equal(engine.exports.length, 0, 'not the blocking route');
+    assert.ok(
+        engine.log.some(l => l.startsWith('POST /api/export/job?name=ex&')),
+        engine.log.join('\n'),
+    );
+    assert.equal(document.getElementById('report').hidden, false);
+});
+
+test('Export falls back to the blocking route on an engine without jobs', async () => {
+    open = Area.create('ex', 3, 'flat');
+    await clickExport();
+    assert.equal(engine.exports.length, 1);
+    assert.equal(engine.exports[0].path, '/api/export');
+});
+
+test('a cancelled export says so, not that it failed', async () => {
+    open = Area.create('ex', 3, 'flat');
+    engine.routes.set('POST /api/export/job', () => [{ job: 2, running: true, progress: { step: 'tiles', done: 1, total: 9 } }, 202]);
+    engine.routes.set('GET /api/export/job', () => [
+        { job: 2, running: false, cancelled: true, error: 'the export was cancelled', progress: { step: 'failed' } },
+    ]);
+    await clickExport();
+    const body = document.getElementById('reportBody');
+    assert.match(JSON.stringify(body.children.map(c => c.textContent)), /Export cancelled/);
+});

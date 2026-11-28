@@ -8,9 +8,10 @@
 /**
  * `on`: the engine runs in this page. `call(what, ...args)`: asks the page's engine Worker for something that isn't an API
  * request (an export's zip). `request(method, path, headers, body)`: an API request to that Worker, as a Response. `boot`: what
- * the start took, for the tests and the console.
+ * the start took, for the tests and the console. `progress(p)`: while an export runs, takes the engine's progress as it prints
+ * it (worker.js passes its LS_PROGRESS lines on).
  */
-export const web = { on: false, call: null, request: null, boot: null };
+export const web = { on: false, call: null, request: null, boot: null, progress: null };
 
 /** Saves `bytes` (a Uint8Array, or a Blob) as a download called `name`. */
 export function download(name, bytes, type = 'application/octet-stream') {

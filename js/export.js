@@ -7,7 +7,8 @@
 import { thingsForExport } from './things.js';
 import { ambienceForExport } from './ambience.js';
 import { api, engine, failure } from './api.js';
-import { $, say } from './dom.js';
+import { $, el, say } from './dom.js';
+import { exportProgressOf } from './exportjob.js';
 import { showReport, showError } from './report.js';
 import { web } from './web.js';
 import { downloadExport } from './webdemo.js';
@@ -73,6 +74,80 @@ export async function sendArea(what) {
     return await res.json();
 }
 
+/** How often a running export's progress is asked for (ms). */
+const POLL_MS = 1000;
+
+/** The report box while area `name` exports: its estimate, a bar with the step and time left, and Cancel when `cancel` is
+ *  given (the engine stops between tiles; the browser page's engine can't be reached until it is done). `show(p)` updates it
+ *  from the engine's progress. */
+function progressBox(name, cancel) {
+    const estimate = el('p', { className: 'export-eta', textContent: 'Estimating the time…' });
+    const bar = el('progress', { className: 'export-bar', max: 1 });
+    const step = el('p', { className: 'note export-step' });
+    const stop = cancel
+        ? el('button', {
+              type: 'button',
+              className: 'export-cancel',
+              textContent: 'Cancel export',
+              onclick: () => {
+                  stop.disabled = true;
+                  stop.textContent = 'Cancelling…';
+                  cancel();
+              },
+          })
+        : null;
+    $('reportBody').replaceChildren(el('h3', { textContent: `Exporting ${name}` }), estimate, bar, step, ...(stop ? [stop] : []));
+    $('report').hidden = false;
+    // (The bar never goes back: a slower tile than expected stretches the time left, not the work done.)
+    let most = 0;
+    return {
+        show(p) {
+            const v = exportProgressOf(p);
+            if (v.estimate) estimate.textContent = v.estimate;
+            step.textContent = v.step;
+            if (v.fraction == null) bar.removeAttribute('value');
+            else bar.value = most = Math.max(most, v.fraction);
+        },
+    };
+}
+
+/** Exports the area open as a job, its progress in the report box: its report, or throws. An engine older than the job route
+ *  exports as before, with no progress. */
+async function exportWithProgress(name) {
+    const { query, body } = areaRequest();
+    const res = await api(`/api/export/job?${query}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body,
+    });
+    if (res.status === 404 || res.status === 501) return sendArea('export');
+    if (!res.ok) throw new Error(await failure(res));
+    const box = progressBox(name, () => api('/api/export/job/cancel', { method: 'POST' }));
+    let job = await res.json();
+    for (;;) {
+        box.show(job.progress);
+        if (!job.running) break;
+        await new Promise(r => setTimeout(r, POLL_MS));
+        const next = await api('/api/export/job');
+        if (!next.ok) throw new Error(await failure(next));
+        job = await next.json();
+    }
+    if (job.cancelled) throw Object.assign(new Error('The export was cancelled: the last export is as it was.'), { cancelled: true });
+    if (job.error) throw new Error(job.error);
+    return job.result;
+}
+
+/** Exports the area open in the browser page, whose engine says how far it is in its log (worker.js): its report. */
+async function exportInPage(name) {
+    const box = progressBox(name, null);
+    web.progress = p => box.show(p);
+    try {
+        return await sendArea('export');
+    } finally {
+        web.progress = null;
+    }
+}
+
 /** The markers of `report` (an export's or a path check's of area `a`) on the ground, when `a` is still the area open: another
  *  area opened meanwhile gets none of them, and the status line says whose the report is. */
 function showMarkers(a, report) {
@@ -101,14 +176,14 @@ export function initExport(c) {
             // (In the browser: the game's shaders first, from the visitor's game folder, asked for once a visit.)
             const shaders = web.on && (await shadersForExport());
             say(`Exporting ${a.name}…`);
-            const report = await sendArea('export');
+            const report = web.on ? await exportInPage(a.name) : await exportWithProgress(a.name);
             // (In the browser the export is a download: its zip, named in the report.)
             if (web.on) Object.assign(report, { download: await downloadExport(report), shaders });
             showReport(report, false, a);
             showMarkers(a, report);
         } catch (err) {
             say('');
-            showError(err.message, engine.up ? 'Export failed' : 'Export needs the engine');
+            showError(err.message, err.cancelled ? 'Export cancelled' : engine.up ? 'Export failed' : 'Export needs the engine');
         } finally {
             btn.disabled = false;
         }
