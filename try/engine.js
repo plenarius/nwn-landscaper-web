@@ -70,6 +70,8 @@ export class Engine {
             'LANDSCAPER_JOBS=1',
             'LANDSCAPER_GAME=none',
             'LS_MINIMAP=terrain',
+            // (An export's progress, a line each tile: the page's progress bar, as the engine answers nothing until it is done.)
+            'LS_PROGRESS=1',
         ];
         const fds = [
             new OpenFile(new File(new Uint8Array())),

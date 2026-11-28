@@ -31,7 +31,17 @@ let shaders = false;
 let stock = null;
 
 const say = text => self.postMessage({ kind: 'progress', text });
-const log = text => self.postMessage({ kind: 'log', text: String(text) });
+/** What the engine prints: to the console, except an export's progress lines (LS_PROGRESS), which go to the editor's bar. */
+const log = text => {
+    const line = String(text);
+    if (line.startsWith('LS_PROGRESS {')) {
+        try {
+            self.postMessage({ kind: 'export-progress', progress: JSON.parse(line.slice(12)) });
+            return;
+        } catch {}
+    }
+    self.postMessage({ kind: 'log', text: line });
+};
 
 /** `blob` (a WebP) as PNG bytes: the engine reads PNG, TGA and DDS. */
 async function png(blob) {

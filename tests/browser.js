@@ -43,6 +43,12 @@ function element(id, tag = 'div') {
         disabled: false,
         onclick: null,
         addEventListener() {},
+        setAttribute(k, v) {
+            this[k] = String(v);
+        },
+        removeAttribute(k) {
+            delete this[k];
+        },
         appendChild(kid) {
             this.children.push(kid);
             return kid;
