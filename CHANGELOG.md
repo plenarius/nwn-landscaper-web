@@ -5,6 +5,14 @@ tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.c
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
 not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
+## 0.8.1
+
+- **An area too large to publish can still be tried on dev.** The Publish dialog says it is too large to publish, with its
+  size and the limit (for example "the tile files are 476 MB, more than the 200 MB a publish takes"), and keeps **Try on
+  dev** on, which takes any size. The canvas's Publish dialog does the same.
+- **Publish the whole module shows only for a module of two or more exported areas**, as meant: it showed for a lone area
+  too.
+
 ## 0.8.0
 
 - **Canvases in the editor:** File → **New canvas** makes a landscape of up to 128 by 128 tiles, and **Open canvas** opens one
