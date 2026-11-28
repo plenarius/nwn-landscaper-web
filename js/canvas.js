@@ -19,16 +19,17 @@ export const MAX_TILES = 128;
 export const NONE = 'none';
 
 /**
- * The per-sample grids a block carries, in the block file's order: the canvas's field, the save's key, its typed array and
- * values a sample, and for one a block may leave out, the block file's flag and when it counts as empty. The chasm mask is
- * left out without a chasm sample; the soft paint's blend layer (a second texture and its weight, 2 bytes a sample, the soft
- * paint format of 2026-11-28) without a weight. A new per-sample layer joins here like these.
+ * The per-sample grids a block carries, in the block file's order: the canvas's field, the save's key, its typed array (one
+ * value a sample, little-endian in the file), and for one a block may leave out, the block file's flag and when it counts as
+ * empty. The chasm mask is left out without a chasm sample, and the canvas keeps none then (`drop`), as an area does; the soft
+ * paint's blend layer (the second texture in the low byte, its weight in the high one: the soft paint format of 2026-11-28)
+ * without a weight. A new per-sample layer joins here like these.
  */
 export const LAYERS = [
-    { field: 'heights', key: 'heights', Type: Float32Array, per: 1 },
-    { field: 'materials', key: 'paint', Type: Uint8Array, per: 1 },
-    { field: 'chasm', key: 'chasm', Type: Uint8Array, per: 1, flag: 1, empty: a => !a.includes(1) },
-    { field: 'blend', key: 'blend', Type: Uint8Array, per: 2, flag: 2, empty: a => !a.some((v, k) => k & 1 && v) },
+    { field: 'heights', key: 'heights', Type: Float32Array },
+    { field: 'materials', key: 'paint', Type: Uint8Array },
+    { field: 'chasm', key: 'chasm', Type: Uint8Array, flag: 1, empty: a => !a.includes(1), drop: true },
+    { field: 'blend', key: 'blend', Type: Uint16Array, flag: 2, empty: a => !a.some(v => v >= 256) },
 ];
 
 /** Whether `name` can be a canvas's: 1 to 7 lower case letters, digits or `_` (a piece's default name adds two digits). */
@@ -83,7 +84,7 @@ export class CanvasArea extends Area {
             pieceNextId: 1,
         };
         this.module = name;
-        // The soft paint's blend layer (LAYERS), null until a block or a brush gives it one.
+        // The soft paint's blend layer (LAYERS): the area's own where it has one, else null until a block gives it one.
         this.blend ??= null;
     }
 
@@ -149,13 +150,13 @@ export class CanvasArea extends Area {
     blockData(key) {
         const [x, y] = parseKey(key),
             { i0, j0, w, h } = this.blockRect(x, y);
-        return LAYERS.map(({ field, Type, per, empty }) => {
+        return LAYERS.map(({ field, Type, empty }) => {
             const src = this[field];
-            if (!src) return empty ? null : new Type(w * h * per);
-            const out = new Type(w * h * per);
+            if (!src) return empty ? null : new Type(w * h);
+            const out = new Type(w * h);
             for (let j = 0; j < h; j++) {
-                const a = ((j0 + j) * this.nx + i0) * per;
-                out.set(src.subarray(a, a + w * per), j * w * per);
+                const a = (j0 + j) * this.nx + i0;
+                out.set(src.subarray(a, a + w), j * w);
             }
             return empty?.(out) ? null : out;
         });
@@ -165,12 +166,12 @@ export class CanvasArea extends Area {
     setBlock(key, layers) {
         const [x, y] = parseKey(key),
             { i0, j0, w, h } = this.blockRect(x, y);
-        LAYERS.forEach(({ field, Type, per, empty }, n) => {
+        LAYERS.forEach(({ field, Type, empty }, n) => {
             // (a layer a block leaves out is empty there: cleared where the canvas has it)
-            const src = layers[n] ?? (empty && this[field] ? new Type(w * h * per) : null);
+            const src = layers[n] ?? (empty && this[field] ? new Type(w * h) : null);
             if (!src) return;
-            this[field] ??= new Type(this.nx * this.ny * per);
-            for (let j = 0; j < h; j++) this[field].set(src.subarray(j * w * per, (j + 1) * w * per), ((j0 + j) * this.nx + i0) * per);
+            this[field] ??= new Type(this.nx * this.ny);
+            for (let j = 0; j < h; j++) this[field].set(src.subarray(j * w, (j + 1) * w), (j0 + j) * this.nx + i0);
         });
     }
 
@@ -301,11 +302,14 @@ export class CanvasArea extends Area {
     }
 }
 
-/** Drops canvas `c`'s layers that may be left out and are empty everywhere (null: none), as an area keeps no chasm mask
- *  without a chasm. */
+/** Drops canvas `c`'s layers it keeps none of when they are empty everywhere (`drop`), as an area keeps no chasm mask without
+ *  a chasm. */
 export function dropEmpty(c) {
-    for (const { field, empty } of LAYERS) if (empty && c[field] && empty(c[field])) c[field] = null;
+    for (const { field, empty, drop } of LAYERS) if (drop && c[field] && empty(c[field])) c[field] = null;
 }
+
+/** Layer `layer`'s values from their little-endian `bytes` (a save's or a block file's). */
+export const layerFrom = (bytes, layer) => new layer.Type(bytes.slice().buffer);
 
 /** Block name `b03_02` as [3, 2]. */
 function parseKey(key) {
@@ -333,8 +337,9 @@ export function decodeBlock(bytes, w, h) {
             out.push(null);
             continue;
         }
-        out.push(bytes.slice(at, at + n * layer.per));
-        at += n * layer.per;
+        const size = n * layer.Type.BYTES_PER_ELEMENT;
+        out.push(layerFrom(bytes.subarray(at, at + size), layer));
+        at += size;
     }
     if (bytes.length !== at + 8) throw new Error('a block of the wrong length');
     return out;

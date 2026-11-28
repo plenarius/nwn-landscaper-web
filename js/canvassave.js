@@ -6,7 +6,7 @@
 // A save that can't reach the engine keeps what it would have sent in this browser (IndexedDB, copies.js), keyed by canvas,
 // and the next open of that canvas puts it back when the engine's versions are still the ones it started from.
 
-import { CanvasArea, LAYERS, dropEmpty, fromB64 } from './canvas.js';
+import { CanvasArea, LAYERS, dropEmpty, fromB64, layerFrom } from './canvas.js';
 import { api, failure, json } from './api.js';
 import { copyOf, dropCopyOf, keepCopy } from './copies.js';
 
@@ -68,7 +68,7 @@ export async function loadCanvas(name, me) {
             if (heights.length !== w * h) continue;
             c.setBlock(
                 b.block,
-                LAYERS.map((l, n) => (n === 0 ? heights : b[l.key] ? fromB64(b[l.key]) : null)),
+                LAYERS.map((l, n) => (n === 0 ? heights : b[l.key] ? layerFrom(fromB64(b[l.key]), l) : null)),
             );
             c.canvas.dirty.set(b.block, ++c.canvas.stamp);
         }

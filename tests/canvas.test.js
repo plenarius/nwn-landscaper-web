@@ -177,10 +177,9 @@ test('a block file is read as the engine writes it', () => {
 test('a blend layer goes with the blocks that have weights, and comes back', () => {
     const c = CanvasArea.create('cv', 40, 'flat', 5);
     save(c);
-    c.blend = new Uint8Array(c.nx * c.ny * 2);
-    const k = 300 * c.nx + 300;
-    c.blend[2 * k] = c.materialIndex('rock');
-    c.blend[2 * k + 1] = 90;
+    // (the soft paint editor's layer: a Uint16Array, the second texture in the low byte, its weight in the high one)
+    c.blend = new Uint16Array(c.nx * c.ny);
+    c.blend[300 * c.nx + 300] = c.materialIndex('rock') | (90 << 8);
     // (a blend change reaches its blocks as a paint change does, once the undo grids carry it; here by hand)
     c.markChanged({ i0: 300, i1: 300, j0: 300, j1: 300 });
     const body = save(c);
@@ -188,10 +187,19 @@ test('a blend layer goes with the blocks that have weights, and comes back', () 
         body.blocks.map(b => b.block),
         ['b01_01'],
     );
-    assert.equal(fromB64(body.blocks[0].blend).length, 257 * 257 * 2);
+    // (as FORMAT.md lays it out: [second, weight] a sample)
+    const bytes = fromB64(body.blocks[0].blend),
+        k = (300 - 256) * 257 + 300 - 256;
+    assert.equal(bytes.length, 257 * 257 * 2);
+    assert.deepEqual([bytes[2 * k], bytes[2 * k + 1]], [1, 90]);
     // (a block without a weight sends none, as the format asks)
     c.markChanged({ i0: 10, i1: 10, j0: 10, j1: 10 });
     assert.equal(c.saveBody().body.blocks.find(b => b.block === 'b00_00').blend, undefined);
     const back = reopen(c, [body]);
     assert.deepEqual(back.blend, c.blend);
+    // (an empty layer stays: the soft paint editor keeps one always)
+    c.blend.fill(0);
+    c.markChanged({ i0: 300, i1: 300, j0: 300, j1: 300 });
+    assert.equal(save(c).blocks[0].blend, undefined);
+    assert.ok(c.blend);
 });
