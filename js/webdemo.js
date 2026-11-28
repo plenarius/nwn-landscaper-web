@@ -11,6 +11,7 @@ import { ask } from './ask.js';
 import { $, el, say } from './dom.js';
 import { showError } from './report.js';
 import { browserCopies, flushSave, loadArea, saveNew } from './save.js';
+import { DESKTOP_URL } from './nogame.js';
 import { download, web } from './web.js';
 
 /** What the "No engine" line says when the engine couldn't start in this browser. */
@@ -181,7 +182,7 @@ export async function downloadExport(report) {
 }
 
 /** The handbook's page for installing the app on each system. */
-export const DESKTOP_URL = 'https://landscaper.layonara.com/handbook/getting-started/';
+export { DESKTOP_URL };
 
 /** Sets up the browser's items when the engine runs in this page; does nothing otherwise. `ctx`: area(), setArea(a). */
 export function initWebDemo(ctx) {

@@ -16,7 +16,7 @@ let ctx = null;
 
 /** The new canvas dialog's note (show() changes it for Make a canvas from this area). */
 const NEW_NOTE =
-    'A landscape larger than one area, up to 128 by 128 tiles, sculpted and painted as one. Cutting it into areas comes later.';
+    'A landscape larger than one area, up to 128 by 128 tiles, sculpted and painted as one, then cut into areas in its Pieces mode.';
 /** The least room round an area made a canvas: its band, so the piece cut out carries the same halo. */
 const MIN_ROOM = 5;
 

@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// When the engine has none of the game's files (the web demo, before the visitor gives it their game folder: /api/me's `game`
-// is false), the panels that read them say so, with a button to give the page the game folder, instead of lists that stay empty.
+// When the engine has none of the game's files (the web demo: /api/me's `game`
+// is false), the panels that read them say so, with a link to the desktop app, instead of lists that stay empty.
 
-import { $, el, say } from './dom.js';
+import { $, el } from './dom.js';
 
 /** Each panel or dialog that needs the game: its id, its name, and what it reads from the game. */
 export const NEEDS_GAME = [
@@ -15,23 +15,25 @@ export const NEEDS_GAME = [
     ['importDialog', 'Import', "rebuilds an area from the game's tilesets"],
 ];
 
-/** What the game-folder button says it will do: reading the game in the page comes in a later version. */
-export const GAME_FOLDER_SOON =
-    'Using your game folder in this page is coming soon. Until then, the panels that say they need the game need the Landscaper on your computer.';
+/** Where the desktop app is: what the page sends a visitor to for the panels that need the game. */
+export const DESKTOP_URL = 'https://landscaper.layonara.com/handbook/getting-started/';
 
 /** The notice for `name`, which `what`. */
 function notice(name, what) {
-    const button = el('button', { type: 'button', className: 'game-folder', textContent: 'Use my game folder…' });
-    button.onclick = () => {
-        button.disabled = true;
-        button.textContent = 'Coming soon';
-        say(GAME_FOLDER_SOON);
-    };
+    const link = el('a', {
+        className: 'game-folder',
+        href: DESKTOP_URL,
+        target: '_blank',
+        rel: 'noopener',
+        textContent: 'Get the desktop app',
+    });
     const box = el(
         'div',
         { className: 'needs-game' },
-        el('p', { textContent: `${name} needs your copy of Neverwinter Nights: it ${what}, and this page has none of the game's files.` }),
-        button,
+        el('p', {
+            textContent: `${name} needs your copy of Neverwinter Nights: it ${what}, and this page has none of the game's files. The desktop app reads your game where it is installed.`,
+        }),
+        link,
     );
     box.setAttribute('role', 'note');
     return box;

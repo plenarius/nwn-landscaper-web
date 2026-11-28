@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 // showNoGame(): with an engine that has none of the game's files, each panel that needs the game says so, once, with the
-// game-folder button; with the game, the panels are as they were.
+// link to the desktop app; with the game, the panels are as they were.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './browser.js';
 
-const { showNoGame, NEEDS_GAME, GAME_FOLDER_SOON } = await import('../js/nogame.js');
+const { showNoGame, NEEDS_GAME, DESKTOP_URL } = await import('../js/nogame.js');
 
 // What nogame.js uses of an element beyond browser.js's: its classes, finding its notice, putting one first, taking it out.
 const make = document.createElement;
@@ -47,12 +47,10 @@ test('without the game, each panel that needs it says so once, with the folder b
         const notes = h.children.filter(k => k.className === 'needs-game');
         assert.equal(notes.length, 1, h.id);
         assert.match(notes[0].children[0].textContent, /needs your copy of Neverwinter Nights/);
-        const button = notes[0].children[1];
-        assert.equal(button.textContent, 'Use my game folder…');
-        button.onclick();
-        assert.equal(button.textContent, 'Coming soon');
+        const link = notes[0].children[1];
+        assert.equal(link.textContent, 'Get the desktop app');
+        assert.equal(link.href, DESKTOP_URL);
     }
-    assert.equal(document.getElementById('statusMsg').textContent, GAME_FOLDER_SOON);
     showNoGame(false);
     for (const h of hosts) {
         assert.ok(!h.classList.contains('no-game'), h.id);
