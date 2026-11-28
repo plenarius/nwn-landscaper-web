@@ -5,6 +5,13 @@ tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.c
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
 not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
+## 0.8.2
+
+- **A new canvas's note says how it is cut into areas** (its Pieces mode) instead of that cutting comes later, which it did
+  in 0.8.0.
+- **The browser page's panels that need the game link to the desktop app** instead of a "Use my game folder" button that
+  only said "Coming soon".
+
 ## 0.8.1
 
 - **An area too large to publish can still be tried on dev.** The Publish dialog says it is too large to publish, with its
