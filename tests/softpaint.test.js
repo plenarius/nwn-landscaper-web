@@ -76,7 +76,8 @@ for (const style of ['crisp', 'broken', 'mixed']) {
 test('a texture’s edge is its catalog entry’s, else its category’s', () => {
     assert.equal(edgeOf({ edge: 'crisp', category: 'Earth' }), 'crisp');
     assert.equal(edgeOf({ edge: 'broken', category: 'Walls' }), 'broken');
-    assert.equal(edgeOf({ edge: 'soft', category: 'Cobbles' }), 'crisp');
+    assert.equal(edgeOf({ edge: 'soft', category: 'Cobbles' }), 'soft');
+    assert.equal(edgeOf({ edge: 'wavy', category: 'Cobbles' }), 'crisp');
     for (const [c, e] of [
         ['Grass', 'broken'],
         ['Snow', 'broken'],

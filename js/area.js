@@ -7,6 +7,7 @@
 // the order `landscaper export` reads.
 
 import { Band } from './band.js';
+import { blendForSave, blendFromSave } from './blend.js';
 import { generateHeightMap } from './noise.js';
 import { defaultAtmosphere, copyPreset, PRESETS } from './atmosphere.js';
 
@@ -114,6 +115,9 @@ export class Area {
         // (texture ids from the library catalog).
         this.materials = materials ?? new Uint8Array(this.nx * this.ny);
         this.palette = palette ?? [DEFAULT_TEXTURE];
+        // Each sample's second texture and its weight (blend.js): the second's palette index in the low byte, its weight (0 to
+        // 255, 0: none) in the high one, so the bytes are the file's and the engine's interleaved [second, weight].
+        this.blend = new Uint16Array(this.nx * this.ny);
         // Light and fog (see atmosphere.js).
         this.atmosphere = defaultAtmosphere();
         // Bodies of water, each filled from sample (i, j) to `level`; and
@@ -648,7 +652,7 @@ export class Area {
      */
     beginStroke(before = null) {
         this.settle(this.undoStack.at(-1), before?.meta);
-        this.undoStack.push({ rect: null, h: null, m: null, ch: null, chNull: this.chasm === null, meta: {}, band: null });
+        this.undoStack.push({ rect: null, h: null, m: null, b: null, ch: null, chNull: this.chasm === null, meta: {}, band: null });
         if (this.undoStack.length > UNDO_STEPS) this.undoStack.shift();
         this.redoStack = [];
     }
@@ -684,6 +688,7 @@ export class Area {
             this.undoBase = {
                 h: this.heights.slice(),
                 m: this.materials.slice(),
+                b: this.blend.slice(),
                 ch: this.chasm?.slice() ?? new Uint8Array(n),
                 meta: structuredClone(pick(now, UNDO_FIELDS)),
             };
@@ -704,6 +709,7 @@ export class Area {
                 b = j * nx + rect.i1 + 1;
             base.h.set(this.heights.subarray(a, b), a);
             base.m.set(this.materials.subarray(a, b), a);
+            base.b.set(this.blend.subarray(a, b), a);
             if (c) base.ch.set(c.subarray(a, b), a);
             else base.ch.fill(0, a, b);
         }
@@ -716,7 +722,7 @@ export class Area {
         if (!b) return;
         const n = b.nx * b.ny;
         if (this.bandBase?.h.length !== n) {
-            this.bandBase = { h: b.heights.slice(), m: b.materials.slice(), ch: new Uint8Array(n) };
+            this.bandBase = { h: b.heights.slice(), m: b.materials.slice(), b: b.blend.slice(), ch: new Uint8Array(n) };
             return;
         }
         const base = this.bandBase,
@@ -725,10 +731,11 @@ export class Area {
         let r = null;
         for (let j = 0, k = 0; j < b.ny; j++)
             for (let i = 0; i < b.nx; i++, k++)
-                if (!b.inArea(i, j, this) && (h[k] !== bh[k] || b.materials[k] !== base.m[k])) r = grow(r, i, j);
+                if (!b.inArea(i, j, this) && (h[k] !== bh[k] || b.materials[k] !== base.m[k] || b.blend[k] !== base.b[k]))
+                    r = grow(r, i, j);
         if (!r) return;
         if (into) {
-            into.band ??= { rect: null, h: null, m: null, ch: null };
+            into.band ??= { rect: null, h: null, m: null, b: null, ch: null };
             widen(into.band, r, base, b.nx);
         }
         for (let j = r.j0; j <= r.j1; j++) {
@@ -736,6 +743,7 @@ export class Area {
                 e = j * b.nx + r.i1 + 1;
             base.h.set(b.heights.subarray(a, e), a);
             base.m.set(b.materials.subarray(a, e), a);
+            base.b.set(b.blend.subarray(a, e), a);
         }
     }
 
@@ -746,13 +754,15 @@ export class Area {
         if (!b || !s?.rect || base?.h.length !== b.nx * b.ny) return null;
         const { i0, i1, j0, j1 } = s.rect,
             size = (i1 - i0 + 1) * (j1 - j0 + 1),
-            back = { rect: s.rect, h: new Float32Array(size), m: new Uint8Array(size), ch: new Uint8Array(size) };
+            back = { rect: s.rect, h: new Float32Array(size), m: new Uint8Array(size), b: new Uint16Array(size), ch: new Uint8Array(size) };
         for (let j = j0, r = 0; j <= j1; j++)
             for (let i = i0, k = j * b.nx + i0; i <= i1; i++, k++, r++) {
                 back.h[r] = b.heights[k];
                 back.m[r] = b.materials[k];
+                back.b[r] = b.blend[k];
                 b.heights[k] = base.h[k] = s.h[r];
                 b.materials[k] = base.m[k] = s.m[r];
+                b.blend[k] = base.b[k] = s.b[r];
             }
         return back;
     }
@@ -765,6 +775,8 @@ export class Area {
             bh = bits(base.h),
             m = this.materials,
             bm = base.m,
+            bl = this.blend,
+            bb = base.b,
             c = this.chasm,
             bc = base.ch;
         let i0 = nx,
@@ -775,7 +787,7 @@ export class Area {
             let first = -1,
                 last = -1;
             for (let i = 0; i < nx; i++, k++) {
-                if (h[k] === bh[k] && m[k] === bm[k] && (c ? c[k] : 0) === bc[k]) continue;
+                if (h[k] === bh[k] && m[k] === bm[k] && bl[k] === bb[k] && (c ? c[k] : 0) === bc[k]) continue;
                 if (first < 0) first = i;
                 last = i;
             }
@@ -798,7 +810,16 @@ export class Area {
     apply(s) {
         const base = this.undoBase,
             { nx, ny } = this,
-            back = { rect: s.rect, h: null, m: null, ch: null, chNull: this.chasm === null, meta: {}, band: this.applyBand(s.band) };
+            back = {
+                rect: s.rect,
+                h: null,
+                m: null,
+                b: null,
+                ch: null,
+                chNull: this.chasm === null,
+                meta: {},
+                band: this.applyBand(s.band),
+            };
         let rect = null,
             heights = null;
         // (a state with a chasm array has one again, if only of zeros, as a whole snapshot gave it back)
@@ -808,26 +829,32 @@ export class Area {
                 size = (i1 - i0 + 1) * (j1 - j0 + 1);
             back.h = new Float32Array(size);
             back.m = new Uint8Array(size);
+            back.b = new Uint16Array(size);
             back.ch = new Uint8Array(size);
             const h = this.heights,
                 m = this.materials,
+                bl = this.blend,
                 c = this.chasm;
             for (let j = j0, r = 0; j <= j1; j++)
                 for (let i = i0, k = j * nx + i0; i <= i1; i++, k++, r++) {
                     const oh = h[k],
                         om = m[k],
+                        ob = bl[k],
                         oc = c[k],
                         nh = s.h[r],
                         nm = s.m[r],
+                        nb = s.b[r],
                         nc = s.ch[r];
                     back.h[r] = oh;
                     back.m[r] = om;
+                    back.b[r] = ob;
                     back.ch[r] = oc;
                     h[k] = base.h[k] = nh;
                     m[k] = base.m[k] = nm;
+                    bl[k] = base.b[k] = nb;
                     c[k] = base.ch[k] = nc;
                     const moved = oh !== nh || oc !== nc;
-                    if (moved || om !== nm) rect = grow(rect, i, j);
+                    if (moved || om !== nm || ob !== nb) rect = grow(rect, i, j);
                     // (a chasm opened or filled in moves the drawn ground, and so the shadows)
                     if (moved) heights = grow(heights, i, j);
                 }
@@ -859,12 +886,15 @@ export class Area {
     // Saved in the browser between sessions.
     toJSON() {
         this.band?.sync(this);
+        const blend = blendForSave(this.blend);
         return {
             name: this.name,
             tiles: this.tiles,
             tilesY: this.tilesY,
             heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))),
             materials: toBase64(this.materials),
+            // (no key at all for an area that never had weights)
+            ...(blend && { blend }),
             chasm: this.hasChasm() ? toBase64(this.chasm) : null,
             palette: this.palette,
             atmosphere: this.atmosphere,
@@ -894,6 +924,8 @@ export class Area {
         const heights = new Float32Array(fromBase64(o.heights).buffer);
         const materials = o.materials ? fromBase64(o.materials) : undefined;
         const area = new Area(o.name, o.tiles, heights, materials, o.palette, o.tilesY ?? o.tiles);
+        const blend = blendFromSave(o.blend, area.nx * area.ny, area.palette.length);
+        if (blend) area.blend = blend;
         if (typeof o.chasm === 'string' && o.chasm) {
             const chasm = fromBase64(o.chasm);
             if (chasm.length === area.nx * area.ny) area.chasm = chasm;
@@ -1016,11 +1048,13 @@ function widen(s, r, base, nx) {
         size = w * (u.j1 - u.j0 + 1),
         h = new Float32Array(size),
         m = new Uint8Array(size),
+        b = new Uint16Array(size),
         ch = new Uint8Array(size);
     for (let j = u.j0, q = 0; j <= u.j1; j++, q += w) {
         const a = j * nx + u.i0;
         h.set(base.h.subarray(a, a + w), q);
         m.set(base.m.subarray(a, a + w), q);
+        b.set(base.b.subarray(a, a + w), q);
         ch.set(base.ch.subarray(a, a + w), q);
         if (!was || j < was.j0 || j > was.j1) continue;
         const ww = was.i1 - was.i0 + 1,
@@ -1028,7 +1062,8 @@ function widen(s, r, base, nx) {
             at = q + was.i0 - u.i0;
         h.set(s.h.subarray(p, p + ww), at);
         m.set(s.m.subarray(p, p + ww), at);
+        b.set(s.b.subarray(p, p + ww), at);
         ch.set(s.ch.subarray(p, p + ww), at);
     }
-    Object.assign(s, { rect: u, h, m, ch });
+    Object.assign(s, { rect: u, h, m, b, ch });
 }

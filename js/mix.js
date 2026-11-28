@@ -7,10 +7,11 @@
 // in proportion to the weights. A patch is the same wherever the brush passes, so strokes over the same ground paint it the same
 // way: nothing reshuffles until the seed changes (Reshuffle). The brush's strength is how much of the ground the mix covers: each
 // patch has a second hash, and it is painted when that is under the strength (tapered to the brush's rim with a soft edge); the
-// rest keeps its texture. Every sample is still one texture: the area file is the same as for any painting, and the engine bakes
-// a tile with several textures as it always has. The panel (mixpanel.js) keeps the mix in this browser under MIX_KEY.
+// rest keeps its texture. With a soft edge, the patches towards the rim fade in by weight (blend.js) rather than breaking up
+// into specks: each patch is painted where it is covered, at the edge's reach. The panel (mixpanel.js) keeps the mix in this browser under MIX_KEY.
 
 import { SPACING } from './area.js';
+import { StrokePaint } from './blend.js';
 
 /** The storage key of the mix (JSON: whether it is on, its textures and weights, the patch size, the soft edge and the seed). */
 export const MIX_KEY = 'landscaper.paintMix';
@@ -189,9 +190,9 @@ export function patchChoice(plan, ci, cj) {
     return { k, cover: hash(ci, cj, plan.seed, 4) };
 }
 
-/** How much of the brush's strength reaches `d` metres from its middle, `radius` its size: all of it, or with a soft edge all
- *  of it to 60% of the way out, then less to none at the rim (smoothstep), so a stroke's edge breaks up into patches. (Out to
- *  half way, passes a little over half a brush apart left about one patch in 25 unpainted between them.) */
+/** How much of the brush reaches `d` metres from its middle, `radius` its size: all of it, or with a soft edge all of it to
+ *  60% of the way out, then less to none at the rim (smoothstep): the patches' weight there. (Out to half way, passes a little
+ *  over half a brush apart left about one patch in 25 unpainted between them.) */
 function reach(d, radius, soft) {
     if (d > radius) return 0;
     if (!soft) return 1;
@@ -201,13 +202,14 @@ function reach(d, radius, soft) {
 
 /**
  * Paints `plan` (mixPlan) over the brush at area point (x, y), `radius` metres: each sample takes its patch's texture, where the
- * patch's cover hash is under `strength` (0..1) times the edge's reach; the others keep theirs. The same ground always comes out
- * the same, so a second pass changes nothing. Returns the changed sample rectangle, as tools.js's stamp. `origin`: metres from
- * the grid's first sample to the area's (the band's offset), so the band's patches are the area's and run on across the edge.
+ * patch's cover hash is under `strength` (0..1), weighing the edge's reach (blend.js); the others keep theirs. The same ground
+ * always comes out the same, so a second pass changes nothing. Returns the changed sample rectangle, as tools.js's stamp.
+ * `origin`: metres from the grid's first sample to the area's (the band's offset), so the band's patches are the area's and run
+ * on across the edge. `painter`: the stroke's StrokePaint over `area`, so a rim passed over again doesn't build up.
  */
-export function mixStamp(area, x, y, radius, strength, plan, origin = 0) {
-    const n = area.nx,
-        m = area.materials;
+export function mixStamp(area, x, y, radius, strength, plan, origin = 0, painter = null) {
+    const n = area.nx;
+    painter ??= new StrokePaint(area);
     const i0 = Math.max(0, Math.floor((x - radius) / SPACING)),
         i1 = Math.min(n - 1, Math.ceil((x + radius) / SPACING));
     const j0 = Math.max(0, Math.floor((y - radius) / SPACING)),
@@ -221,7 +223,9 @@ export function mixStamp(area, x, y, radius, strength, plan, origin = 0) {
             if (r <= 0) continue;
             const { ci, cj } = patchAt(px - origin, py - origin, plan.patch, plan.seed);
             const { k, cover } = patchChoice(plan, ci, cj);
-            if (cover < strength * r) m[j * n + i] = plan.indices[k];
+            if (cover >= strength) continue;
+            // (the core through the painter too, so a rim passing over it later in the stroke can't take it back)
+            painter.put(j * n + i, plan.indices[k], r, false);
         }
     }
     return { i0, i1, j0, j1 };

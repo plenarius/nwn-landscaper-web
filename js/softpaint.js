@@ -4,7 +4,8 @@
 // Soft paint, drawn as the export bakes it (landscaper's src/generator/soft.rs, which this follows step by step): each texture's
 // samples smoothed into a weight field, so a painted edge follows a smooth line instead of the 0.625 m grid's staircase. Where
 // textures meet the heaviest wins, eased over a few centimetres: a crisp edge for laid surfaces, a broken one (moved by noise
-// and by the textures' own light and dark: gravel poking into snow) for natural ground, as the texture catalog's `edge` says.
+// and by the textures' own light and dark: gravel poking into snow) for natural ground, or a plain blend for a `soft` one, as
+// the texture catalog's `edge` says. A sample a soft brush gave weights (blend.js) keeps them instead of being smoothed.
 //
 // The view keeps, for each sample of the paint grid, its two heaviest textures and the second's share (SoftGrid, worked out
 // again over each change's rectangle and the smoothing's reach); its shader (SOFT_GLSL) reads the four samples round a point
@@ -33,7 +34,7 @@ const BUILT = ['floor', 'wall', 'cobble', 'flag', 'paving', 'plank', 'wood', 'br
 
 /** A library texture's edge (`t` its catalog entry): its `edge`, else what its category suggests. */
 export function edgeOf(t) {
-    if (t?.edge === 'crisp' || t?.edge === 'broken') return t.edge;
+    if (t?.edge === 'crisp' || t?.edge === 'broken' || t?.edge === 'soft') return t.edge;
     const c = String(t?.category ?? '').toLowerCase();
     return BUILT.some(w => c.includes(w)) ? 'crisp' : 'broken';
 }
@@ -59,8 +60,9 @@ export function kernel(spacing, sigma = SOFT.sigma) {
  * Smooths paint `src` (palette indices, `nx` by `ny`, rows from the south) over samples i0..i1, j0..j1 into `out` (RGBA a
  * sample): the heaviest texture, the next, and the next's share of the two times 255 (0, and the second the first, when it has
  * none); ties go to the lower palette index. Beyond the grid the edge's samples carry on, as the bake's fields clamp to its halo.
+ * A sample with a weight in `blend` (blend.js; null: none) takes its own two textures instead, as the bake does.
  */
-export function soften(src, nx, ny, i0, i1, j0, j1, out, k) {
+export function soften(src, nx, ny, i0, i1, j0, j1, out, k, blend = null) {
     const { weights: kw, reach } = k;
     const acc = new Float32Array(256),
         seen = new Uint8Array(256),
@@ -127,6 +129,23 @@ export function soften(src, nx, ny, i0, i1, j0, j1, out, k) {
             out[o + 2] = q;
             out[o + 3] = 0;
         }
+    if (blend)
+        for (let j = j0; j <= j1; j++)
+            for (let i = i0; i <= i1; i++) {
+                const s = j * nx + i,
+                    v = blend[s];
+                if (v < 256) continue;
+                const o = s * 4,
+                    m = src[s],
+                    b = v & 255,
+                    w = v >>> 8;
+                // (the heavier first: the paint, unless the second weighs more than half)
+                const swap = w > 128 && b !== m;
+                out[o] = swap ? b : m;
+                out[o + 1] = b === m ? m : swap ? m : b;
+                out[o + 2] = b === m ? 0 : swap ? 255 - w : w;
+                out[o + 3] = 0;
+            }
 }
 
 /**
@@ -143,9 +162,10 @@ export class SoftGrid {
         this.ny = b ? b.ny : area.ny;
         this.k = kernel(spacing);
         this.src = new Uint8Array(this.nx * this.ny);
+        this.blend = new Uint16Array(this.nx * this.ny);
         this.out = new Uint8Array(this.nx * this.ny * 4);
         this.read(0, this.nx - 1, 0, this.ny - 1);
-        soften(this.src, this.nx, this.ny, 0, this.nx - 1, 0, this.ny - 1, this.out, this.k);
+        soften(this.src, this.nx, this.ny, 0, this.nx - 1, 0, this.ny - 1, this.out, this.k, this.blend);
     }
 
     /** Whether this grid still fits `area` (the same area, band and size). */
@@ -164,10 +184,13 @@ export class SoftGrid {
             for (let i = i0; i <= i1; i++) {
                 const ai = i - n,
                     aj = j - n,
-                    m = ai >= 0 && aj >= 0 && ai < area.nx && aj < area.ny ? area.materials[aj * area.nx + ai] : band.materials[j * nx + i];
+                    own = ai >= 0 && aj >= 0 && ai < area.nx && aj < area.ny,
+                    m = own ? area.materials[aj * area.nx + ai] : band.materials[j * nx + i],
+                    v = own ? area.blend[aj * area.nx + ai] : band.blend[j * nx + i];
                 const k = j * nx + i;
-                if (this.src[k] === m) continue;
+                if (this.src[k] === m && this.blend[k] === v) continue;
                 this.src[k] = m;
+                this.blend[k] = v;
                 if (i < c0) c0 = i;
                 if (i > c1) c1 = i;
                 if (j < r0) r0 = j;
@@ -191,7 +214,7 @@ export class SoftGrid {
                 j0: Math.max(0, changed.j0 - e),
                 j1: Math.min(ny - 1, changed.j1 + e),
             };
-        soften(this.src, nx, ny, s.i0, s.i1, s.j0, s.j1, this.out, this.k);
+        soften(this.src, nx, ny, s.i0, s.i1, s.j0, s.j1, this.out, this.k, this.blend);
         return s;
     }
 }
@@ -262,6 +285,16 @@ export function softColour(g, spacing, x, y, colour, looks) {
     const mix = softMix(g, spacing, x, y);
     if (!mix.length) return [0, 0, 0];
     if (mix.length === 1) return colour(mix[0][0]);
+    // (the softer style wins: soft, then broken, then crisp)
+    if (mix.some(([m]) => looks[m].edge === 'soft')) {
+        const total = mix.reduce((t, [, w]) => t + w, 0),
+            out = [0, 0, 0];
+        for (const [m, w] of mix) {
+            const c = colour(m);
+            for (let k = 0; k < 3; k++) out[k] += (c[k] * w) / total;
+        }
+        return out;
+    }
     const broken = mix.some(([m]) => looks[m].edge === 'broken'),
         tau = broken ? SOFT.tauBroken : SOFT.tauCrisp,
         [first, second] = [mix[0][0], mix[1][0]];
@@ -291,7 +324,7 @@ export function softColour(g, spacing, x, y, colour, looks) {
 /**
  * GLSL for the view's fragment shader: `SOFT_SPLAT(area, px, out)` sets vec4 `out` to the ground's colour at area point `area`
  * (vec2) from the soft grid (uSoft, uSoftN samples, uSoftOrigin to the area's first), each texture drawn by the macro
- * `SPLAT(layer)` (linear colour) and described by uLayers (a texel a palette index: r 1 for a broken edge, g its mean
+ * `SPLAT(layer)` (linear colour) and described by uLayers (a texel a palette index: r 1 for a broken edge and 2 for a soft one, g its mean
  * luminance, b and a its noise seed's low and high 16 bits). softColour's rule, worked in display values as the bake works,
  * except that an edge eases over at least about a pixel (`px`, metres a pixel there): far off, where the game's mipmaps blur
  * the bake's edge, a sharper one would crawl as the camera moves.
@@ -343,15 +376,27 @@ vec4 softLayer(float m) { return texelFetch(uLayers, ivec2(int(m), 0), 0); }
         } \\
     } \\
     int i1 = -1, i2 = -1; \\
-    bool broken = false; \\
+    bool broken = false, soft = false; \\
     for (int e = 0; e < 8; e++) { \\
         if (e >= en || ew[e] <= ${SOFT.minWeight.toFixed(3)}) continue; \\
-        if (softLayer(em[e]).r > 0.5) broken = true; \\
+        float style = softLayer(em[e]).r; \\
+        if (style > 1.5) soft = true; \\
+        else if (style > 0.5) broken = true; \\
         if (i1 < 0 || ew[e] > ew[i1] || (ew[e] == ew[i1] && em[e] < em[i1])) { i2 = i1; i1 = e; } \\
         else if (i2 < 0 || ew[e] > ew[i2] || (ew[e] == ew[i2] && em[e] < em[i2])) i2 = e; \\
     } \\
     if (i1 < 0) result = vec4(0.0, 0.0, 0.0, 1.0); \\
     else if (i2 < 0) result = SPLAT(em[i1]); \\
+    else if (soft) { \\
+        vec3 sum = vec3(0.0); \\
+        float total = 0.0; \\
+        for (int e = 0; e < 8; e++) { \\
+            if (e >= en || ew[e] <= ${SOFT.minWeight.toFixed(3)}) continue; \\
+            sum += softDisplay(SPLAT(em[e]).rgb) * ew[e]; \\
+            total += ew[e]; \\
+        } \\
+        result = vec4(softLinear(sum / total), 1.0); \\
+    } \\
     else { \\
         vec3 sc[8]; \\
         float ss[8], best = -1e9; \\

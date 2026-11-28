@@ -105,10 +105,16 @@ export function carve(area, e, rock) {
                 const target = e.floor + outcrop(e, r, u, v);
                 if (target > h[k] + 0.05) {
                     h[k] = target;
-                    if (rock !== undefined) area.materials[k] = rock;
+                    if (rock !== undefined) {
+                        area.materials[k] = rock;
+                        area.blend[k] = 0;
+                    }
                 }
                 // The cut faces beside and behind the floor: rock whatever the hill is painted.
-                if (rock !== undefined && Math.abs(v) <= half + FACE && u >= r.u0 && u <= e.depth + FACE) area.materials[k] = rock;
+                if (rock !== undefined && Math.abs(v) <= half + FACE && u >= r.u0 && u <= e.depth + FACE) {
+                    area.materials[k] = rock;
+                    area.blend[k] = 0;
+                }
             }
         }
     }

@@ -11,6 +11,7 @@ import './importmap.js';
 const { Area, SPACING } = await import('../js/area.js');
 const mixjs = await import('../js/mix.js');
 const { stamp } = await import('../js/tools.js');
+const { sampleMix } = await import('../js/blend.js');
 const { newMix, withTexture, withWeight, toggledTexture, shiftAdded, shares, readMix, writeMix, keptTextures, mixPlan, mixStamp } = mixjs;
 
 /** A mix of `ids` (weights `weights`, equal by default) with `opts`, painted on a flat area `tiles` a side: the area, its
@@ -133,29 +134,36 @@ test('the strength is how much of the ground the mix covers, in patches, and rep
     for (let k = 0; k < lo.area.materials.length; k++) if (lo.area.materials[k] === 1) assert.equal(hi.area.materials[k], 1);
 });
 
-test('a soft edge covers the middle of the brush and breaks up toward its rim; a hard one fills the circle', () => {
+test('a soft edge covers the middle of the brush and fades out by weight toward its rim, no specks; a hard one fills the circle', () => {
+    // Sand's share of each sample (blend.js), by ring: the mean, the least and the most.
     const ring = (area, x, y, r0, r1) => {
-        let hit = 0,
-            all = 0;
+        const shares = [];
         for (let j = 0; j < area.ny; j++) {
             for (let i = 0; i < area.nx; i++) {
                 const d = Math.hypot(i * SPACING - x, j * SPACING - y);
                 if (d < r0 || d >= r1) continue;
-                all++;
-                if (area.materials[j * area.nx + i] !== 0) hit++;
+                const k = j * area.nx + i;
+                shares.push(sampleMix(area.materials[k], area.blend[k]).find(([m]) => m !== 0)?.[1] ?? 0);
             }
         }
-        return hit / all;
+        return { mean: shares.reduce((a, b) => a + b, 0) / shares.length, least: Math.min(...shares), most: Math.max(...shares) };
     };
     const soft = setup(['sand'], { patch: 1.5, soft: true });
     mixStamp(soft.area, 40, 40, 16, 1, soft.plan);
-    assert.equal(ring(soft.area, 40, 40, 0, 8), 1);
-    const rim = ring(soft.area, 40, 40, 13, 16);
-    assert.ok(rim > 0.02 && rim < 0.4, `rim ${rim.toFixed(3)}`);
-    assert.equal(ring(soft.area, 40, 40, 16.5, 30), 0);
+    assert.equal(ring(soft.area, 40, 40, 0, 8).least, 1);
+    const inner = ring(soft.area, 40, 40, 10, 13),
+        rim = ring(soft.area, 40, 40, 13, 16);
+    assert.ok(rim.mean > 0.05 && rim.mean < 0.5 && rim.mean < inner.mean, `rim ${rim.mean.toFixed(3)}, inside it ${inner.mean.toFixed(3)}`);
+    const near = ring(soft.area, 40, 40, 13, 15.5);
+    assert.ok(rim.most < 1 && near.least > 0, `rim from ${near.least} to ${rim.most}: every sample some sand, none all sand`);
+    assert.equal(ring(soft.area, 40, 40, 16.5, 30).most, 0);
     const hard = setup(['sand'], { patch: 1.5, soft: false });
     mixStamp(hard.area, 40, 40, 16, 1, hard.plan);
-    assert.equal(ring(hard.area, 40, 40, 0, 15.9), 1);
+    assert.equal(ring(hard.area, 40, 40, 0, 15.9).least, 1);
+    assert.ok(
+        hard.area.blend.every(v => v === 0),
+        'a hard edge writes no weights',
+    );
 });
 
 test('a stroke of mix dabs is one undo step', () => {
