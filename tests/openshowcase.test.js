@@ -10,7 +10,7 @@ import { engine, clearStorage } from './browser.js';
 
 const { Area } = await import('../js/area.js');
 const save = await import('../js/save.js');
-const { copyShowcase, showcaseList } = await import('../js/showcase.js');
+const { copyShowcase, showcaseList, sizeLine } = await import('../js/showcase.js');
 
 save.initSave({ area: () => null, me: () => ({ team: false, user: 'local' }), readOnly: () => false, open: () => {} });
 
@@ -87,4 +87,13 @@ test('a name taken after the list was read is refused by the engine and skipped,
     engine.areas.set('lsforest', theirs);
     assert.equal((await copying).name, 'lsforest2');
     assert.equal(engine.areas.get('lsforest'), theirs);
+});
+
+test("a card's size line: tiles and metres, the hak as the editor counts sizes, and the baked objects; none unmeasured", () => {
+    assert.equal(
+        sizeLine({ tiles: [16, 12], hak_bytes: 476 * 1024 * 1024, baked: 4896 }),
+        '16 × 12 tiles (160 × 120 m) · 476 MB hak · 4,896 baked objects',
+    );
+    assert.equal(sizeLine({ tiles: [12, 10] }), '12 × 10 tiles (120 × 100 m)');
+    assert.equal(sizeLine(LIST[0]), '');
 });

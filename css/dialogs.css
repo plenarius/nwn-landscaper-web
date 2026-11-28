@@ -248,6 +248,20 @@ dialog .start-card {
 .showcase-list small {
     margin: 0;
 }
+/* (pushed to the card's foot, so the size lines of a row line up) */
+.showcase-list .showcase-size {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 0.35em;
+    margin-top: auto;
+    color: var(--muted);
+}
+.showcase-size span {
+    white-space: nowrap;
+}
+.showcase-size span:not(:last-child)::after {
+    content: "\a0·";
+}
 
 /* The buttons at the foot of a dialog. :where() keeps the specificity <menu> had here before. */
 dialog div:where(.dialog-buttons) {
