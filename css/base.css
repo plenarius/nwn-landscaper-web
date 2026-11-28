@@ -5,6 +5,8 @@
    the report over the view. */
 
 :root {
+    /* (the browser's own controls drawn dark: an unticked box, a list's popup, a scroll bar) */
+    color-scheme: dark;
     --bg: #1d2228;
     --panel: #262c34;
     --panel-2: #303844;
@@ -259,6 +261,26 @@ button {
 }
 input[type="range"] {
     width: 100%;
+    accent-color: var(--accent);
+}
+/* Number boxes as the text boxes are, wherever they are; panels and dialogs set their sizes. No steppers: each browser draws
+   its own, and the arrow keys still step the number. Ticks and dots in the accent, not the browser's blue. */
+input[type="number"] {
+    padding: 6px 8px;
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid #000;
+    border-radius: 6px;
+    appearance: textfield;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+}
+input[type="checkbox"],
+input[type="radio"] {
     accent-color: var(--accent);
 }
 

@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// The New area dialog: its size, what kind of ground it starts as (hills, a cave, an interior, a sample descent or landscape),
-// its module.
+// The New area dialog: its size, what kind of ground it starts as (a blank ground, or a starter landscape), its module.
 
 import { Area, TILE } from './area.js';
 import { descentPlan, cutDescent } from './tools.js';
@@ -22,28 +21,10 @@ const showSize = () => {
     for (const o of $('sizeChoices').children)
         o.classList.toggle('active', +o.dataset.size === +$('newW').value && +o.dataset.size === +$('newH').value);
 };
-// Sample starts: a switchback descent already laid, to show what it is and to change. How many floors depends on the size.
+// The descending cave: a switchback descent already laid, to show what it is and to change. How many floors depends on the size.
 // `floor` is the halls' texture where the library has it (a team's own library may); otherwise the first of `stock` it has,
 // from the engine's starter library (src/starter_textures.json), which every install builds from the game's files.
 const DESCENT_STARTERS = {
-    crypt: {
-        from: 'interior',
-        floors: 6,
-        drop: 5,
-        ceiling: 4,
-        floor: 'flagIrregular',
-        stock: ['floorFlag', 'floorSlabs', 'floorStone'],
-        size: [12, 12],
-    },
-    dungeon: {
-        from: 'interior',
-        floors: 4,
-        drop: 4,
-        ceiling: 4,
-        floor: 'cobbles',
-        stock: ['floorCobble', 'floorStone', 'floorBrick'],
-        size: [12, 8],
-    },
     'descending-cave': {
         from: 'cave',
         floors: 5,
@@ -54,6 +35,64 @@ const DESCENT_STARTERS = {
         size: [12, 10],
     },
 };
+
+/**
+ * The dialog's choices, a group of picture cards each: `value` (the form's `start`: a ground Area.create makes, or a key of
+ * DESCENT_STARTERS or TERRAIN_STARTERS), its name, one line on what it makes, and whether the Start height applies (the starters
+ * and the rock to dig out set their own). Each card's picture is css/start/<value>.webp, drawn from what it makes.
+ */
+export const START_GROUPS = [
+    {
+        title: 'Blank',
+        starts: [
+            { value: 'flat', name: 'Flat', text: 'Level ground at the start height', height: true },
+            { value: 'hills', name: 'Gentle hills', text: 'Rolling ground to shape', height: true },
+            { value: 'rough', name: 'Rough hills', text: 'Broken, steeper ground', height: true },
+            { value: 'cave', name: 'Cave', text: 'Solid rock: dig the cave out of it' },
+            { value: 'interior', name: 'Interior', text: 'Solid stone: cut the rooms out of it' },
+        ],
+    },
+    {
+        title: 'Starter landscapes',
+        starts: [
+            { value: 'canyon', name: 'Canyon', text: 'A sandy floor between stepped rock walls' },
+            { value: 'snowy-pass', name: 'Snowy mountain pass', text: 'A path over a saddle, snow falling' },
+            { value: 'dunes', name: 'Dune desert', text: 'Wind-piled dunes, all walkable' },
+            { value: 'lake-valley', name: 'Valley with a lake', text: 'A meadow ringed by hills' },
+            { value: 'descending-cave', name: 'Descending cave', text: 'Five floors down through rock' },
+        ],
+    },
+];
+const START_DEFAULT = 'flat';
+/** The Start height when it doesn't apply (the field's own default). */
+const BASE_DEFAULT = 5;
+const startOf = value => START_GROUPS.flatMap(g => g.starts).find(s => s.value === value);
+
+/** The cards of START_GROUPS: a radio a card, all in one group, so the arrow keys move through them as through any radios. */
+function startCards() {
+    const out = [];
+    for (const g of START_GROUPS) {
+        const cards = el('div', { className: 'start-cards' });
+        cards.setAttribute('role', 'radiogroup');
+        cards.setAttribute('aria-label', g.title);
+        for (const s of g.starts) {
+            const radio = el('input', { type: 'radio', name: 'start', value: s.value, checked: s.value === START_DEFAULT });
+            const card = el('label', { className: 'start-card', title: s.text });
+            card.dataset.start = s.value;
+            card.append(radio, el('span', { className: 'pic' }), el('span', { className: 'name', textContent: s.name }));
+            cards.appendChild(card);
+        }
+        out.push(el('h3', { className: 'start-group', textContent: g.title }), cards);
+    }
+    return out;
+}
+
+/** What the chosen start makes, under the cards, and the Start height only where it applies. */
+function showStart(value) {
+    const s = startOf(value);
+    $('startNote').textContent = s ? `${s.name}: ${s.text.charAt(0).toLowerCase()}${s.text.slice(1)}.` : '';
+    $('newBaseRow').hidden = !s?.height;
+}
 
 /** The texture a starter's halls are painted with: its own when the library has it, else its first stock one the library
  *  has, else none (the halls keep the rock's texture), as the Room and Descent tools choose (strokes.js). An id the library
@@ -90,16 +129,20 @@ export function initNewArea(c) {
     $('newW').oninput = $('newH').oninput = showSize;
     showSize();
 
+    $('startChoices').replaceChildren(...startCards());
     for (const radio of document.querySelectorAll('input[name=start]')) {
         radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            showStart(radio.value);
             const size = (DESCENT_STARTERS[radio.value] ?? TERRAIN_STARTERS[radio.value])?.size;
-            if (size && radio.checked) {
+            if (size) {
                 $('newW').value = size[0];
                 $('newH').value = size[1];
                 showSize();
             }
         });
     }
+    showStart(START_DEFAULT);
     // The name box starts empty: with the open area's name in it, Create replaced the open area. The dialog's returnValue is
     // cleared too: Escape closes a dialog keeping its last one, and a stale "ok" used to create an area.
     $('btnNew').onclick = () => {
@@ -146,7 +189,7 @@ async function create(name, form) {
         replace = true;
     }
     const start = new FormData(form).get('start');
-    const base = Math.min(100, Math.max(0, Number($('newBase').value) || 0));
+    const base = startOf(start)?.height ? Math.min(100, Math.max(0, Number($('newBase').value) || 0)) : BASE_DEFAULT;
     const tiles = v => Math.min(32, Math.max(3, Math.round(+v || 8)));
     // (In the browser, an area over 16 by 16 asks first: its export may need more memory than the browser has.)
     if (!(await bigAreaOk(tiles($('newW').value), tiles($('newH').value)))) return;

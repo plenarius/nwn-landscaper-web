@@ -79,14 +79,14 @@ export function freeName(name, taken) {
 }
 
 /** Area JSON `o` read from a file called `file`, as an Area (named from the file when it names none); throws when it isn't one. */
-function areaFrom(o, file) {
+export function areaFrom(o, file) {
     if (typeof o !== 'object' || !o || !o.heights) throw new Error('no heights');
     o.name ||= nameFromFile(file);
     return Area.fromJSON(o);
 }
 
 /** The names of the areas in this browser: the engine's, and the copies kept beside it. */
-async function areaNames() {
+export async function areaNames() {
     const names = new Set(browserCopies());
     const res = await api('/api/areas');
     if (!res.ok) throw new Error(await failure(res));
