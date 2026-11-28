@@ -124,12 +124,15 @@ google-chrome --user-data-dir=/tmp/landscaper-browser --enable-unsafe-swiftshade
 
 ## Use
 
-- **New area**: name (1-9 of a-z 0-9 _, prefixes every resref), size in 10 m NWN tiles (3 to 32 each way), and a start. The
-  starts are flat ground, gentle or rough hills, a cave or an interior (solid rock to cut rooms out of), a sample descending
-  crypt, dungeon or cave, or a sample landscape: a canyon, a snowy mountain pass, a dune desert or a valley with a lake, each
-  painted, lit and given its weather and sky box, and different every time. A name that an area already has asks before
+- **New area**: name (1-9 of a-z 0-9 _, prefixes every resref), size in 10 m NWN tiles (3 to 32 each way), and a start, picked
+  from picture cards. The blank starts are flat ground, gentle or rough hills, a cave or an interior (solid rock to cut rooms
+  out of); the starter landscapes are a canyon, a snowy mountain pass, a dune desert, a valley with a lake and a descending
+  cave, each painted, lit and given its weather and sky box, and different every time. A name that an area already has asks before
   replacing that area. The engine saves your work to disk as you go; when it can't (no engine, or a failed save), the browser
   keeps the area until the engine is back and then hands it over.
+- **Open a showcase** (File): a copy of one of the handbook's finished showcase areas, as a new area under a free name. The
+  areas are in `showcase/` beside the page, which every package of the editor carries (the engine's
+  `scripts/pack-showcase.sh`); `landscaper serve` run from the engine's source serves its own.
 - **Tools** (big buttons; the key is under each): Raise `1`, Lower `2`, Smooth `3`, Flatten `4`, Paint `5`, Water `6`, Chasm `c`,
   Entrance `7`, Light `b`,
   Place `8`, Scatter `9`, Ambience `a`, Things `t`, and for caves and interiors Dig `0`, Ramp `p`, Descent `d` and Room `r` (shown on every

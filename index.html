@@ -51,6 +51,7 @@
             <div class="menu-list" hidden>
                 <button type="button" class="menu-item" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span><span>New area</span><kbd>N</kbd></button>
                 <button type="button" class="menu-item" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span><span>Open…</span><kbd>O</kbd></button>
+                <button type="button" class="menu-item" id="btnShowcase" title="A copy of one of the showcase's finished areas, to look round and change"><span>Open a showcase…</span></button>
                 <button type="button" class="menu-item" id="btnNewCanvas" title="A landscape larger than one area, to cut into areas later"><span>New canvas…</span></button>
                 <button type="button" class="menu-item" id="btnOpenCanvas" title="Open one of your canvases"><span>Open canvas…</span></button>
                 <button type="button" class="menu-item" id="btnCanvasFromArea" title="A canvas round the area open, which becomes its first piece: the area itself is left as it is"><span>Make a canvas from this area…</span></button>
@@ -495,35 +496,35 @@
     <dialog id="newDialog" aria-labelledby="newTitle">
         <form method="dialog">
             <h2 id="newTitle">New area</h2>
-            <label>Name <small>1–9 letters, digits or _ (prefixes every resref)</small>
-                <input type="text" id="newName" required pattern="[a-z0-9_]{1,9}" maxlength="9" placeholder="a new name"></label>
-            <label>Module <small>its NWN module; another area's to link to it (a cave beside its surface). Empty: its own</small>
-                <input type="text" id="newModule" pattern="[a-z0-9_]{0,16}" maxlength="16" placeholder="same as the name"></label>
+            <div class="name-row">
+                <label>Name <small>1–9 letters, digits or _ (prefixes every resref)</small>
+                    <input type="text" id="newName" required pattern="[a-z0-9_]{1,9}" maxlength="9" placeholder="a new name"></label>
+                <label>Module <small>its NWN module; another area's to link to it (a cave beside its surface). Empty: its own</small>
+                    <input type="text" id="newModule" pattern="[a-z0-9_]{0,16}" maxlength="16" placeholder="same as the name"></label>
+            </div>
             <label>Size <small>NWN tiles of 10 m</small></label>
             <div class="size-choices" id="sizeChoices"></div>
             <div class="size-free"><label>Across <input id="newW" type="number" min="3" max="32" step="1" value="8"></label>
                 <label>Up <input id="newH" type="number" min="3" max="32" step="1" value="8"></label><small>tiles, west to east and south to north</small></div>
             <label>Start from</label>
-            <div class="start-choices">
-                <label><input type="radio" name="start" value="flat" checked> Flat</label>
-                <label><input type="radio" name="start" value="hills"> Gentle hills</label>
-                <label><input type="radio" name="start" value="rough"> Rough hills</label>
-                <label><input type="radio" name="start" value="cave"> Cave (dig it out of rock)</label>
-                <label><input type="radio" name="start" value="interior"> Interior (rooms)</label>
-                <label><input type="radio" name="start" value="crypt"> Descending crypt <small>(six floors down, stone halls: a sample to change)</small></label>
-                <label><input type="radio" name="start" value="dungeon"> Descending dungeon <small>(four floors, cobbles)</small></label>
-                <label><input type="radio" name="start" value="descending-cave"> Descending cave <small>(five floors in rock)</small></label>
-                <label><input type="radio" name="start" value="canyon"> Canyon <small>(a sandy floor between stepped rock walls)</small></label>
-                <label><input type="radio" name="start" value="snowy-pass"> Snowy mountain pass <small>(a path over a saddle, snow falling)</small></label>
-                <label><input type="radio" name="start" value="dunes"> Dune desert <small>(wind-piled dunes, all walkable)</small></label>
-                <label><input type="radio" name="start" value="lake-valley"> Valley with a lake <small>(a meadow ringed by hills)</small></label>
-            </div>
-            <label>Start height <small>metres; start high (a plateau) to dig valleys and canyons down into it</small>
-                <input id="newBase" type="number" min="0" max="100" step="1" value="5"></label>
+            <div id="startChoices" class="start-groups"></div>
+            <p class="note" id="startNote"></p>
+            <label id="newBaseRow" class="base-row">Start height <input id="newBase" type="number" min="0" max="100" step="1" value="5">
+                <small>metres: start high to dig valleys and canyons down into it</small></label>
             <div class="dialog-buttons">
                 <button type="submit" value="cancel" formnovalidate>Cancel</button>
                 <button type="submit" value="ok" class="primary" id="newCreate">Create</button>
             </div>
+        </form>
+    </dialog>
+
+    <dialog id="showcaseDialog" aria-labelledby="showcaseTitle">
+        <form method="dialog">
+            <h2 id="showcaseTitle">Open a showcase</h2>
+            <p class="note">Finished areas made in the Landscaper. The one you pick opens as a new area of yours, a copy to look round and change; nothing you have is replaced.</p>
+            <div id="showcaseList" class="showcase-list"></div>
+            <p class="note" id="showcaseStatus"></p>
+            <div class="dialog-buttons"><button type="submit" value="cancel">Cancel</button></div>
         </form>
     </dialog>
 

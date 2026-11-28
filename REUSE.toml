@@ -23,6 +23,8 @@ path = [
     "scripts/check.sh",
     # nwn-bake's SHA-256s of those shared files (scripts/shared-files.sh).
     "scripts/shared-files.sha256",
+    # New area's card pictures, drawn by the editor from its own starts.
+    "css/start/*.webp",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright (C) 2026 plenarius"

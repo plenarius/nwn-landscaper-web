@@ -40,6 +40,7 @@ import { initPublish } from './publish.js';
 import { initScripts } from './scripts.js';
 import { initReport, showError } from './report.js';
 import { initNewArea } from './newarea.js';
+import { initShowcase } from './showcase.js';
 import { unlistedOf, unlistedRows } from './unlisted.js';
 import { initHeightmap } from './heightmap.js';
 import { initUnderlay, underlayAreaChanged, underlayEscape, toggleUnderlay, showUnderlay, hideUnderlay } from './underlay.js';
@@ -678,7 +679,7 @@ $('noEngineClose').onclick = () => {
 
 /** Which of the file menu's buttons show, and which are off while looking at someone else's workspace. */
 function showButtons() {
-    for (const id of ['btnExport', 'btnCheck', 'btnImport', 'btnDelete']) if ($(id)) $(id).disabled = readOnly;
+    for (const id of ['btnExport', 'btnCheck', 'btnImport', 'btnDelete', 'btnShowcase']) if ($(id)) $(id).disabled = readOnly;
     $('btnActivity').hidden = !(me.team && me.admin);
     $('sepFile').hidden = $('btnActivity').hidden;
     $('btnVersion').hidden = !(me.team && me.versions);
@@ -799,6 +800,7 @@ $('btnRedo').onclick = () => {
 
 // The New area dialog (newarea.js).
 initNewArea({ setArea, thingsTool, library });
+initShowcase({ setArea });
 
 // The engine in this browser (webdemo.js): Download area, Open area from a file, Help's source link.
 initWebDemo({ area: () => area, setArea });
