@@ -443,12 +443,17 @@ export async function deleteArea(a) {
 async function deleteOpenArea() {
     const a = ctx.area();
     if (ctx.readOnly() || !a) return;
-    const kept = ctx.me().team
-        ? 'The server keeps its last copy, which an admin can bring back.'
-        : "Its last copy is kept in the Landscaper's data folder (deleted/), from where you can bring it back.";
+    // (In the browser page the data folder is the browser's own storage, out of reach: nothing there brings it back.)
+    const text = web.on
+        ? `${a.name} leaves this browser's storage, and its name is free again. Nothing on this page can bring it back: to keep it, cancel and use File, Download area first.`
+        : `${a.name} leaves your areas, with its export, and its name is free again. ${
+              ctx.me().team
+                  ? 'The server keeps its last copy, which an admin can bring back.'
+                  : "Its last copy is kept in the Landscaper's data folder (deleted/), from where you can bring it back."
+          }\n\nThe module it was exported into, and its hak, stay as they are.`;
     const yes = await ask({
         title: `Delete ${a.name}?`,
-        text: `${a.name} leaves your areas, with its export, and its name is free again. ${kept}\n\nThe module it was exported into, and its hak, stay as they are.`,
+        text,
         ok: `Delete ${a.name}`,
         danger: true,
     });
