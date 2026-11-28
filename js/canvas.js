@@ -82,10 +82,17 @@ export class CanvasArea extends Area {
             // Cutting (step 6): the pieces, rectangles of tiles, and the counter their numbers come from.
             pieces: [],
             pieceNextId: 1,
+            // What the engine's tags start with in every piece (null: the canvas's name): a canvas made from an area keeps its.
+            tagPrefix: null,
         };
         this.module = name;
         // The soft paint's blend layer (LAYERS): the area's own where it has one, else null until a block gives it one.
         this.blend ??= null;
+    }
+
+    /** The tag of entrance `e`'s door, as the engine tags it in the piece it ends up in. */
+    doorTag(e) {
+        return `${this.canvas.tagPrefix ?? this.name}_ent${e.id}`;
     }
 
     /** Blocks each way. */
@@ -180,7 +187,15 @@ export class CanvasArea extends Area {
     header() {
         const o = Object.fromEntries(HEADER_FIELDS.map(f => [f, this[f]]));
         o.lights = this.lightsForExport();
-        return { ...o, kind: 'surface', ground: this.canvas.ground, pieces: this.canvas.pieces, pieceNextId: this.canvas.pieceNextId };
+        const prefix = this.canvas.tagPrefix ? { tagPrefix: this.canvas.tagPrefix } : {};
+        return {
+            ...o,
+            ...prefix,
+            kind: 'surface',
+            ground: this.canvas.ground,
+            pieces: this.canvas.pieces,
+            pieceNextId: this.canvas.pieceNextId,
+        };
     }
 
     /** What the next save sends: the header when it changed (with its base), and each dirty block with its base; `stamps`, the
@@ -242,6 +257,87 @@ export class CanvasArea extends Area {
         return c;
     }
 
+    /**
+     * Canvas `name` made from surface area `a` (File, Make a canvas from this area: docs/DESIGN-canvas-cut.md, step 8), `room`
+     * tiles bigger on each side. The area becomes piece 1, named as it is, where it was: its band is the canvas's ground round
+     * it, as far as a piece's halo reaches, so cutting that piece out gives the area back; past the band, the band's edge carried
+     * outward, as the engine carries a canvas's edge. Its tags keep the area's name (`tagPrefix`), so its doors keep theirs.
+     * `a` is left as it was.
+     */
+    static fromArea(a, name, room) {
+        if (a.enclosed()) throw new Error('A cave or an interior has no edge to grow from: only an open area becomes a canvas.');
+        const tiles = a.tiles + 2 * room,
+            tilesY = a.tilesY + 2 * room;
+        if (tiles > MAX_TILES || tilesY > MAX_TILES)
+            throw new Error(`That makes it ${tiles}×${tilesY} tiles: at most ${MAX_TILES} each way.`);
+        const c = new CanvasArea(name, tiles, tilesY, 0),
+            off = room * (TILE / SPACING),
+            metres = room * TILE;
+        c.created = Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
+        // The ground: the band's grids (the area's own in their middle), or the area's without one, their edge carried out.
+        a.band?.sync(a);
+        const g = a.band ?? { nx: a.nx, ny: a.ny, n: 0, heights: a.heights, materials: a.materials },
+            at = (i, n) => Math.min(Math.max(i, 0), n - 1);
+        for (let j = 0; j < c.ny; j++) {
+            const row = at(j - off + g.n, g.ny) * g.nx;
+            for (let i = 0; i < c.nx; i++) {
+                const k = row + at(i - off + g.n, g.nx);
+                c.heights[j * c.nx + i] = g.heights[k];
+                c.materials[j * c.nx + i] = g.materials[k];
+            }
+        }
+        // The layers only the area's own samples have.
+        for (const field of ['chasm', 'blend']) {
+            const src = a[field];
+            if (!src) continue;
+            const out = new src.constructor(c.nx * c.ny);
+            for (let j = 0; j < a.ny; j++) out.set(src.subarray(j * a.nx, (j + 1) * a.nx), (j + off) * c.nx + off);
+            c[field] = out;
+        }
+        dropEmpty(c);
+        const moved = p => ({ ...p, x: p.x + metres, y: p.y + metres }),
+            outline = t => (Array.isArray(t.outline) ? { ...t, outline: t.outline.map(([x, y]) => [x + metres, y + metres]) } : t);
+        c.palette = [...a.palette];
+        c.water = a.water.map(w => ({ ...w, i: w.i + off, j: w.j + off, ...(w.bounds && { bounds: w.bounds.map(v => v + off) }) }));
+        c.objects = a.objects.map(moved);
+        c.things = structuredClone(a.things).map(t => outline(moved(t)));
+        c.entrances = a.entrances.map(moved);
+        c.ambience = a.ambience.map(moved);
+        if (a.lights) {
+            c.lights = Array.from({ length: tiles * tilesY }, () => [0, 0]);
+            for (let ty = 0; ty < a.tilesY; ty++)
+                for (let tx = 0; tx < a.tiles; tx++) c.lights[(ty + room) * tiles + tx + room] = [...a.lights[ty * a.tiles + tx]];
+        }
+        Object.assign(c, {
+            atmosphere: structuredClone(a.atmosphere),
+            shadow: a.shadow,
+            nextObjectId: a.nextObjectId,
+            nextThingId: a.nextThingId,
+            entranceNextId: a.entranceNextId,
+            // (the canvas's own, for pieces cut later: the area's tag stays with the area's piece)
+            settings: (({ tag, ...rest }) => structuredClone(rest))(a.settings ?? {}),
+        });
+        c.canvas.tagPrefix = a.name;
+        c.canvas.pieces = [
+            {
+                id: 1,
+                name: a.name,
+                x: room,
+                y: room,
+                w: a.tiles,
+                h: a.tilesY,
+                ...(a.settings && { settings: structuredClone(a.settings) }),
+                ...(a.atmosphere && { atmosphere: structuredClone(a.atmosphere) }),
+                // (an imported area's own objects, as changed, in its own metres: they belong to the area this piece replaces)
+                originals: structuredClone(a.originals),
+            },
+        ];
+        c.canvas.pieceNextId = 2;
+        c.markAll();
+        c.floodWater();
+        return c;
+    }
+
     /** The canvas from its header (the engine's `GET /api/canvas` answer: `header`, `version`, `blocks`) and its blocks' files
      *  (`files`: name to the block file's bytes, for those that have one; the rest are flat at the header's ground). */
     static fromHeader(answer, files) {
@@ -295,6 +391,7 @@ export class CanvasArea extends Area {
         c.canvas.versions = new Map(Object.entries(answer.blocks ?? {}));
         c.canvas.pieces = Array.isArray(h.pieces) ? h.pieces : [];
         c.canvas.pieceNextId = h.pieceNextId ?? 1;
+        c.canvas.tagPrefix = typeof h.tagPrefix === 'string' && h.tagPrefix ? h.tagPrefix : null;
         c.water = Array.isArray(h.water) ? h.water : [];
         dropEmpty(c);
         c.floodWater();

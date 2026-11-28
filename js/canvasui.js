@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// New canvas and Open canvas (File menu), and the view's detail button while a canvas is open. A canvas is sculpted and painted
-// with the area tools and cut into pieces in Pieces mode (piecesui.js); its export and publish come with step 7.
+// New canvas, Open canvas and Make a canvas from this area (File menu), and the view's detail button while a canvas is open. A
+// canvas is sculpted and painted with the area tools and cut into pieces in Pieces mode (piecesui.js); its export and publish
+// come with step 7.
 
 import { CanvasArea, MAX_TILES, MIN_TILES, canvasNameOk } from './canvas.js';
 import { createCanvas, listCanvases, loadCanvas } from './canvassave.js';
@@ -13,6 +14,12 @@ import { $, el, say } from './dom.js';
 /** What app.js gives this file (initCanvas): `area()`, `me()`, `readOnly()`, `setArea(a)`, `flushSave()` and the `view`. */
 let ctx = null;
 
+/** The new canvas dialog's note (show() changes it for Make a canvas from this area). */
+const NEW_NOTE =
+    'A landscape larger than one area, up to 128 by 128 tiles, sculpted and painted as one. Cutting it into areas comes later.';
+/** The least room round an area made a canvas: its band, so the piece cut out carries the same halo. */
+const MIN_ROOM = 5;
+
 // Buttons that act on one area, off while a canvas is open: a canvas is exported, checked and published by its pieces.
 const AREA_ONLY = ['btnExport', 'btnCheck', 'btnPublish', 'btnDelete', 'btnVersion'];
 
@@ -20,7 +27,9 @@ export function initCanvas(c) {
     ctx = c;
     $('btnNewCanvas').onclick = () => show('new');
     $('btnOpenCanvas').onclick = () => show('open');
-    $('canvasGo').onclick = create;
+    $('btnCanvasFromArea').onclick = () => show('from');
+    $('canvasGo').onclick = () => ($('canvasFrom').hidden ? create() : fromArea());
+    $('canvasRoom').oninput = roomShown;
     $('btnDetail').onclick = () => {
         const on = $('btnDetail').getAttribute('aria-pressed') !== 'true';
         $('btnDetail').setAttribute('aria-pressed', String(on));
@@ -37,6 +46,8 @@ export function canvasShown(a) {
     $('btnDetail').hidden = !a.canvas;
     $('btnDetail').setAttribute('aria-pressed', 'true');
     $('btnDetail').classList.toggle('active', !!a.canvas);
+    // (a canvas grows from an open area's band; a cave or an interior has none)
+    $('btnCanvasFromArea').disabled = !!a.canvas || a.enclosed();
     for (const id of AREA_ONLY) {
         const b = $(id);
         if (!b) continue;
@@ -50,12 +61,24 @@ export function canvasShown(a) {
     }
 }
 
-/** Opens the dialog to make a canvas (`new`) or to pick one to open (`open`). */
+/** Opens the dialog to make a canvas (`new`), to make one from the area open (`from`), or to pick one to open (`open`). */
 async function show(mode) {
     const dlg = $('canvasDialog'),
-        open = mode === 'open';
-    $('canvasTitle').textContent = open ? 'Open a canvas' : 'New canvas';
+        open = mode === 'open',
+        from = mode === 'from',
+        a = ctx.area();
+    $('canvasTitle').textContent = open ? 'Open a canvas' : from ? `Make a canvas from ${a.name}` : 'New canvas';
+    $('canvasNote').textContent = from
+        ? `${a.name} becomes the canvas's first piece, where it is, with its band and everything on it: exported, that piece is ${a.name} as it is now. ${a.name} itself stays as it is. Its tags stay too, so its doors keep theirs.`
+        : NEW_NOTE;
     $('canvasNew').hidden = open;
+    $('canvasShape').hidden = from;
+    $('canvasFrom').hidden = !from;
+    if (from) {
+        // (a canvas's name can't be an area's: the area's own, shortened, or with cv)
+        $('canvasName').value = a.name.length > 7 ? a.name.slice(0, 7) : `${a.name.slice(0, 5)}cv`;
+        roomShown();
+    }
     $('canvasList').hidden = !open;
     $('canvasGo').hidden = open;
     $('canvasGo').disabled = false;
@@ -103,6 +126,51 @@ async function openCanvas(name) {
         if (restored) ctx.saveSoon();
     } catch (err) {
         $('canvasMsg').textContent = `Couldn't open ${name}: ${err.message}`;
+    }
+}
+
+/** The canvas's size the room round the area makes, under the box. */
+function roomShown() {
+    const a = ctx.area(),
+        room = Math.round(+$('canvasRoom').value),
+        w = a.tiles + 2 * room,
+        h = a.tilesY + 2 * room;
+    $('canvasFromSize').textContent =
+        w > MAX_TILES || h > MAX_TILES
+            ? `${w}×${h} tiles: a canvas is at most ${MAX_TILES} each way.`
+            : `The canvas: ${w}×${h} tiles, ${a.name} (${a.tiles}×${a.tilesY}) in its middle.`;
+}
+
+/** Makes a canvas from the area open, as the dialog says, on the engine, and opens it. The area is left as it is. */
+async function fromArea() {
+    const a = ctx.area(),
+        name = $('canvasName').value.trim(),
+        room = Math.round(+$('canvasRoom').value),
+        msg = $('canvasMsg');
+    const wrong = !canvasNameOk(name)
+        ? 'The name is 1 to 7 lower case letters, digits or _.'
+        : !(room >= MIN_ROOM)
+          ? `At least ${MIN_ROOM} tiles of room round it: its band is that wide.`
+          : !engine.up
+            ? NEEDS_ENGINE
+            : '';
+    if (wrong) {
+        msg.textContent = wrong;
+        return;
+    }
+    $('canvasGo').disabled = true;
+    msg.textContent = `Making ${name} from ${a.name}…`;
+    try {
+        await ctx.flushSave();
+        const c = CanvasArea.fromArea(a, name, room);
+        await createCanvas(c, ctx.me());
+        $('canvasDialog').close();
+        ctx.setArea(c);
+        say(`Made canvas ${name} (${c.tiles}×${c.tilesY} tiles) from ${a.name}, its first piece. ${a.name} is as it was.`);
+    } catch (err) {
+        msg.textContent = `Couldn't make ${name}: ${err.message}`;
+    } finally {
+        $('canvasGo').disabled = false;
     }
 }
 

@@ -53,6 +53,7 @@
                 <button type="button" class="menu-item" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span><span>Open…</span><kbd>O</kbd></button>
                 <button type="button" class="menu-item" id="btnNewCanvas" title="A landscape larger than one area, to cut into areas later"><span>New canvas…</span></button>
                 <button type="button" class="menu-item" id="btnOpenCanvas" title="Open one of your canvases"><span>Open canvas…</span></button>
+                <button type="button" class="menu-item" id="btnCanvasFromArea" title="A canvas round the area open, which becomes its first piece: the area itself is left as it is"><span>Make a canvas from this area…</span></button>
                 <button type="button" class="menu-item" id="btnVersion" hidden title="Keep this version of the area in the team's history (autosave doesn't)"><span>Save version</span></button>
                 <button type="button" class="menu-item" id="btnDelete" title="Delete the area open: it leaves your areas, and its last copy is kept to bring back"><span>Delete area…</span></button>
                 <hr class="menu-sep" id="sepAreaFile" hidden>
@@ -538,18 +539,26 @@
     <dialog id="canvasDialog" aria-labelledby="canvasTitle">
         <form method="dialog">
             <h2 id="canvasTitle">New canvas</h2>
-            <p class="note">A landscape larger than one area, up to 128 by 128 tiles, sculpted and painted as one. Cutting it into areas comes later.</p>
+            <p class="note" id="canvasNote">A landscape larger than one area, up to 128 by 128 tiles, sculpted and painted as one. Cutting it into areas comes later.</p>
             <div id="canvasNew">
                 <label>Name <small>1–7 letters, digits or _ (an area cut from it adds two digits)</small>
                     <input type="text" id="canvasName" maxlength="7" autocomplete="off" pattern="[a-z0-9_]{1,7}" placeholder="a new name"></label>
-                <label>Size <small>NWN tiles of 10 m</small></label>
-                <div class="size-free"><label>Across <input id="canvasW" type="number" min="3" max="128" step="1" value="64"></label>
-                    <label>Up <input id="canvasH" type="number" min="3" max="128" step="1" value="64"></label><small>tiles, up to 128 each way</small></div>
-                <label>Start from</label>
-                <div class="start-choices">
-                    <label><input type="radio" name="canvasStart" value="hills" checked> Gentle hills</label>
-                    <label><input type="radio" name="canvasStart" value="rough"> Rough hills</label>
-                    <label><input type="radio" name="canvasStart" value="flat"> Flat</label>
+                <div id="canvasShape">
+                    <label>Size <small>NWN tiles of 10 m</small></label>
+                    <div class="size-free"><label>Across <input id="canvasW" type="number" min="3" max="128" step="1" value="64"></label>
+                        <label>Up <input id="canvasH" type="number" min="3" max="128" step="1" value="64"></label><small>tiles, up to 128 each way</small></div>
+                    <label>Start from</label>
+                    <div class="start-choices">
+                        <label><input type="radio" name="canvasStart" value="hills" checked> Gentle hills</label>
+                        <label><input type="radio" name="canvasStart" value="rough"> Rough hills</label>
+                        <label><input type="radio" name="canvasStart" value="flat"> Flat</label>
+                    </div>
+                </div>
+                <div id="canvasFrom" hidden>
+                    <label>Room round it <small>to grow into</small></label>
+                    <div class="size-free"><label>Each side <input id="canvasRoom" type="number" min="5" max="62" step="1" value="8"></label>
+                        <small>tiles, 5 at least: the area's band is 5</small></div>
+                    <p class="note" id="canvasFromSize"></p>
                 </div>
             </div>
             <div id="canvasList" class="open-list" hidden></div>
