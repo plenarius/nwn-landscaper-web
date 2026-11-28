@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // New canvas and Open canvas (File menu), and the view's detail button while a canvas is open. A canvas is sculpted and painted
-// with the area tools; cutting it into areas, and so its export, check and publish, come with the pieces (step 6).
+// with the area tools and cut into pieces in Pieces mode (piecesui.js); its export and publish come with step 7.
 
 import { CanvasArea, MAX_TILES, MIN_TILES, canvasNameOk } from './canvas.js';
 import { createCanvas, listCanvases, loadCanvas } from './canvassave.js';

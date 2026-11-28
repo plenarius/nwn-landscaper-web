@@ -32,7 +32,7 @@ export const engine = { up: true };
 export const viewing = { user: null };
 
 /** The requests other than GETs that change nothing in a workspace: going back to one's own, and checking paths. */
-const CHANGE_NOTHING = new Set(['/api/view-as', '/api/check']);
+const CHANGE_NOTHING = new Set(['/api/view-as', '/api/check', '/api/canvas-check']);
 
 /** What a tool that needs the engine says when it isn't there. */
 export const NEEDS_ENGINE = IN_APP

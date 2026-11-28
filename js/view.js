@@ -46,6 +46,8 @@ const WORK_SKY = 1.0;
 const WORK_FOG = new THREE.Color(0x3a4048);
 // Multiplies the painted texture on ground too steep to walk.
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
+/** How much an open piece's neighbours' ground is dimmed (Open piece): seen, and told apart from the piece. */
+const DIMMED = 0.4;
 // Splat shading, as landscaper bakes it into the NWN tiles: each sample has
 // a texture (an index into the area palette, stored in uMat). Walkable
 // ground draws the paint smoothed (softpaint.js, uSoft), its edges crisp,
@@ -337,7 +339,8 @@ export class View {
             this.updateFog();
             const px = this.renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
             this.ambience.frame(performance.now() / 1000, px);
-            this.renderer.render(this.scene, this.camera);
+            // (nothing to draw while Pieces mode covers the view)
+            if (!this.covered) this.renderer.render(this.scene, this.camera);
         };
         requestAnimationFrame(loop);
     }
@@ -482,6 +485,7 @@ export class View {
         this.drawn = null;
         this.coarse?.dispose();
         this.coarse = null;
+        this.focus = null;
         this.windowPinned = false;
         const { nx, ny, sizeX, sizeY } = area;
         // A canvas draws a window of it at full detail and all of it at a quarter (Coarse); an area is all window.
@@ -803,6 +807,22 @@ export class View {
         this.controls.update();
     }
 
+    /** Frames canvas point (x, y) metres with `size` metres of ground in view, from the south, as frame() does an area. */
+    frameOn(x, y, size) {
+        const mid = this.area.heightAt(x, y);
+        this.controls.target.set(x, mid, this.area.sizeY - y);
+        this.camera.position.set(x, mid + size * 0.95, this.area.sizeY - y + size * 1.15);
+        this.controls.update();
+    }
+
+    /** Dims the ground outside samples `r` (i0..i1, j0..j1; null: none): an open piece's neighbours, still editable. */
+    setFocus(r) {
+        this.focus = r;
+        this.markDirty(this.everything(), false);
+        this.flush();
+        this.coarse?.update(this.everything());
+    }
+
     // --- The camera from the keyboard (the mouse's: right-drag turns, middle-drag moves, wheel zooms) ----------------
 
     /** Moves the view along the ground: `right` and `forward` in steps of a tenth of the distance to what it looks at. */
@@ -1049,6 +1069,8 @@ export class View {
         } else {
             c.copy(this.showWalkability ? BLOCKED : ROCK);
         }
+        const f = this.focus;
+        if (f && (i < f.i0 || i > f.i1 || j < f.j0 || j > f.j1)) c.multiplyScalar(DIMMED);
         return c;
     }
 

@@ -1,0 +1,320 @@
+/* SPDX-FileCopyrightText: Copyright (C) 2026 plenarius */
+/* SPDX-License-Identifier: MIT */
+
+/* A canvas's Pieces mode (the map and its side panel), the Sculpt and Pieces switch, and an open piece's small map. */
+
+.mode-switch {
+    display: flex;
+}
+.mode-switch .top-btn:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.mode-switch .top-btn:last-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    margin-left: -1px;
+}
+.mode-switch .top-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+#areaInfo .crumb {
+    color: var(--accent);
+}
+#areaInfo code {
+    color: var(--muted);
+}
+
+/* Pieces mode covers the tool column and the view; the top bar and the status line stay. */
+#piecesMode {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(380px, 34vw, 500px);
+    gap: 16px;
+    padding: 12px 16px;
+    min-height: 0;
+    background: var(--bg);
+}
+#piecesMode[hidden] {
+    display: none;
+}
+body.pieces-mode #tools {
+    visibility: hidden;
+}
+#piecesMapBox {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+}
+#piecesMap {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+#piecesPanel {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 14px;
+    background: var(--panel);
+    border: 1px solid #000;
+    border-radius: 10px;
+}
+#piecesPanel h2 {
+    margin: 0 0 10px;
+    font-size: 17px;
+}
+#piecesPanel h2 small {
+    font-size: 12px;
+    font-weight: 400;
+}
+#piecesPanel h3 {
+    margin: 4px 0 8px;
+    font-size: 16px;
+    color: var(--accent);
+}
+.muted {
+    color: var(--muted);
+}
+.pieces-tools,
+.row-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 10px;
+}
+.pieces-tools button,
+.row-buttons button,
+.pieces-form button {
+    padding: 6px 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid #000;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+.pieces-tools button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.row-buttons button.primary {
+    background: var(--accent);
+    color: #1d2228;
+    font-weight: 600;
+}
+.pieces-tools button:hover,
+.row-buttons button:hover,
+.pieces-form button:hover {
+    filter: brightness(1.15);
+}
+.pieces-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--panel-2);
+}
+.piece-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 76px 58px 100px;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    background: none;
+    color: var(--text);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+}
+.piece-row:hover {
+    background: var(--panel-2);
+}
+.piece-row.active {
+    border-color: var(--accent);
+    background: var(--bg);
+    font-weight: 600;
+}
+.piece-row .piece-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.piece-row code {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
+}
+.piece-row .piece-size {
+    font-variant-numeric: tabular-nums;
+}
+.chip {
+    justify-self: start;
+    padding: 0 6px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 400;
+    white-space: nowrap;
+    background: var(--panel-2);
+    color: var(--muted);
+}
+.chip.good {
+    background: #2f4a2c;
+    color: var(--good);
+}
+.chip.warn {
+    background: #4f3a1e;
+    color: var(--warn);
+}
+.chip.bad {
+    background: #4f2620;
+    color: var(--bad);
+}
+.piece-details .kv,
+.pieces-form .kv {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 4px 12px;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+.piece-details .kv > :nth-child(odd),
+.pieces-form .kv > :nth-child(odd) {
+    color: var(--muted);
+}
+.piece-details code {
+    color: var(--text);
+    font-size: 13px;
+}
+.pieces-form {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 8px;
+}
+.pieces-form input {
+    width: 100%;
+    padding: 4px 6px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid #000;
+    border-radius: 4px;
+    font: inherit;
+}
+.pieces-form input[type="number"] {
+    width: 4em;
+}
+.note.bad,
+.drag-error {
+    color: var(--bad);
+}
+.note:empty {
+    display: none;
+}
+.drag-moves {
+    margin: 0 0 12px;
+    padding: 0;
+    list-style: none;
+}
+.drag-moves li {
+    margin: 0 0 8px;
+}
+.drag-moves code {
+    color: var(--muted);
+}
+.drag-moves .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+}
+.dot.warn {
+    background: var(--warn);
+}
+.dot.good {
+    background: var(--good);
+}
+.dot.water {
+    background: #5b8fd0;
+}
+.move-where {
+    margin-left: 16px;
+    color: var(--muted);
+    font-size: 13px;
+}
+.drag-error {
+    padding: 8px 12px;
+    background: rgba(184, 50, 31, 0.15);
+    border: 1px solid var(--bad-fill);
+    border-radius: 6px;
+}
+
+/* An open piece: the canvas small, the piece lit, and its crossings. */
+.open-panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1;
+    width: 252px;
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    padding: 10px 12px;
+    background: rgba(38, 44, 52, 0.96);
+    border: 1px solid #000;
+    border-radius: 10px;
+    font-size: 13px;
+}
+.open-panel h3 {
+    margin: 4px 0 8px;
+    font-size: 14px;
+}
+.open-panel h3 + h3,
+.open-panel .note + h3 {
+    padding-top: 8px;
+    border-top: 1px solid var(--panel-2);
+}
+/* (#viewport canvas puts the 3D view's out of the flow; this one stays in its panel) */
+#viewport #smallMap {
+    position: static;
+    display: block;
+    cursor: pointer;
+}
+.open-panel .note {
+    margin: 6px 0;
+    color: var(--muted);
+}
+.open-crossings div {
+    margin: 2px 0;
+}
+
+/* (.top-btn's display would show them) */
+#btnBackCanvas[hidden],
+#btnDetail[hidden],
+.mode-switch[hidden] {
+    display: none;
+}
+/* The sculpting view's own buttons are for the 3D view, which Pieces mode covers. */
+body.pieces-mode :is(#btnDetail, #btnCheck, #btnLive, #btnWalk, #btnMarkers, #menuShow, #topbar .group-sep) {
+    display: none;
+}
+
+/* An open piece: its breadcrumb on one line; the canvas's path check is in the small map's panel. */
+#areaInfo:has(.crumb) {
+    flex: none;
+    display: block;
+    white-space: nowrap;
+}
+body.piece-open :is(#btnCheck, #btnLive, #btnDetail) {
+    display: none;
+}

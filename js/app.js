@@ -67,6 +67,7 @@ import {
     unsaved,
 } from './save.js';
 import { canvasShown, initCanvas } from './canvasui.js';
+import { initPieces, piecesShown } from './piecesui.js';
 import { initLive, showLive, checkSoon } from './live.js';
 import { initMissing, showMissing } from './missing.js';
 import { initExport } from './export.js';
@@ -627,6 +628,7 @@ function setArea(a, blank = false) {
     canvasShown(a);
     $('areaInfo').textContent = `${a.canvas ? 'canvas ' : ''}${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
     $('areaInfo').title = $('areaInfo').textContent;
+    piecesShown(a);
     $('report').hidden = true;
     showAreaSky(a);
     showMissing();
@@ -717,6 +719,7 @@ initScripts(editor);
 // Save a version, Delete area, and autosave (save.js).
 initSave({ ...editor, open: name => openArea({ name }, false), blank: showBlank });
 initCanvas({ ...editor, setArea, flushSave, saveSoon: () => saveSoon() });
+initPieces({ ...editor, flushSave, saveSoon: () => saveSoon() });
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
 async function viewAs(user) {
