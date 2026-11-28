@@ -196,7 +196,7 @@ async function exportZip(name, module) {
               ]),
     ].join('\r\n');
     const t = performance.now();
-    const blob = zip([
+    const blob = await zip([
         [`modules/${modName}`, mod],
         ...haks.map(([n, f]) => [`hak/${n}`, f.data]),
         ['README.txt', new TextEncoder().encode(readme)],
