@@ -20,6 +20,7 @@ import { live } from './live.js';
 import { lightStamp } from './lights.js';
 import { showLightTool } from './lighttool.js';
 import { saveSoon } from './save.js';
+import { placeText } from './piecesui.js';
 
 /** What app.js gives this file (initStrokes): `area()`, `tool()`, `readOnly()`, `view`, the Things tool (`thingsTool`),
  *  `selectTool(id)`, the Paint tool's `paintTexture()`, `mixOn()`, `currentMix()`, `picking()`, `setPicking(on)` and
@@ -587,7 +588,7 @@ export function initStrokes(c) {
                         ? 'walkable'
                         : 'too steep to walk';
             $('statusPos').textContent =
-                `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
+                `${placeText(p.x, p.y) ?? `x ${p.x.toFixed(1)} m · y ${p.y.toFixed(1)} m`} · height ${p.z.toFixed(1)} m · tile ${tx},${ty} · ${what}`;
         }
         if (stroke?.tool === 'light' && p) {
             if (lightStamp(ctx.area(), p.x, p.y, radius, stroke.pair)) {

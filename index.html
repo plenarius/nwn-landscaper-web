@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="css/things.css">
     <link rel="stylesheet" href="css/menus.css">
     <link rel="stylesheet" href="css/editors.css">
+    <link rel="stylesheet" href="css/pieces.css">
     <link rel="stylesheet" href="css/notice.css">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M4 40 L18 18 L26 28 L32 20 L44 40 Z' fill='%23d8a24a'/%3E%3C/svg%3E">
     <script type="importmap">
@@ -74,6 +75,11 @@
                 <button type="button" class="menu-item" id="btnUnderlay" title="A picture under the ground to trace over: a battlemat or a map"><span>Underlay…</span></button>
             </div>
         </div>
+        <div class="mode-switch" id="modeSwitch" hidden role="group" aria-label="Canvas mode">
+            <button type="button" class="top-btn active" id="btnModeSculpt" aria-pressed="true" title="Sculpt and paint the whole canvas">Sculpt</button>
+            <button type="button" class="top-btn" id="btnModePieces" aria-pressed="false" title="Cut the canvas into pieces: each becomes one area">Pieces</button>
+        </div>
+        <button type="button" class="top-btn" id="btnBackCanvas" hidden title="Back to the whole canvas, in Pieces mode">← Back to the canvas</button>
         <div class="spacer"></div>
         <button type="button" class="top-btn icon-only" id="btnUndo" title="Undo (Ctrl+Z)"><span class="icon" data-icon="undo"></span><span class="lbl">Undo</span></button>
         <button type="button" class="top-btn icon-only" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span><span class="lbl">Redo</span></button>
@@ -357,7 +363,72 @@
             </div>
             <div id="paletteBody"></div>
         </section>
+        <section id="openPanel" class="open-panel" hidden aria-label="The open piece on the canvas">
+            <h3>On the canvas</h3>
+            <canvas id="smallMap" width="1" height="1" title="Click a piece to open it"></canvas>
+            <p class="note">Dimmed ground is the neighbours'. It is drawn as this area's edge scenery on export; sculpt it here or in their pieces.</p>
+            <h3>Crossings <span class="muted" id="openCrossingsCount"></span></h3>
+            <div id="openCrossings" class="open-crossings"></div>
+            <p class="note" id="openCrossingsNote"></p>
+            <div class="row-buttons"><button type="button" id="openCheck">Check paths</button></div>
+            <p class="note" id="openCheckOut"></p>
+        </section>
     </main>
+
+    <section id="piecesMode" hidden aria-label="Pieces">
+        <div id="piecesMapBox"><canvas id="piecesMap" width="1" height="1"></canvas></div>
+        <div id="piecesPanel">
+            <div id="piecesNormal">
+                <h2><span id="piecesTitle">Pieces</span> <small class="muted" id="piecesSummary"></small></h2>
+                <div class="pieces-tools" id="piecesTools">
+                    <button type="button" data-ptool="cut" title="Drag across the ground to cut out a piece on tile lines; drag a cut to move it">✂ Cut</button>
+                    <button type="button" data-ptool="move" title="Drag a cut line to move it: the pieces on both sides follow">⇔ Move a cut</button>
+                    <button type="button" data-ptool="join" title="Click two pieces side by side to join them into one">⊞ Join</button>
+                    <button type="button" data-ptool="grid" title="Fill the canvas with an even grid of pieces">Grid…</button>
+                </div>
+                <div id="gridForm" class="pieces-form" hidden>
+                    <h3>Grid</h3>
+                    <div class="kv"><span>Pieces across × up</span><span><input type="number" id="gridAcross" min="1" max="43" value="2"> × <input type="number" id="gridUp" min="1" max="43" value="2"></span>
+                        <span>Each piece</span><span id="gridSize"></span>
+                        <span>Replaces</span><span id="gridReplaces"></span></div>
+                    <p class="note bad" id="gridMsg"></p>
+                    <button type="button" id="gridGo">Make the grid</button>
+                </div>
+                <div id="piecesList" class="pieces-list"></div>
+                <div id="pieceDetails" class="piece-details">
+                    <h3 id="pieceTitle">Piece</h3>
+                    <div class="kv">
+                        <span>Name in game</span><span id="pieceGame"></span>
+                        <span>Tag · resref</span><code id="pieceTag"></code>
+                        <span>Tiles</span><span id="pieceTiles"></span>
+                        <span>Joins</span><div id="pieceJoins"></div>
+                    </div>
+                    <div id="renameForm" class="pieces-form" hidden>
+                        <div class="kv"><label for="renameName">Name (resref)</label><input type="text" id="renameName" maxlength="9" autocomplete="off" pattern="[a-z0-9_]{1,9}">
+                            <label for="renameGame">Name in game</label><input type="text" id="renameGame" maxlength="60" autocomplete="off" placeholder="as the name"></div>
+                        <p class="note">Renaming a piece after it was published makes it a new area to the module.</p>
+                        <p class="note bad" id="renameMsg"></p>
+                        <button type="button" id="pieceRenameGo">Rename</button>
+                    </div>
+                    <div class="row-buttons">
+                        <button type="button" class="primary" id="pieceOpen" title="Edit this piece at full detail, its neighbours' ground round it (Enter)">Open this piece</button>
+                        <button type="button" id="pieceRename">Rename</button>
+                        <button type="button" id="pieceCheck" title="Check paths in this piece and across its crossings">Check paths</button>
+                        <button type="button" id="pieceRemove" title="Make this piece a gap: its ground stays, not exported (Delete)">Make a gap</button>
+                    </div>
+                    <p class="note" id="pieceCheckOut"></p>
+                </div>
+                <div class="row-buttons"><button type="button" id="piecesCheckAll" title="Check paths in every piece and across the canvas, from the start piece">Check paths (all pieces)</button></div>
+                <p class="note" id="piecesCheckOut"></p>
+            </div>
+            <div id="piecesDrag" hidden>
+                <h2 id="dragTitle">Moving a cut</h2>
+                <p id="dragStrip"></p>
+                <ul id="dragMoves" class="drag-moves"></ul>
+                <p class="drag-error" id="dragError" hidden></p>
+            </div>
+        </div>
+    </section>
 
     <aside id="report" hidden>
         <button type="button" id="reportClose" title="Close">×</button>
