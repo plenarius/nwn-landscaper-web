@@ -6,8 +6,12 @@
 import { $, el } from './dom.js';
 import { clickCount } from './routes.js';
 
-/** Shows what an export or a path check (`checkOnly`) found in the report box: `r` is the engine's report. */
-export function showReport(r, checkOnly = false) {
+/** How many of `area`'s objects stand on its band, past its edge: scenery, not objects outside the area. */
+export const onBand = area => area?.objects.filter(o => area.beyond(o.x, o.y)).length ?? 0;
+
+/** Shows what an export or a path check (`checkOnly`) found in the report box: `r` is the engine's report, `area` the area sent. */
+export function showReport(r, checkOnly = false, area = null) {
+    const band = onBand(area);
     const failed = r.warnings.filter(w => w.kind === 'failed_route').length;
     const closed = r.warnings.filter(w => w.kind === 'closed_passage').length;
     const winding = r.warnings.length - failed - closed;
@@ -70,6 +74,11 @@ export function showReport(r, checkOnly = false) {
                 !$('btnMarkers').classList.contains('active') &&
                 p('note', 'The markers are hidden: Markers in the top bar (M) shows them.'),
             p('', `Walkable ground kept: ${(100 * r.coverage).toFixed(1)}%`),
+            band > 0 &&
+                p(
+                    '',
+                    `${band} object${band === 1 ? '' : 's'} on the band past the edge: scenery the game draws beyond the area (near ones as models, farther ones as pictures), casting shade and never in the way.`,
+                ),
             ...(checkOnly
                 ? [p('note', 'Nothing was exported: this only checks.')]
                 : [

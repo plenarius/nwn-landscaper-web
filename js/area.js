@@ -327,6 +327,30 @@ export class Area {
         return a + (b - a) * ty;
     }
 
+    /** Whether area point (x, y) is past the area's edge on its band (false without one). */
+    beyond(x, y) {
+        return !!this.band && (x < 0 || y < 0 || x > this.sizeX || y > this.sizeY);
+    }
+
+    /** Whether (x, y) is on ground an object may stand on, `margin` metres in from its rim: the area, and with a band the
+     *  band too (the engine's halo, drawn past the edge in the game). */
+    onGround(x, y, margin = 0) {
+        const r = (this.band?.offset ?? 0) - margin;
+        return x >= -r && y >= -r && x <= this.sizeX + r && y <= this.sizeY + r;
+    }
+
+    /** The ground's height at area point (x, y): the area's (heightAt), or past its edge the band's. */
+    groundAt(x, y) {
+        return this.beyond(x, y) ? this.band.groundAt(this, x, y) : this.heightAt(x, y);
+    }
+
+    /** Whether the ground at area point (x, y) is walkable and dry; past the edge, whether the band there is (Band.firm). */
+    firmAt(x, y) {
+        if (this.beyond(x, y)) return this.band.firm(this, x, y);
+        const { i, j } = this.sampleAt(x, y);
+        return this.walkable(i, j) && this.depth(i, j) <= 0;
+    }
+
     /** In an interior, (x, y) in a wall's cell moved onto the wall's foot, where the wall is drawn upright (uprightShift); else
      *  [x, y] (landscaper's Heightmap::wall_foot). */
     wallFoot(x, y) {
@@ -896,7 +920,11 @@ export class Area {
             area.originals = { removed: o.originals.removed ?? [], moved: o.originals.moved ?? {}, edited: o.originals.edited ?? {} };
         area.nextObjectId = o.nextObjectId ?? Math.max(0, ...area.objects.map(x => x.id ?? 0)) + 1;
         // (an area saved before bands gets its first fill: every area shows real ground past its edge)
-        if (!area.enclosed()) area.band = Band.fromJSON(o.band, area) ?? Band.fill(area);
+        if (!area.enclosed()) {
+            const band = Band.fromJSON(o.band, area);
+            // (A band still as the first fill left it, before the fill was eased, is filled again: nobody shaped it.)
+            area.band = band && !band.same(Band.extruded(area), area) ? band : Band.fill(area);
+        }
         if (o.water) area.water = o.water;
         area.floodWater();
         return area;

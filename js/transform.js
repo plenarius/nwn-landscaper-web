@@ -35,6 +35,7 @@ export class Transformer {
      * @param {() => object} [d.selected]  the object to move: the view's selected one unless given
      * @param {(o) => void} [d.moved]  draws the object where it now is: the view's moveObject unless given
      * @param {boolean} [d.sizes]  false: it moves and turns, but has no size (no S, no corner box)
+     * @param {(o, x: number, y: number) => number[]} [d.keep]  where it may stand when moved to (x, y): inside the area unless given
      */
     constructor(d) {
         this.selected = () => d.view.selected;
@@ -212,8 +213,7 @@ export class Transformer {
 
     setPosition(x, y) {
         const a = this.area();
-        this.o.x = Math.min(a.sizeX, Math.max(0, x));
-        this.o.y = Math.min(a.sizeY, Math.max(0, y));
+        [this.o.x, this.o.y] = this.keep ? this.keep(this.o, x, y) : [Math.min(a.sizeX, Math.max(0, x)), Math.min(a.sizeY, Math.max(0, y))];
     }
 
     async refresh() {

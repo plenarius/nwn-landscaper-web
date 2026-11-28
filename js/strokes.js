@@ -83,6 +83,13 @@ function openCtx(x, y, hit) {
     m.hidden = false;
 }
 
+/** What a tool that works only inside the area says when pressed on the band past its edge. */
+const PAST_EDGE = {
+    things: 'Things stay inside the area: the band past its edge is scenery the game shows but nobody reaches.',
+    entrance: 'Entrances stay inside the area: the band past its edge is scenery the game shows but nobody reaches.',
+    ambience: "Particles stay inside the area: the game's scenery past its edge has none.",
+};
+
 /** The ramp tool's settings: the rise you typed (blank: to where the button comes up), and whether to keep it walkable. */
 const rampOptions = () => ({ rise: $('rampRise').value === '' ? null : +$('rampRise').value, keepWalkable: $('rampWalkable').checked });
 /** A ramp is twice the brush size wide, and at least as wide as the narrowest passage NWN's pathfinding keeps open. */
@@ -264,6 +271,11 @@ export function initStrokes(c) {
         if (!p) {
             dbg.note = '(down missed the terrain)';
             showDebug();
+            return;
+        }
+        // Things, entrances and particles are the game's own, which has none past the area's edge: the band takes scenery only.
+        if (PAST_EDGE[ctx.tool()] && ctx.area().beyond(p.x, p.y) && ctx.view.pickThing(e.clientX, e.clientY) == null) {
+            say(PAST_EDGE[ctx.tool()]);
             return;
         }
         if (ctx.tool() === 'things') {
@@ -607,18 +619,21 @@ export function initStrokes(c) {
     };
 }
 
-/** The brushes that shape and paint the band round the area too (band.js), where they reach past its edge. */
+/** The brushes that shape and paint the band round the area too (band.js), where they reach past its edge (a mix too). */
 const BAND_TOOLS = new Set(['raise', 'lower', 'smooth', 'flatten', 'paint']);
 
 /** Stamps the band beyond the area's edge with the stroke's brush at area point `p`, as the area was stamped. */
 function bandStamp(stroke, p, radius, dt) {
     const area = ctx.area(),
         band = area.band;
-    if (!band || stroke.mix || !BAND_TOOLS.has(stroke.tool)) return;
+    if (!band || !BAND_TOOLS.has(stroke.tool)) return;
     if (p.x - radius > 0 && p.y - radius > 0 && p.x + radius < area.sizeX && p.y + radius < area.sizeY) return;
     // (its middle the area's as it is now, so a brush across the edge reads both sides)
     band.sync(area);
-    const o = band.offset;
-    if (stamp(band, stroke.tool, p.x + o, p.y + o, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex))
-        ctx.view.markBand();
+    const o = band.offset,
+        strength = +ctx.strengthIn.value;
+    const changed = stroke.mix
+        ? mixStamp(band, p.x + o, p.y + o, radius, strength, stroke.mix, o)
+        : stamp(band, stroke.tool, p.x + o, p.y + o, radius, strength, dt, stroke.flattenTo, stroke.paintIndex);
+    if (changed) ctx.view.markBand();
 }
