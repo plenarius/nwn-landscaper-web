@@ -66,6 +66,7 @@ import {
     lastOpen,
     unsaved,
 } from './save.js';
+import { canvasShown, initCanvas } from './canvasui.js';
 import { initLive, showLive, checkSoon } from './live.js';
 import { initMissing, showMissing } from './missing.js';
 import { initExport } from './export.js';
@@ -618,7 +619,8 @@ function setArea(a, blank = false) {
     thingsTool.selectedId = null;
     if (!blank) thingsTool.loadOriginals();
     thingsTool.refresh();
-    $('areaInfo').textContent = `${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
+    canvasShown(a);
+    $('areaInfo').textContent = `${a.canvas ? 'canvas ' : ''}${a.name} · ${a.tiles}×${a.tilesY} tiles (${a.sizeX}×${a.sizeY} m)`;
     $('areaInfo').title = $('areaInfo').textContent;
     $('report').hidden = true;
     showAreaSky(a);
@@ -682,6 +684,7 @@ function showButtons() {
     $('pubGo').textContent = me.package ? 'Download the package' : 'Open the pull requests';
     $('btnPublish').disabled = readOnly;
     $('btnVersion').disabled = readOnly;
+    if (area?.canvas) canvasShown(area);
 }
 
 function showWho() {
@@ -708,6 +711,7 @@ initScripts(editor);
 
 // Save a version, Delete area, and autosave (save.js).
 initSave({ ...editor, open: name => openArea({ name }, false), blank: showBlank });
+initCanvas({ ...editor, setArea, flushSave, saveSoon: () => saveSoon() });
 
 /** An admin looks at `user`'s workspace ('' for their own), then the page reloads in it. */
 async function viewAs(user) {

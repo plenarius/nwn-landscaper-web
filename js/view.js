@@ -22,6 +22,7 @@ import { at as entranceAt, groundBehind, scenery as entranceScenery } from './en
 import { metresOf, triplanarGlsl, variedGlsl, varyOf } from './triplanar.js';
 import { AmbienceLayer } from './ambienceview.js';
 import { SOFT_GLSL, SoftGrid, edgeOf, seed } from './softpaint.js';
+import { Coarse, QUARTER, windowAt, wholeWindow } from './canvasview.js';
 
 const GRASS_LOW = new THREE.Color(0x4f7a32);
 const GRASS_HIGH = new THREE.Color(0x7d9b4a);
@@ -330,6 +331,7 @@ export class View {
             requestAnimationFrame(loop);
             this.onFrame?.();
             if (this.dirty) this.flush();
+            else this.followWindow();
             if (this.bandDirty) this.updateBand();
             this.controls.update();
             this.updateFog();
@@ -478,22 +480,12 @@ export class View {
         this.fit = null;
         this.chasmFit = null;
         this.drawn = null;
+        this.coarse?.dispose();
+        this.coarse = null;
+        this.windowPinned = false;
         const { nx, ny, sizeX, sizeY } = area;
-        const geo = new THREE.PlaneGeometry(sizeX, sizeY, nx - 1, ny - 1);
-        geo.rotateX(-Math.PI / 2);
-        geo.translate(sizeX / 2, 0, sizeY / 2);
-        // How far under its ceiling each sample is: the rock tops (0.3 or less) are void, drawn black.
-        geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1e9), 1));
-        // How far down a chasm each sample is, over its depth: 0 out of one, 1 on its floor (drawn black, its walls fading).
-        geo.setAttribute('aDeep', new THREE.BufferAttribute(new Float32Array(nx * ny), 1));
-        // Each sample's own slope's up part: whether it is too steep to walk (its normal, steep ground's taken wider, isn't).
-        geo.setAttribute('aUp', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1), 1));
-        // How far an interior's wall top was moved onto its foot's line (uprightShift; m east, north): its paint is read where
-        // it was.
-        geo.setAttribute('aShift', new THREE.BufferAttribute(new Float32Array(nx * ny * 2), 2));
-        // Whether each sample is an upright wall's foot and its top (uprightFoot): the shader paints the wall between them.
-        geo.setAttribute('aWall', new THREE.BufferAttribute(new Float32Array(nx * ny * 2), 2));
-        geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
+        // A canvas draws a window of it at full detail and all of it at a quarter (Coarse); an area is all window.
+        this.win = area.canvas ? windowAt(area, sizeX / 2, sizeY / 2) : wholeWindow(area);
         this.uniforms.uMat.value?.dispose();
         const mat = new THREE.DataTexture(area.materials, nx, ny, THREE.RedFormat, THREE.UnsignedByteType);
         mat.minFilter = mat.magFilter = THREE.NearestFilter;
@@ -505,10 +497,11 @@ export class View {
         this.uniforms.uSize.value.set(sizeX, sizeY);
         this.shadeDirty = null;
         this.updateShade(true);
-        this.mesh = new THREE.Mesh(geo, this.splatMaterial());
+        this.mesh = new THREE.Mesh(this.windowGeometry(), this.splatMaterial());
         // (So three.js hands it the object shadows' map. Its own dimming darkens only the shadow light, which lights nothing.)
         this.mesh.receiveShadow = true;
         this.scene.add(this.mesh);
+        if (area.canvas) this.coarse = new Coarse(this);
         this.buildSkirt();
         this.buildBand();
         this.grid = new THREE.LineSegments(
@@ -529,6 +522,53 @@ export class View {
         this.updateLights();
         this.frame();
         this.syncPalette();
+    }
+
+    /** The full-detail mesh's geometry over the window (`win`, samples of the area), its values filled by flush. */
+    windowGeometry() {
+        const { i0, j0, nx, ny } = this.win,
+            w = (nx - 1) * SPACING,
+            h = (ny - 1) * SPACING;
+        const geo = new THREE.PlaneGeometry(w, h, nx - 1, ny - 1);
+        geo.rotateX(-Math.PI / 2);
+        geo.translate(i0 * SPACING + w / 2, 0, this.area.sizeY - j0 * SPACING - h / 2);
+        // How far under its ceiling each sample is: the rock tops (0.3 or less) are void, drawn black.
+        geo.setAttribute('aGap', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1e9), 1));
+        // How far down a chasm each sample is, over its depth: 0 out of one, 1 on its floor (drawn black, its walls fading).
+        geo.setAttribute('aDeep', new THREE.BufferAttribute(new Float32Array(nx * ny), 1));
+        // Each sample's own slope's up part: whether it is too steep to walk (its normal, steep ground's taken wider, isn't).
+        geo.setAttribute('aUp', new THREE.BufferAttribute(new Float32Array(nx * ny).fill(1), 1));
+        // How far an interior's wall top was moved onto its foot's line (uprightShift; m east, north): its paint is read where
+        // it was.
+        geo.setAttribute('aShift', new THREE.BufferAttribute(new Float32Array(nx * ny * 2), 2));
+        // Whether each sample is an upright wall's foot and its top (uprightFoot): the shader paints the wall between them.
+        geo.setAttribute('aWall', new THREE.BufferAttribute(new Float32Array(nx * ny * 2), 2));
+        geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nx * ny * 3), 3));
+        return geo;
+    }
+
+    /**
+     * Moves a canvas's full-detail window to `win` (windowAt's; null: none, the whole canvas at a quarter of the detail): the
+     * mesh is made again there and drawn whole. `pin`: it stays there instead of following the camera (Open piece, step 6,
+     * gives it the piece and its ring).
+     */
+    setWindow(win, pin = false) {
+        if (!this.coarse) return;
+        this.windowPinned = pin;
+        const same = a => a && win && a.i0 === win.i0 && a.j0 === win.j0 && a.nx === win.nx && a.ny === win.ny;
+        this.mesh.visible = !!win;
+        if (win && !same(this.win)) {
+            this.win = win;
+            this.mesh.geometry.dispose();
+            this.mesh.geometry = this.windowGeometry();
+            this.grid.geometry.dispose();
+            this.grid.geometry = new THREE.BufferGeometry();
+            this.markDirty(this.everything(), false);
+            this.flush();
+        }
+        this.grid.visible = !!win;
+        this.coarse.setHole(win && this.win);
+        this.groundVersion++;
     }
 
     /** Draws the Ambience tool's placements again (the tool, an undo, the ground moved, the light changed). */
@@ -882,11 +922,20 @@ export class View {
 
     /** Vertex index of sample (i, j): plane rows run north to south. */
     vertex(i, j) {
-        return (this.area.ny - 1 - j) * this.area.nx + i;
+        const w = this.win;
+        return (w.j0 + w.ny - 1 - j) * w.nx + i - w.i0;
+    }
+
+    /** Rectangle i0..i1, j0..j1 cut to the full-detail window, or null when they don't meet. */
+    inWindow(i0, i1, j0, j1) {
+        const w = this.win,
+            r = { i0: Math.max(i0, w.i0), i1: Math.min(i1, w.i0 + w.nx - 1), j0: Math.max(j0, w.j0), j1: Math.min(j1, w.j0 + w.ny - 1) };
+        return r.i0 > r.i1 || r.j0 > r.j1 ? null : r;
     }
 
     flush() {
         this.groundVersion++;
+        this.flushedAt = performance.now();
         const area = this.area,
             n = area.nx,
             d = this.dirty;
@@ -904,10 +953,12 @@ export class View {
             ? { i0: Math.min(d.i0, moved.i0), i1: Math.max(d.i1, moved.i1), j0: Math.min(d.j0, moved.j0), j1: Math.max(d.j1, moved.j1) }
             : d;
         // Heights of the changed rows and a margin (walkability uses neighbours).
-        const i0 = Math.max(0, r.i0 - 1),
-            i1 = Math.min(n - 1, r.i1 + 1),
-            j0 = Math.max(0, r.j0 - 1),
-            j1 = Math.min(area.ny - 1, r.j1 + 1);
+        // (on a canvas, out to the quarter vertices round them: the window's edge is drawn between those, see Coarse.seal)
+        const q = this.coarse ? QUARTER : 1,
+            i0 = Math.max(0, Math.floor((r.i0 - 1) / q) * q),
+            i1 = Math.min(n - 1, Math.ceil((r.i1 + 1) / q) * q),
+            j0 = Math.max(0, Math.floor((r.j0 - 1) / q) * q),
+            j1 = Math.min(area.ny - 1, Math.ceil((r.j1 + 1) / q) * q);
         const gap = this.mesh.geometry.attributes.aGap,
             deep = this.mesh.geometry.attributes.aDeep,
             shift = this.mesh.geometry.attributes.aShift,
@@ -925,8 +976,11 @@ export class View {
             }
         const span = Math.max(hi - lo, 1);
         const c = new THREE.Color();
-        for (let j = j0; j <= j1; j++) {
-            for (let i = i0; i <= i1; i++) {
+        this.colourOf = (i, j, out) => this.sampleColour(i, j, out, lo, span);
+        this.coarse?.update({ i0, i1, j0, j1 });
+        const inside = this.inWindow(i0, i1, j0, j1) ?? { i0: 0, i1: -1, j0: 0, j1: -1 };
+        for (let j = inside.j0; j <= inside.j1; j++) {
+            for (let i = inside.i0; i <= inside.i1; i++) {
                 const v = this.vertex(i, j),
                     z = area.heights[j * n + i],
                     shown = shownHeights[j * n + i];
@@ -938,27 +992,18 @@ export class View {
                 shift.setXY(v, dx, dy);
                 gap.setX(v, !area.enclosed() ? 1e9 : fit ? fit.ceiling[j * n + i] - shown : area.roof - shown);
                 deep.setX(v, chasm ? chasm.deep[j * n + i] : 0);
-                // Under water the water shows it; no red tint. (Nor in a chasm: it is dark.)
-                const wet = !Number.isNaN(area.waterLevel[j * n + i]);
-                if (chasm?.deep[j * n + i]) c.copy(this.textured ? WHITE : ROCK);
-                else if (this.textured) {
-                    // White leaves the painted texture as it is.
-                    if (wet || area.walkable(i, j) || !this.showWalkability) c.setRGB(1, 1, 1);
-                    else c.copy(BLOCKED_TINT);
-                } else if (area.walkable(i, j)) {
-                    c.copy(GRASS_LOW).lerp(GRASS_HIGH, (z - lo) / span);
-                } else {
-                    c.copy(this.showWalkability ? BLOCKED : ROCK);
-                }
+                this.sampleColour(i, j, c, lo, span, z);
                 col.setXYZ(v, c.r, c.g, c.b);
             }
         }
+        this.coarse?.seal(pos, inside);
         for (const a of [pos, gap, deep, col, shift]) this.uploadRows(a, i0, i1, j0, j1);
         // A foot depends on its neighbour's neighbours: a sample further out.
         const wall = this.mesh.geometry.attributes.aWall,
             [w0, w1, v0, v1] = [Math.max(0, i0 - 1), Math.min(n - 1, i1 + 1), Math.max(0, j0 - 1), Math.min(area.ny - 1, j1 + 1)];
-        for (let j = v0; j <= v1; j++)
-            for (let i = w0; i <= w1; i++) {
+        const wi = this.inWindow(w0, w1, v0, v1) ?? { i0: 0, i1: -1, j0: 0, j1: -1 };
+        for (let j = wi.j0; j <= wi.j1; j++)
+            for (let i = wi.i0; i <= wi.i1; i++) {
                 const top = upright && uprightShift(shownHeights, n, area.ny, i, j).some(d => d !== 0);
                 wall.setXY(this.vertex(i, j), upright && uprightFoot(shownHeights, n, area.ny, i, j) ? 1 : 0, top ? 1 : 0);
             }
@@ -977,6 +1022,36 @@ export class View {
         }
     }
 
+    /** A canvas's full-detail window follows what the camera looks at, once the ground has been still a moment: never in the
+     *  middle of a stroke. Off while the whole canvas is shown at a quarter of the detail (setWindow(null)). */
+    followWindow() {
+        if (!this.coarse || this.windowPinned || !this.mesh.visible || performance.now() - (this.flushedAt ?? 0) < 400) return;
+        const t = this.controls.target,
+            a = this.area,
+            next = windowAt(a, t.x, a.sizeY - t.z);
+        if (next.i0 !== this.win.i0 || next.j0 !== this.win.j0) this.setWindow(next);
+    }
+
+    /** Sample (i, j)'s vertex colour into `c`: white over paint (red where it can't be walked, with Walkability on), or by
+     *  height (`lo`, `span`) before the textures load. */
+    sampleColour(i, j, c, lo, span, z = this.area.heights[j * this.area.nx + i]) {
+        const area = this.area,
+            k = j * area.nx + i;
+        // Under water the water shows it; no red tint. (Nor in a chasm: it is dark.)
+        const wet = !Number.isNaN(area.waterLevel[k]);
+        if (this.chasmFit?.deep[k]) c.copy(this.textured ? WHITE : ROCK);
+        else if (this.textured) {
+            // White leaves the painted texture as it is.
+            if (wet || area.walkable(i, j) || !this.showWalkability) c.setRGB(1, 1, 1);
+            else c.copy(BLOCKED_TINT);
+        } else if (area.walkable(i, j)) {
+            c.copy(GRASS_LOW).lerp(GRASS_HIGH, (z - lo) / span);
+        } else {
+            c.copy(this.showWalkability ? BLOCKED : ROCK);
+        }
+        return c;
+    }
+
     /**
      * Ground attribute `attr` goes to the GPU at the next draw for samples i0..i1, j0..j1 only (clamped to the area): one range
      * from the first of them to the last, the rows between whole, as one upload. Whole buffers were 12.7 MB a stroke frame on a
@@ -984,13 +1059,12 @@ export class View {
      * the whole area, and until a whole upload asked for has been made.
      */
     uploadRows(attr, i0, i1, j0, j1) {
-        const { nx, ny } = this.area;
-        i0 = Math.max(0, i0);
-        j0 = Math.max(0, j0);
-        i1 = Math.min(nx - 1, i1);
-        j1 = Math.min(ny - 1, j1);
+        const w = this.win,
+            r = this.inWindow(i0, i1, j0, j1);
+        if (!r) return;
+        ({ i0, i1, j0, j1 } = r);
         attr.needsUpdate = true;
-        if (wholeLeft(attr, i0 === 0 && j0 === 0 && i1 === nx - 1 && j1 === ny - 1)) return;
+        if (wholeLeft(attr, i0 === w.i0 && j0 === w.j0 && i1 === w.i0 + w.nx - 1 && j1 === w.j0 + w.ny - 1)) return;
         // (rows run north to south: the northmost row's first vertex comes first)
         const first = this.vertex(i0, j1),
             last = this.vertex(i1, j0);
@@ -1090,12 +1164,15 @@ export class View {
     updateNormals(i0, i1, j0, j1) {
         const { nx, ny } = this.area,
             geo = this.mesh.geometry,
-            y = geo.attributes.position.array,
+            y = this.drawn,
             nor = geo.attributes.normal,
-            up = geo.attributes.aUp;
-        // (three.js's y is up and its z runs south)
+            up = geo.attributes.aUp,
+            r = this.inWindow(i0, i1, j0, j1);
+        if (!r) return;
+        ({ i0, i1, j0, j1 } = r);
+        // (three.js's y is up and its z runs south; the drawn heights, so a window's edge has its neighbours outside it)
         groundNormals(
-            (i, j) => y[this.vertex(i, j) * 3 + 1],
+            (i, j) => y[j * nx + i],
             nx,
             ny,
             SPACING,
@@ -1117,8 +1194,11 @@ export class View {
      *  box that is too tall after the ground is lowered only costs the picking an early miss. */
     updateBounds(i0, i1, j0, j1) {
         const geo = this.mesh.geometry,
-            { nx, ny } = this.area;
-        if (!geo.boundingBox || (i0 === 0 && j0 === 0 && i1 === nx - 1 && j1 === ny - 1)) {
+            w = this.win,
+            r = this.inWindow(i0, i1, j0, j1);
+        if (!r) return;
+        ({ i0, i1, j0, j1 } = r);
+        if (!geo.boundingBox || (i0 === w.i0 && j0 === w.j0 && i1 === w.i0 + w.nx - 1 && j1 === w.j0 + w.ny - 1)) {
             geo.computeBoundingBox();
             geo.computeBoundingSphere();
             return;
@@ -2160,19 +2240,25 @@ export class View {
     /** The tile grid, draped 5 cm above the ground: the lines along the tile edges, one segment between each two samples,
      *  moved where samples `r` (i0..i1, j0..j1; the whole area when not given) changed. */
     updateGrid(r = this.everything()) {
-        const area = this.area,
-            { nx, ny } = area,
-            per = Math.round(TILE / SPACING); // samples along a tile
+        const w = this.win,
+            { nx, ny, i0: wi, j0: wj } = w,
+            per = Math.round(TILE / SPACING), // samples along a tile
+            tilesX = (nx - 1) / per,
+            tilesY = (ny - 1) / per;
+        // Over the full-detail window, in its own samples (the window starts on a tile line).
+        const cut = this.inWindow(r.i0, r.i1, r.j0, r.j1);
+        if (!cut) return;
+        r = { i0: cut.i0 - wi, i1: cut.i1 - wi, j0: cut.j0 - wj, j1: cut.j1 - wj };
         // Segments: lines of constant x (running north, ny - 1 each), then of constant y (running east, nx - 1 each).
-        const north = (area.tiles + 1) * (ny - 1),
-            segments = north + (area.tilesY + 1) * (nx - 1);
+        const north = (tilesX + 1) * (ny - 1),
+            segments = north + (tilesY + 1) * (nx - 1);
         let attr = this.grid.geometry.attributes.position;
         if (attr?.count !== segments * 2) {
             this.grid.geometry.dispose();
             this.grid.geometry = new THREE.BufferGeometry();
             attr = new THREE.BufferAttribute(new Float32Array(segments * 6), 3);
             this.grid.geometry.setAttribute('position', attr);
-            r = this.everything();
+            r = { i0: 0, i1: nx - 1, j0: 0, j1: ny - 1 };
         }
         const a = attr.array,
             ground = this.mesh.geometry.attributes.position.array,
@@ -2180,8 +2266,8 @@ export class View {
         // Each segment between two samples as the ground draws them, lifted off it. One up an interior's upright wall
         // (uprightShift) is moved off the wall into the room instead, the way its top was moved: on the wall, the wall hid it.
         const put = (seg, i0, j0, i1, j1) => {
-            const p = this.vertex(i0, j0),
-                q = this.vertex(i1, j1);
+            const p = this.vertex(i0 + wi, j0 + wj),
+                q = this.vertex(i1 + wi, j1 + wj);
             const dx = shift[p * 2] + shift[q * 2],
                 dy = shift[p * 2 + 1] + shift[q * 2 + 1],
                 d = Math.hypot(dx, dy);
@@ -2202,14 +2288,14 @@ export class View {
         attr.needsUpdate = true;
         const whole = wholeLeft(attr, r.i0 <= 0 && r.j0 <= 0 && r.i1 >= nx - 1 && r.j1 >= ny - 1);
         const upload = (seg, count) => !whole && count > 0 && attr.addUpdateRange(seg * 6, count * 6);
-        for (let t = Math.ceil(r.i0 / per); t * per <= r.i1 && t <= area.tiles; t++) {
+        for (let t = Math.ceil(r.i0 / per); t * per <= r.i1 && t <= tilesX; t++) {
             const i = t * per,
                 k0 = Math.max(0, r.j0 - 1),
                 k1 = Math.min(ny - 2, r.j1);
             for (let k = k0; k <= k1; k++) put(t * (ny - 1) + k, i, k, i, k + 1);
             upload(t * (ny - 1) + k0, k1 - k0 + 1);
         }
-        for (let t = Math.ceil(r.j0 / per); t * per <= r.j1 && t <= area.tilesY; t++) {
+        for (let t = Math.ceil(r.j0 / per); t * per <= r.j1 && t <= tilesY; t++) {
             const j = t * per,
                 k0 = Math.max(0, r.i0 - 1),
                 k1 = Math.min(nx - 2, r.i1);
@@ -2265,8 +2351,9 @@ export class View {
     groundHit(o, d, open = false) {
         const { nx, ny, sizeX, sizeY } = this.area,
             y = this.mesh.geometry.attributes.position.array,
-            box = this.mesh.geometry.boundingBox,
-            gap = open ? this.mesh.geometry.attributes.aGap.array : null;
+            box = this.coarse ? this.coarse.box : this.mesh.geometry.boundingBox,
+            gap = open && !this.coarse ? this.mesh.geometry.attributes.aGap.array : null,
+            drawn = this.drawn;
         // The part of the ray over the area, between the ground's lowest and highest point.
         let t0 = 0,
             t1 = Infinity;
@@ -2296,10 +2383,13 @@ export class View {
             stepZ = sz ? SPACING / Math.abs(d.z) : Infinity;
         let nextX = sx ? ((cx + (sx > 0 ? 1 : 0)) * SPACING - o.x) / d.x : Infinity,
             nextZ = sz ? ((cz + (sz > 0 ? 1 : 0)) * SPACING - o.z) / d.z : Infinity;
-        const corner = (i, k) => {
-            const v = (k * nx + i) * 3;
-            return [y[v], y[v + 1], y[v + 2]];
-        };
+        // (a canvas's ground is picked at full detail everywhere, from its drawn heights: the window covers only part of it)
+        const corner = this.coarse
+            ? (i, k) => [i * SPACING, drawn[(ny - 1 - k) * nx + i], k * SPACING]
+            : (i, k) => {
+                  const v = (k * nx + i) * 3;
+                  return [y[v], y[v + 1], y[v + 2]];
+              };
         const rock = (...corners) => gap && corners.every(([i, k]) => gap[k * nx + i] <= VOID_BELOW);
         for (;;) {
             const a = corner(cx, cz),
