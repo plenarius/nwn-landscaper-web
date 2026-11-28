@@ -326,6 +326,10 @@ input[type="range"] {
     word-break: break-all;
 }
 /* An export under way: its estimate, a bar of the time, the step and time left. */
+/* (clear of the close button: a canvas's title names the piece too) */
+#report .export-title {
+    padding-right: 24px;
+}
 #report .export-eta {
     font-weight: 600;
     margin: 0 0 8px;

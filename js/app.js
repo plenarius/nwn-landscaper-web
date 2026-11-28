@@ -713,7 +713,7 @@ function showWho() {
 }
 
 initActivity();
-initPublish(editor);
+initPublish({ ...editor, flushSave });
 initScripts(editor);
 
 // Save a version, Delete area, and autosave (save.js).
@@ -813,7 +813,7 @@ initHeightmap({
     },
 });
 
-initExport(editor);
+initExport({ ...editor, flushSave });
 
 // The report box (report.js).
 initReport();

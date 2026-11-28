@@ -15,6 +15,7 @@ import { downloadExport } from './webdemo.js';
 import { shadersForExport } from './gamefolder.js';
 import { exportBlocked } from './missing.js';
 import { blendForSave } from './blend.js';
+import { pieceOf } from './canvaspub.js';
 
 /** What app.js gives this file (initExport): `area()`, `readOnly()` and `view`. */
 let ctx = null;
@@ -96,17 +97,22 @@ function progressBox(name, cancel) {
               },
           })
         : null;
-    $('reportBody').replaceChildren(el('h3', { textContent: `Exporting ${name}` }), estimate, bar, step, ...(stop ? [stop] : []));
+    const title = el('h3', { className: 'export-title', textContent: `Exporting ${name}` });
+    $('reportBody').replaceChildren(title, estimate, bar, step, ...(stop ? [stop] : []));
     $('report').hidden = false;
     // (The bar never goes back: a slower tile than expected stretches the time left, not the work done.)
     let most = 0;
     return {
-        show(p) {
+        /** `label`: a canvas job's ("rivl: rivl02 (piece 2 of 3)"); its bar is the whole canvas's. */
+        show(p, label) {
             const v = exportProgressOf(p);
+            const piece = pieceOf(label, v.fraction ?? 0);
+            if (piece) title.textContent = `Exporting ${name}: ${piece.piece}, piece ${piece.k} of ${piece.n}`;
             if (v.estimate) estimate.textContent = v.estimate;
             step.textContent = v.step;
-            if (v.fraction == null) bar.removeAttribute('value');
-            else bar.value = most = Math.max(most, v.fraction);
+            const f = piece ? piece.overall : v.fraction;
+            if (f == null) bar.removeAttribute('value');
+            else bar.value = most = Math.max(most, f);
         },
     };
 }
@@ -121,11 +127,16 @@ async function exportWithProgress(name) {
         body,
     });
     if (res.status === 404 || res.status === 501) return sendArea('export');
+    return followJob(res, name);
+}
+
+/** Follows the export job `res` started, its progress in the report box: its result, or throws. */
+async function followJob(res, name) {
     if (!res.ok) throw new Error(await failure(res));
     const box = progressBox(name, () => api('/api/export/job/cancel', { method: 'POST' }));
     let job = await res.json();
     for (;;) {
-        box.show(job.progress);
+        box.show(job.progress, job.area);
         if (!job.running) break;
         await new Promise(r => setTimeout(r, POLL_MS));
         const next = await api('/api/export/job');
@@ -157,12 +168,67 @@ function showMarkers(a, report) {
     } else say(`The report is ${a.name}'s, which is no longer open: open it again to see where on the ground.`);
 }
 
+/** Exports every piece of canvas `a` into its module as one job: the canvas's report in the report box. */
+export async function exportCanvas(a) {
+    if (ctx.readOnly() || !a?.canvas) return;
+    const btn = $('btnExport');
+    btn.disabled = true;
+    try {
+        if (!a.canvas.pieces?.length) throw new Error('Cut the canvas into pieces first: Pieces, then Grid… makes an even grid.');
+        await ctx.flushSave?.();
+        say(`Exporting ${a.name}…`);
+        const res = await api(`/api/canvas-export/job?name=${encodeURIComponent(a.name)}`, { method: 'POST' });
+        if (res.status === 404 || res.status === 501)
+            throw new Error('This engine has no canvas export yet: it needs the update that publishes canvases.');
+        showCanvasReport(await followJob(res, a.name));
+        say('');
+    } catch (err) {
+        say('');
+        showError(err.message, err.cancelled ? 'Export cancelled' : engine.up ? 'Export failed' : 'Export needs the engine');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+/** A canvas export's report: each piece's warnings and the routes across the canvas. */
+function showCanvasReport(r) {
+    const problems = r.routes?.problems ?? [];
+    const warned = (r.pieces ?? []).reduce((n, p) => n + (p.report?.warnings?.length ?? 0), 0);
+    const level = problems.length ? 'bad' : warned ? 'warn' : 'good';
+    $('reportBody').replaceChildren(
+        el('h3', {
+            className: level,
+            textContent: `Exported ${r.canvas}: ${r.pieces.length} piece${r.pieces.length === 1 ? '' : 's'} into ${r.module}.mod`,
+        }),
+        el(
+            'ul',
+            { className: 'findings' },
+            ...r.pieces.map(p => {
+                const w = p.report?.warnings?.length ?? 0;
+                return el('li', {
+                    className: `finding ${w ? 'warn' : ''}`,
+                    textContent: `${p.name}: ${w ? `${w} path warning${w === 1 ? '' : 's'}` : 'no path warnings'}`,
+                });
+            }),
+            ...problems.map(p => el('li', { className: 'finding error', textContent: `${p.piece}: ${p.why}` })),
+        ),
+        el('p', {
+            className: 'note',
+            textContent: problems.length
+                ? "Some pieces can't be walked into from the start piece: Pieces mode marks them."
+                : `Every piece can be walked into from ${r.routes?.start ?? 'the start piece'}. Open a piece to see its warnings on the ground.`,
+        }),
+    );
+    $('report').hidden = false;
+}
+
 /** Sets up the Export and Check paths buttons. */
 export function initExport(c) {
     ctx = c;
     $('btnExport').onclick = async () => {
         if (ctx.readOnly()) return;
         if (!ctx.area()) return;
+        if (ctx.area().canvas) return exportCanvas(ctx.area());
         // Textures the library hasn't got: the engine would refuse the area anyway; this says which, and how to fix it.
         const blocked = exportBlocked();
         if (blocked) {
@@ -193,6 +259,8 @@ export function initExport(c) {
     $('btnCheck').onclick = async () => {
         if (ctx.readOnly()) return;
         if (!ctx.area()) return;
+        // (A canvas: every piece and the routes across it, as Pieces mode's Check paths (all pieces).)
+        if (ctx.area().canvas) return $('piecesCheckAll').click();
         const btn = $('btnCheck');
         btn.disabled = true;
         const a = ctx.area();

@@ -426,3 +426,60 @@ dialog button.busy:disabled {
 .open-unlisted small {
     margin-left: 0;
 }
+
+/* A canvas's Publish dialog (mock-up 4): the pieces, their ticks and why. */
+#canvasPubDialog {
+    width: min(820px, 94vw);
+}
+.cp-table-box {
+    max-height: min(46vh, 420px);
+    overflow: auto;
+    margin: 10px 0;
+}
+.cp-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.cp-table th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 400;
+    padding: 6px 8px;
+}
+.cp-table td {
+    border-top: 1px solid #333b45;
+    padding: 7px 8px;
+    vertical-align: top;
+}
+.cp-table td:first-child {
+    width: 28px;
+}
+.cp-table td code {
+    color: var(--muted);
+    font-size: 0.9em;
+}
+.cp-table td.bad {
+    color: var(--bad);
+}
+.cp-table td.warn {
+    color: var(--warn);
+}
+.cp-table tr.refused b {
+    color: var(--muted);
+}
+#cpText.err {
+    color: var(--bad);
+    font-weight: 600;
+}
+#cpText.ok {
+    color: #5cc46a;
+}
+#canvasPubDialog .dialog-buttons {
+    flex-wrap: wrap;
+}
+.cp-table input[type="checkbox"],
+#cpEvery {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}

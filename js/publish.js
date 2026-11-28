@@ -7,6 +7,8 @@
 import { api, failure, json } from './api.js';
 import { $ } from './dom.js';
 import { initTrial, trialChecked, trialClosed, trialOpen } from './trial.js';
+import { initCanvasPublish, openCanvasPublish } from './canvaspubui.js';
+import { exportCanvas } from './export.js';
 
 /** What app.js gives this file (initPublish): `area()`, `me()` (who is signed in) and `readOnly()`. */
 let ctx = null;
@@ -128,8 +130,10 @@ export function initPublish(c) {
     });
     initTrial({ area: () => ctx.area(), me: () => ctx.me(), whole: () => $('pubWhole').checked, show: pubShow });
     $('pubWhole').onchange = pubCheck;
+    initCanvasPublish(() => exportCanvas(ctx.area()));
     $('btnPublish').onclick = async () => {
         if (ctx.readOnly() || !ctx.area()) return;
+        if (ctx.area().canvas) return openCanvasPublish(ctx);
         const dlg = $('publishDialog');
         $('pubLinks').textContent = '';
         $('pubGo').disabled = false;
