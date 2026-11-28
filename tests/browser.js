@@ -76,6 +76,7 @@ const listeners = [];
 globalThis.document = {
     getElementById: id => elements.get(id) ?? elements.set(id, element(id)).get(id),
     createElement: tag => element(null, tag),
+    createTextNode: text => ({ textContent: text }),
     addEventListener(type, f) {
         listeners.push({ type, f });
     },

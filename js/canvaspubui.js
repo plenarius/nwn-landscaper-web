@@ -12,7 +12,8 @@ import { everyPiece, publishRows, refusedOf, removedLines, sendText, warningLine
 /** What publish.js gives this file: `area()`, `me()`. */
 let ctx = null;
 /** The rows shown, the dry run's pieces once it passed (a send only follows a dry run of the same ticks), the removed lines. */
-const st = { rows: [], checked: '', removed: [], busy: false };
+// checked: the ticks the last dry run passed (they can be sent); tryable: the ticks that can go on dev (passed, or too large only).
+const st = { rows: [], checked: '', tryable: '', removed: [], busy: false };
 
 const canvasName = () => ctx.area().name;
 const ticked = () => st.rows.filter(r => r.ticked).map(r => r.name);
@@ -41,6 +42,7 @@ function buttons() {
         me = ctx.me(),
         pkg = !!me.package;
     const ready = !!names.length && st.checked === names.join(',');
+    const tryable = !!names.length && st.tryable === names.join(',');
     $('cpGo').hidden = pkg;
     $('cpGo').disabled = st.busy || !names.length || refusedOf(st.rows, names).length > 0;
     $('cpGo').textContent = ready
@@ -50,7 +52,7 @@ function buttons() {
           : 'Check';
     $('cpPackage').disabled = st.busy || !names.length;
     $('cpTry').hidden = !(me.team && me.publish && !pkg);
-    $('cpTry').disabled = st.busy || !ready;
+    $('cpTry').disabled = st.busy || !tryable;
     $('cpExport').hidden = !st.rows.some(r => r.refused);
     $('cpNoteRow').hidden = pkg;
     $('cpEvery').checked = st.rows.length > 0 && everyPiece(st.rows).every(n => names.includes(n));
@@ -82,6 +84,7 @@ function draw() {
 /** The ticks changed: what the last dry run said no longer holds. */
 function changed() {
     st.checked = '';
+    st.tryable = '';
     $('cpLinks').replaceChildren();
     notes(st.removed.map(t => ['warn', t]));
     show(ticked().length ? '' : 'Tick the pieces to send.');
@@ -98,6 +101,7 @@ export async function openCanvasPublish(c) {
     st.rows = [];
     st.removed = [];
     st.checked = '';
+    st.tryable = '';
     st.busy = false;
     $('cpTitle').textContent = ctx.me().package ? `Package ${canvasName()} for your module` : `Send ${canvasName()} for review`;
     $('cpLinks').replaceChildren();
@@ -146,8 +150,12 @@ async function check() {
         ]);
         const plan = dry.plan ?? {};
         if (errors) show(`${errors} problem${errors === 1 ? '' : 's'} to fix before this can be sent (listed below).`, 'err');
-        else {
-            st.checked = names.join(',');
+        else if (dry.too_large) {
+            // (Too large to send for review, but Try on dev takes any size: only the trial is offered.)
+            st.tryable = names.join(',');
+            show(`Too large to publish: ${dry.too_large.detail}. You can still try it on dev, which takes any size.`, 'err');
+        } else {
+            st.checked = st.tryable = names.join(',');
             show(
                 `This sends ${names.length} piece${names.length === 1 ? '' : 's'} as one review request${plan.areas ? ` (${plan.areas.length} area${plan.areas.length === 1 ? '' : 's'})` : ''}: what the last export built. Nothing is merged; ${ctx.me().reviewers || 'your reviewers'} review it.`,
             );

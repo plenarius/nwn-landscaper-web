@@ -66,8 +66,9 @@ async function pubCheck() {
         'work',
     );
     try {
-        const { plan, findings = [] } = await publishCall(true);
+        const { plan, findings = [], too_large: tooLarge } = await publishCall(true);
         if (mine !== pubSeq) return;
+        if (tooLarge) return pubTooLarge(tooLarge, findings);
         // What the pull request will say about it (the review service writes it: what is new, or what changed against production).
         $('pubReview').textContent = (plan.review ?? '').replace(/^### /gm, '').replace(/[*`]/g, '');
         $('pubReviewBox').hidden = !plan.review;
@@ -101,6 +102,20 @@ async function pubCheck() {
         $('pubReviewBox').hidden = true;
         pubShow(`Can't publish yet: ${err.message}`, 'err');
     }
+}
+
+/** A check refused for its size alone (`why`: the service's detail, size, limit, unit): it can't be published as it is, but Try on
+ * dev takes any size, so the trial stays open (unless the check found errors). */
+function pubTooLarge(why, findings) {
+    $('pubReviewBox').hidden = true;
+    showFindings(findings);
+    const errors = findings.filter(f => f.level === 'error').length;
+    trialChecked(errors === 0);
+    pubShow(
+        `Too large to publish: ${why.detail}. You can still try it on dev, which takes any size.` +
+            (errors ? ` Fix the ${errors} problem${errors === 1 ? '' : 's'} below first.` : ''),
+        'err',
+    );
 }
 
 /** What the check found: errors stop a publish; warnings are for a look; each says which object. */
