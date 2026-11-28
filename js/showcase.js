@@ -10,12 +10,14 @@ import { api, failure } from './api.js';
 import { $, el, say } from './dom.js';
 import { showError } from './report.js';
 import { saveNew } from './save.js';
+import { sizeText } from './packs.js';
 import { areaFrom, areaNames, bigAreaOk, freeName } from './webdemo.js';
 
 /** Where the showcase is, beside the page. */
 export const SHOWCASE = 'showcase/';
 
-/** The showcase's entries that have an area (its index.json: `title`, `text`, `still` and `area`, paths from the folder). */
+/** The showcase's entries that have an area (its index.json: `title`, `text`, `still` and `area`, paths from the folder; `tiles`,
+ *  `hak_bytes` and `baked` for sizeParts). */
 export async function showcaseList() {
     const res = await api(`${SHOWCASE}index.json`);
     if (!res.ok) throw new Error(res.status === 404 ? 'this copy of the editor has no showcase' : await failure(res));
@@ -23,6 +25,22 @@ export async function showcaseList() {
     if (!Array.isArray(list)) throw new Error('its index.json is not a list');
     return list.filter(e => e && typeof e.area === 'string' && e.area);
 }
+
+/**
+ * What showcase `entry` costs to export, from its index.json (the engine's scripts/measure-showcase.mjs measures it): its tiles
+ * and metres, its hak and its baked objects, the hak's largest cost. Its parts; none when it wasn't measured.
+ */
+export function sizeParts(entry) {
+    const [x, y] = Array.isArray(entry.tiles) ? entry.tiles : [];
+    if (!(x > 0 && y > 0)) return [];
+    const parts = [`${x} × ${y} tiles (${x * 10} × ${y * 10} m)`];
+    if (entry.hak_bytes > 0) parts.push(`${sizeText(entry.hak_bytes)} hak`);
+    if (Number.isInteger(entry.baked)) parts.push(`${entry.baked.toLocaleString('en-US')} baked objects`);
+    return parts;
+}
+
+/** sizeParts as one line, as the handbook's showcase page says it. */
+export const sizeLine = entry => sizeParts(entry).join(' · ');
 
 /** A new random `created`, as Area.create gives: the copy is an area of its own, not the showcase's. */
 const newIdentity = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
@@ -93,6 +111,8 @@ export function initShowcase(ctx) {
                     e.still ? el('img', { src: SHOWCASE + e.still, alt: '', loading: 'lazy' }) : el('span', { className: 'no-still' }),
                     el('strong', { textContent: e.title }),
                     el('small', { textContent: e.text ?? '' }),
+                    // (each part kept whole, so the line breaks only between them)
+                    el('small', { className: 'showcase-size' }, ...sizeParts(e).map(t => el('span', { textContent: t }))),
                 );
                 b.onclick = () => pick(e);
                 return b;
