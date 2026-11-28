@@ -5,6 +5,73 @@ tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.c
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
 not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
+## 0.8.0
+
+- **Canvases in the editor:** File → **New canvas** makes a landscape of up to 128 by 128 tiles, and **Open canvas** opens one
+  again. Every sculpting and painting tool works on it, with undo, as on an area. It is drawn at full detail round what the
+  camera looks at (48 by 48 tiles at most) and at a quarter of the detail beyond, so a 64 by 64 canvas draws 1.2 million
+  triangles instead of 2.1 million; **Full detail near** turns the full detail off for broad shaping. Saves send only the
+  16 by 16 tile blocks a change reached: one Raise stroke across a block border sends two blocks, not the 16 of a 64 by 64
+  canvas.
+- **File → Make a canvas from this area:** the open area becomes the first piece of a new canvas, named as the area and where
+  it was, with room round it to grow (8 tiles a side unless you change it, 5 at least). Its band becomes the canvas's ground
+  round it, carried on outward past that; its paint, soft paint weights, chasm, water, objects, things, entrances, ambience,
+  lights, settings and atmosphere come along, and its tags keep the area's name, so its doors keep theirs. Exporting that
+  piece builds the same area. The area itself is left as it was. A cave or an interior can't become a canvas.
+- **Cutting a canvas into pieces:** a canvas has a **Pieces** mode next to **Sculpt**. It shows the canvas from above: drag
+  across the ground to cut out a piece on tile lines, drag a cut to move it (the pieces on both sides follow), **Join** two
+  pieces that make a rectangle, or **Grid…** for an even grid to start from. Ground no piece covers is a gap, hatched, never
+  exported. While a cut moves, the panel lists what changes piece (entrances, placeables, creatures, lakes) and says that their
+  tags stay; a piece over 32 tiles a side, the game's limit, is refused while dragging, with the piece named. **Open this
+  piece** edits one piece at full detail with an 8-tile ring of its neighbours' ground dimmed round it, so a brush crosses the
+  cut; a small map of the canvas marks it. **Check paths** checks one piece or all of them and across their crossings, with an
+  engine that cuts canvases. Every cut change is one undo step.
+- **Export, Check paths and Publish work on a canvas.** Export builds every piece into the canvas's module, and the progress
+  box names the piece under way ("rivl02, piece 2 of 3"). Publish lists the pieces with ticks on the ones that changed since
+  the last publish and why, refuses pieces changed since their export ("export again first"), checks the ticked pieces and
+  their paths before sending, and shows the pieces to send too, moved corners and pieces no longer on the canvas. Package and
+  Try on dev take the ticked pieces; a package doesn't count as a publish.
+- **Export shows how long it will take, and a progress bar.** As the tiles start, the report box says about how long the
+  export will take and how many tiles are already cached, then shows a bar with the step and the time left. **Cancel export**
+  stops it at the next tile, with nothing changed. The page in a browser shows the same from its engine's progress, on its one
+  thread, without Cancel. An engine older than the job route exports as before.
+- **New area's starts are picture cards**, in two groups: **Blank** (flat, gentle hills, rough hills, cave, interior) and
+  **Starter landscapes** (canyon, snowy mountain pass, dune desert, valley with a lake, descending cave). Each card shows a
+  picture of what it makes; hovering over it, or picking it, says what that is. The arrow keys move between them. **Start
+  height** shows only for flat ground and hills, the starts it changes. The descending crypt and dungeon samples are gone; the
+  descending cave stays.
+- **File → Open a showcase** opens a copy of one of the handbook's showcase areas (forest, swamp, plains, lake valley, canyon,
+  mountain pass, dunes, cave descent), picked by its still, to look round and change. The copy is a new area under the
+  showcase's name, or the next free one when you have an area of that name: it never replaces one. The areas come with the
+  editor, so this works offline in the app, on a team server and in the browser.
+- **The browser page's export downloads compressed:** each file of the zip is deflated, so the swamp showcase's export is
+  236 MB instead of 691 MB, its files the same bytes. Deflating it takes about 17 s.
+- **The browser page fetches the game's TGA textures compressed,** as `<name>.tga.bin`, which GitHub Pages compresses and the
+  engine's `scripts/try-page.sh` names so: a sky's 3.1 MB TGA downloads as about 1.4 MB.
+- **Saved areas are smaller.** A band you never shaped is left out of the save and filled again when the area opens; a shaped
+  band keeps only its own samples, its heights to the centimetre. Objects keep their points to the millimetre and leave out a
+  bearing, size, solid or baked setting that is the default. The forest showcase's save went from 2.6 MB to 1.5 MB. Older saves
+  open as before. An editor older than this release opens a new save with a fresh first fill in place of a shaped band, and
+  with objects missing those defaults, so open new saves only with this release or later.
+- **A river running out past the edge keeps its bed in the band's first fill when the area opens.** The fill was made before
+  the area's water was read, so it eased the bed away.
+- **Paint has a Softness.** The texture fades out towards the brush's rim, and each point under the fade keeps the new
+  texture and the old one by weight, so the edge lies where the brush put it, not on the 0.625 m grid's steps. Natural ground
+  draws it ragged, laid surfaces sharp, and a texture whose `edge` is `soft` as a blend as wide as the fade; the export bakes
+  the same edges. Softness 0 paints hard, as before. A point holds two textures at most: painting a third over it keeps the
+  two that weigh most there.
+- **The Mix brush's soft edge fades the mix in by weight** instead of breaking it up into specks the smoothing then removed.
+- **The sample landscapes' edges follow their rules:** the snowy pass's snow ends where the slope passes about 60 degrees, the
+  canyon's sand where its floor rises, between the grid's points.
+- An area saves its weights in a `blend` field; an area painted without them saves exactly as before.
+- **Number boxes, checkboxes and radio buttons in the editor's colours.** Every number box (New area's sizes and start height,
+  the area settings, Ramp, Descent, the underlay, object properties and the rest) is dark with the text boxes' border and
+  corners, without the browser's white box and spinner; the arrow keys still step it. Checkboxes and
+  radio buttons tick in the accent colour instead of the browser's blue, and the browser's own controls (an unticked box, a
+  list's popup, a scroll bar) are drawn dark.
+- **Delete area in the browser page says what happens there.** It no longer points to a data folder and an exported module the
+  page doesn't have: the area leaves the browser's storage, and File, Download area is the way to keep a copy.
+
 ## 0.7.4
 
 - **Update to X.Y.Z in the app.** In the desktop app, the version menu offers a newer release when the app finds one (a dot
