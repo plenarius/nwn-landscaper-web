@@ -14,6 +14,8 @@ export const BAND = 80;
 const SOFTEN = 24;
 /** How far along the edge the band's heights are averaged (Band.ease), per sample out: 50 m out, 25 m either way. */
 export const EASE = 0.5;
+/** A saved band's heights are whole centimetres (16 bits, half the bytes of every bit): a band is seen, never walked. */
+const CM = 100;
 
 export class Band {
     /** The band round `area`, `n` samples a side; its grids given, or empty. */
@@ -26,12 +28,47 @@ export class Band {
         this.waterLevel = new Float32Array(this.nx * this.ny).fill(NaN);
         // The water's surface, the shallows included (the area's surfaceLevel).
         this.surfaceLevel = new Float32Array(this.nx * this.ny).fill(NaN);
+        // What the first fill made and from what (Band.fill; null: not a fill), and whether it was read from a save of every bit
+        // (before saves left an untouched band out).
+        this.first = null;
+        this.legacy = false;
     }
 
     /** The first fill: the area's edge carried out (extruded), its heights then eased (ease), so the strip by the edge
-     *  matches it and the bumps along it spread into slopes instead of running out as 50 m ridges and steps. */
+     *  matches it and the bumps along it spread into slopes instead of running out as 50 m ridges and steps. It remembers what
+     *  it made and from what (untouched). */
     static fill(area) {
-        return Band.extruded(area).ease(area);
+        const from = Band.seed(area),
+            b = Band.extruded(area).ease(area);
+        b.first = { made: { nx: b.nx, ny: b.ny, heights: b.heights.slice(), materials: b.materials.slice() }, from };
+        return b;
+    }
+
+    /** What the fill of `area` is made from, all of it the band's own samples: the area's edge carried out (extruded), and
+     *  which of them are under water (ease keeps their beds). The rest of the area doesn't change the fill. */
+    static seed(area) {
+        const b = Band.extruded(area);
+        b.sync(area);
+        b.floodWater(area);
+        return { nx: b.nx, ny: b.ny, heights: b.heights, materials: b.materials, wet: b.surfaceLevel.map(v => (Number.isNaN(v) ? 0 : 1)) };
+    }
+
+    /** Whether the band is still the first fill of `area` as it is now: what Band.fill would make again when it is opened, so
+     *  a save leaves it out. Compared with what the fill remembered and was made from rather than filled again: a fill takes a
+     *  third of a second, too long for every autosave. */
+    untouched(area) {
+        const f = this.first;
+        if (!f || !this.same(f.made, area)) return false;
+        const now = Band.seed(area),
+            was = f.from;
+        for (let j = 0, k = 0; j < this.ny; j++)
+            for (let i = 0; i < this.nx; i++, k++)
+                if (
+                    !this.inArea(i, j, area) &&
+                    (now.heights[k] !== was.heights[k] || now.materials[k] !== was.materials[k] || now.wet[k] !== was.wet[k])
+                )
+                    return false;
+        return true;
     }
 
     /** Eases the band's heights along the edge: each ring of samples round the area (those as far out as each other) averaged
@@ -225,19 +262,53 @@ export class Band {
         dryShallows(level, h, this.waterLevel);
     }
 
-    toJSON() {
-        return { n: this.n, heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))), materials: toBase64(this.materials) };
+    /** The band as an area's save keeps it: null while it is the untouched first fill (opening the area fills it again);
+     *  else its own samples (not the area's in its middle), heights to the centimetre (CM). */
+    toJSON(area) {
+        if (this.untouched(area)) return null;
+        const own = [];
+        for (let j = 0, k = 0; j < this.ny; j++) for (let i = 0; i < this.nx; i++, k++) if (!this.inArea(i, j, area)) own.push(k);
+        const materials = Uint8Array.from(own, k => this.materials[k]);
+        let low = Infinity,
+            high = -Infinity;
+        for (const k of own) {
+            low = Math.min(low, this.heights[k]);
+            high = Math.max(high, this.heights[k]);
+        }
+        const base = Math.round((low + high) / 2);
+        // (Ground more than 320 m from the middle of its range, or not a number, keeps every bit, as before: centimetres are
+        // 16 bits.)
+        if (!(Math.max(high - base, base - low) < 320))
+            return { n: this.n, heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))), materials: toBase64(this.materials) };
+        const cm = Int16Array.from(own, k => Math.round((this.heights[k] - base) * CM));
+        return { n: this.n, base, cm: toBase64(new Uint8Array(cm.buffer)), own: toBase64(materials) };
     }
 
     /** The band saved as `o` round `area`; null when it doesn't fit the area (another size). */
     static fromJSON(o, area) {
-        if (!o || !Number.isInteger(o.n) || o.n <= 0 || typeof o.heights !== 'string') return null;
+        if (!o || !Number.isInteger(o.n) || o.n <= 0) return null;
         const b = new Band(area, o.n);
+        if (typeof o.cm === 'string' && typeof o.own === 'string' && Number.isFinite(o.base)) {
+            const bytes = fromBase64(o.cm),
+                materials = fromBase64(o.own),
+                own = b.nx * b.ny - area.nx * area.ny;
+            if (bytes.length !== 2 * own || materials.length !== own) return null;
+            const cm = new Int16Array(bytes.buffer);
+            for (let j = 0, k = 0, x = 0; j < b.ny; j++)
+                for (let i = 0; i < b.nx; i++, k++)
+                    if (!b.inArea(i, j, area)) {
+                        b.heights[k] = o.base + cm[x] / CM;
+                        b.materials[k] = materials[x++];
+                    }
+            return b;
+        }
+        if (typeof o.heights !== 'string') return null;
         const heights = new Float32Array(fromBase64(o.heights).buffer);
         const materials = typeof o.materials === 'string' ? fromBase64(o.materials) : null;
         if (heights.length !== b.nx * b.ny || (materials && materials.length !== b.nx * b.ny)) return null;
         b.heights = heights;
         if (materials) b.materials = materials;
+        b.legacy = true;
         return b;
     }
 }

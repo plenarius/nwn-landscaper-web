@@ -103,6 +103,39 @@ test('an area read back from its JSON is the same area', () => {
     assert.deepEqual(b.toJSON(), a.toJSON());
 });
 
+test("a save keeps objects' points to the millimetre and their bearing and scale to a ten-thousandth, and leaves out defaults", () => {
+    const a = Area.create('ob', 3, 'flat', 5);
+    for (let k = 0; k < 200; k++)
+        a.objects.push({
+            id: k + 1,
+            model: 'plc_a01',
+            appearance: 7,
+            x: Math.random() * 30,
+            y: Math.random() * 30,
+            z: Math.random() * 10 - 2,
+            bearing: k % 3 ? Math.random() * 2 * Math.PI : 0,
+            scale: k % 4 ? 0.1 + Math.random() * 4.9 : 1,
+            solid: k % 2 === 0,
+            baked: k % 5 !== 0,
+        });
+    // Carry's objects have no id; an imported one may have fields of its own.
+    a.objects.push({ model: 'tnp_tree_t21', x: 1.23456, y: 2, z: -0.0001, bearing: 0, scale: 1, solid: true, baked: true, note: 'x' });
+    const saved = a.toJSON().objects;
+    assert.deepEqual(saved.at(-1), { model: 'tnp_tree_t21', x: 1.235, y: 2, z: 0, note: 'x' });
+    assert.ok(saved.every(o => o.bearing !== 0 && o.scale !== 1 && o.solid !== true && o.baked !== true));
+    const b = roundTrip(a);
+    const off = { x: 0.0005, y: 0.0005, z: 0.0005, bearing: 0.00005, scale: 0.00005 };
+    for (const [k, o] of a.objects.entries()) {
+        const back = b.objects[k];
+        assert.deepEqual(Object.keys(back).sort(), Object.keys(o).sort());
+        for (const f in o)
+            if (f in off) assert.ok(Math.abs(back[f] - o[f]) <= off[f] + 1e-12, `${f}: ${back[f]} for ${o[f]}`);
+            else assert.equal(back[f], o[f]);
+    }
+    // Saved again, the same: rounding twice changes nothing.
+    assert.equal(JSON.stringify(roundTrip(b).toJSON()), JSON.stringify(b.toJSON()));
+});
+
 test('a new area has its own `created` id, kept in its saves; an area from before ids has none', () => {
     const a = Area.create('aa', 3, 'flat');
     const b = Area.create('aa', 3, 'flat');
