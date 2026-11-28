@@ -48,8 +48,8 @@ const WORK_FOG = new THREE.Color(0x3a4048);
 const BLOCKED_TINT = new THREE.Color(1.0, 0.42, 0.36);
 // Splat shading, as landscaper bakes it into the NWN tiles: each sample has
 // a texture (an index into the area palette, stored in uMat). Walkable
-// ground draws the paint smoothed (softpaint.js, uSoft), its edges crisp or
-// broken as the bake draws them. Ground too steep to walk takes the
+// ground draws the paint smoothed (softpaint.js, uSoft), its edges crisp,
+// broken or soft as the bake draws them. Ground too steep to walk takes the
 // texture that weighs most in the four samples round a point, blended
 // bilinearly, as landscaper cuts steep faces (its split.rs; in a tie, the
 // lower palette index). Every texture is drawn from three sides by
@@ -176,7 +176,7 @@ ${triplanarGlsl('vNormalArea', 'vArea', 'vUp')}
             }
             splat = heaviest == uImportLayer ? imported : TRIPLANAR(heaviest);
         } else {
-            // Walkable ground: the paint smoothed, its edges crisp or broken, as the export bakes it (softpaint.js).
+            // Walkable ground: the paint smoothed or weighted, its edges crisp, broken or soft, as the export bakes it (softpaint.js).
             #define SPLAT(l) ((l) == uImportLayer ? imported : TRIPLANAR(l))
             SOFT_SPLAT(vArea, softPx, splat)
         }
@@ -780,7 +780,7 @@ export class View {
         for (const [k, id] of this.area.palette.entries()) {
             if (k > 255) break;
             const s = seed(id);
-            data[k * 4] = k !== importAt && edgeOf(this.library.byId.get(id)) === 'broken' ? 1 : 0;
+            data[k * 4] = k === importAt ? 0 : ({ broken: 1, soft: 2 }[edgeOf(this.library.byId.get(id))] ?? 0);
             data[k * 4 + 1] = k === importAt && importLuma != null ? importLuma : (luma?.[k] ?? 0.5);
             data[k * 4 + 2] = s & 0xffff;
             data[k * 4 + 3] = s >>> 16;

@@ -13,16 +13,22 @@ import { web } from './web.js';
 import { downloadExport } from './webdemo.js';
 import { shadersForExport } from './gamefolder.js';
 import { exportBlocked } from './missing.js';
+import { blendForSave } from './blend.js';
 
 /** What app.js gives this file (initExport): `area()`, `readOnly()` and `view`. */
 let ctx = null;
 
 /** The area open, as landscaper serve takes it: the query string has its name and simple settings (tiles, shadow, kind, roof,
  *  clearance, module, halo: its band's samples a side); the body is its heights (its band's, with one) (f32 a sample), each sample's palette index (u8), then JSON with its lists and
- *  objects (palette, water, chasm, lights, entrances, atmosphere, objects, things, settings, originals, ambience). */
+ *  objects (palette, water, chasm, lights, entrances, atmosphere, objects, things, settings, originals, ambience, and the
+ *  blend layer when any sample has a weight). */
 export function areaRequest() {
     const a = ctx.area();
     if (a.canvas) throw new Error('A canvas is exported and checked by its pieces, once it is cut into areas.');
+    // With a band, its grids (the area's in their middle): the engine's halo, drawn past the edge in the game. The chasm and the
+    // water stay in the area's own samples; the engine moves them into the larger grid.
+    const band = a.band;
+    band?.sync(a);
     const extra = new TextEncoder().encode(
         JSON.stringify({
             palette: a.palette,
@@ -36,12 +42,10 @@ export function areaRequest() {
             settings: a.settings,
             originals: a.originals,
             ambience: ambienceForExport(a),
+            // (in the JSON, not after the paint: an engine from before the layer reads all that follows the paint as JSON)
+            blend: blendForSave(band ? band.blend : a.blend) ?? undefined,
         }),
     );
-    // With a band, its grids (the area's in their middle): the engine's halo, drawn past the edge in the game. The chasm and the
-    // water stay in the area's own samples; the engine moves them into the larger grid.
-    const band = a.band;
-    band?.sync(a);
     const h = band ? band.heights : a.heights,
         paint = band ? band.materials : a.materials;
     const heights = new Uint8Array(h.buffer, h.byteOffset, h.byteLength);

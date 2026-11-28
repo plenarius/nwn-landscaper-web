@@ -9,6 +9,9 @@ import assert from 'node:assert/strict';
 import './importmap.js';
 
 const { CanvasArea, BLOCK_STEP, blockKey, decodeBlock, fromB64 } = await import('../js/canvas.js');
+const { SPACING } = await import('../js/area.js');
+const { stamp } = await import('../js/tools.js');
+const { StrokePaint } = await import('../js/blend.js');
 
 /** A block file in the engine's format 1 (src/canvas.rs): what `GET /api/canvas-block` answers. */
 function encodeBlock(w, h, heights, paint, chasm, blend = null) {
@@ -172,6 +175,38 @@ test('a block file is read as the engine writes it', () => {
     assert.equal(cc, null);
     assert.throws(() => decodeBlock(encodeBlock(3, 2, h, p, null), 2, 3), /3 by 2/);
     assert.equal(blockKey(3, 12), 'b03_12');
+});
+
+test('a Softness stroke marks its blocks and saves their weights, a weight-only change too', () => {
+    const c = CanvasArea.create('cv', 40, 'flat', 5),
+        rock = c.materialIndex('rock'),
+        x = 300 * SPACING,
+        stroke = softness => {
+            c.beginStroke();
+            stamp(c, 'paint', x, x, 4, 1, 1 / 60, null, rock, softness, new StrokePaint(c));
+            // (what the next step or a save settles)
+            c.settle(c.undoStack.at(-1));
+        };
+    save(c);
+    stroke(0);
+    save(c);
+    const paint = c.materials.slice();
+    // Softly over its own paint: the paint stays, only the weights change (the core pinned, the rim fading).
+    stroke(1);
+    assert.deepEqual(c.materials, paint);
+    const body = save(c);
+    assert.deepEqual(
+        body.blocks.map(b => b.block),
+        ['b01_01'],
+    );
+    const bytes = fromB64(body.blocks[0].blend),
+        k = (300 - 256) * 257 + 300 - 256;
+    assert.deepEqual([bytes[2 * k], bytes[2 * k + 1]], [rock, 255]);
+    assert.deepEqual(reopen(c, [body]).blend, c.blend);
+    // Undo takes the weights back, and its block goes with the next save.
+    c.undo();
+    assert.ok(c.blend.every(v => v === 0));
+    assert.equal(save(c).blocks[0].blend, undefined);
 });
 
 test('a blend layer goes with the blocks that have weights, and comes back', () => {

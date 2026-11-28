@@ -13,6 +13,7 @@ const { Area, UNDO_STEPS } = await import('../js/area.js');
 const { stamp, chasmStamp, cutRoom } = await import('../js/tools.js');
 const { mixPlan } = await import('../js/mix.js');
 const { mixStamp } = await import('../js/mix.js');
+const { StrokePaint } = await import('../js/blend.js');
 
 // --- The undo before (main 229eeb1): a whole snapshot before each step ---------------------------------------------------
 
@@ -20,6 +21,7 @@ const old = {
     snapshot: a => ({
         h: a.heights.slice(),
         m: a.materials.slice(),
+        b: a.blend.slice(),
         ch: a.chasm?.slice() ?? null,
         p: a.palette.slice(),
         w: a.water.map(b => ({ ...b })),
@@ -35,6 +37,7 @@ const old = {
     restore(a, s) {
         a.heights.set(s.h);
         a.materials.set(s.m);
+        a.blend.set(s.b);
         a.chasm = s.ch ? s.ch.slice() : null;
         a.palette = s.p.slice();
         a.water = s.w.map(b => ({ ...b }));
@@ -64,7 +67,7 @@ const old = {
             sc = s.ch;
         for (let k = 0; k < h.length; k++) {
             const chasmed = (c?.[k] ?? 0) !== (sc?.[k] ?? 0);
-            if (h[k] === s.h[k] && m[k] === s.m[k] && !chasmed) continue;
+            if (h[k] === s.h[k] && m[k] === s.m[k] && a.blend[k] === s.b[k] && !chasmed) continue;
             const i = k % nx,
                 j = (k - i) / nx;
             rect = grow(rect, i, j);
@@ -128,8 +131,10 @@ const TOOLS = {
         u.begin();
         const index = a.materialIndex(['rock', 'sand', 'snow', 'grassLong'][Math.floor(r() * 4)]),
             x = r() * a.sizeX,
-            y = r() * a.sizeY;
-        for (let k = 0; k < 5; k++) stamp(a, 'paint', x + k * 2, y, 3 + r() * 4, 1, 1 / 60, null, index);
+            y = r() * a.sizeY,
+            softness = r() < 0.5 ? 0 : r(),
+            painter = new StrokePaint(a);
+        for (let k = 0; k < 5; k++) stamp(a, 'paint', x + k * 2, y, 3 + r() * 4, 1, 1 / 60, null, index, softness, painter);
     },
     mix(a, r, u) {
         u.begin();
@@ -235,6 +240,7 @@ function state(a) {
     return {
         heights: Buffer.from(a.heights.buffer, a.heights.byteOffset, a.heights.byteLength).toString('base64'),
         materials: Buffer.from(a.materials).toString('base64'),
+        blend: Buffer.from(a.blend.buffer).toString('base64'),
         chasm: a.chasm && Buffer.from(a.chasm).toString('base64'),
         waterLevel: Buffer.from(a.waterLevel.buffer).toString('base64'),
         palette: a.palette,

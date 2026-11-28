@@ -269,6 +269,7 @@ export class CanvasArea extends Area {
                     'sizeY',
                     'heights',
                     'materials',
+                    'blend',
                     'chasm',
                     'waterLevel',
                     'surfaceLevel',

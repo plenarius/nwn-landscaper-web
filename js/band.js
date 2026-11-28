@@ -7,6 +7,7 @@
 // area's own samples in its middle (kept a copy of the area's: the area's grids are the ones edited and undone there).
 
 import { SPACING, MAX_RISE, dryShallows, toBase64, fromBase64 } from './area.js';
+import { blendForSave, blendFromSave } from './blend.js';
 
 /** Samples beyond each side: 5 tiles, 50 m, as far as the game's scene reaches past an area. */
 export const BAND = 80;
@@ -25,6 +26,8 @@ export class Band {
         this.ny = area.ny + 2 * n;
         this.heights = heights ?? new Float32Array(this.nx * this.ny);
         this.materials = materials ?? new Uint8Array(this.nx * this.ny);
+        // Each sample's second texture and its weight, as the area's `blend` (blend.js).
+        this.blend = new Uint16Array(this.nx * this.ny);
         this.waterLevel = new Float32Array(this.nx * this.ny).fill(NaN);
         // The water's surface, the shallows included (the area's surfaceLevel).
         this.surfaceLevel = new Float32Array(this.nx * this.ny).fill(NaN);
@@ -40,7 +43,10 @@ export class Band {
     static fill(area) {
         const from = Band.seed(area),
             b = Band.extruded(area).ease(area);
-        b.first = { made: { nx: b.nx, ny: b.ny, heights: b.heights.slice(), materials: b.materials.slice() }, from };
+        b.first = {
+            made: { nx: b.nx, ny: b.ny, heights: b.heights.slice(), materials: b.materials.slice(), blend: b.blend.slice() },
+            from,
+        };
         return b;
     }
 
@@ -50,7 +56,14 @@ export class Band {
         const b = Band.extruded(area);
         b.sync(area);
         b.floodWater(area);
-        return { nx: b.nx, ny: b.ny, heights: b.heights, materials: b.materials, wet: b.surfaceLevel.map(v => (Number.isNaN(v) ? 0 : 1)) };
+        return {
+            nx: b.nx,
+            ny: b.ny,
+            heights: b.heights,
+            materials: b.materials,
+            blend: b.blend,
+            wet: b.surfaceLevel.map(v => (Number.isNaN(v) ? 0 : 1)),
+        };
     }
 
     /** Whether the band is still the first fill of `area` as it is now: what Band.fill would make again when it is opened, so
@@ -65,7 +78,10 @@ export class Band {
             for (let i = 0; i < this.nx; i++, k++)
                 if (
                     !this.inArea(i, j, area) &&
-                    (now.heights[k] !== was.heights[k] || now.materials[k] !== was.materials[k] || now.wet[k] !== was.wet[k])
+                    (now.heights[k] !== was.heights[k] ||
+                        now.materials[k] !== was.materials[k] ||
+                        now.blend[k] !== was.blend[k] ||
+                        now.wet[k] !== was.wet[k])
                 )
                     return false;
         return true;
@@ -143,6 +159,7 @@ export class Band {
                     k = aj * area.nx + ai;
                 b.heights[j * nx + i] = area.heights[k];
                 b.materials[j * nx + i] = area.materials[k];
+                b.blend[j * nx + i] = area.blend[k];
             }
         }
         return b;
@@ -153,7 +170,10 @@ export class Band {
         if (other.nx !== this.nx || other.ny !== this.ny) return false;
         for (let j = 0, k = 0; j < this.ny; j++)
             for (let i = 0; i < this.nx; i++, k++)
-                if (!this.inArea(i, j, area) && (this.heights[k] !== other.heights[k] || this.materials[k] !== other.materials[k]))
+                if (
+                    !this.inArea(i, j, area) &&
+                    (this.heights[k] !== other.heights[k] || this.materials[k] !== other.materials[k] || this.blend[k] !== other.blend[k])
+                )
                     return false;
         return true;
     }
@@ -175,6 +195,7 @@ export class Band {
             const to = (j + n) * nx + n;
             this.heights.set(area.heights.subarray(j * area.nx, (j + 1) * area.nx), to);
             this.materials.set(area.materials.subarray(j * area.nx, (j + 1) * area.nx), to);
+            this.blend.set(area.blend.subarray(j * area.nx, (j + 1) * area.nx), to);
         }
     }
 
@@ -263,7 +284,7 @@ export class Band {
     }
 
     /** The band as an area's save keeps it: null while it is the untouched first fill (opening the area fills it again);
-     *  else its own samples (not the area's in its middle), heights to the centimetre (CM). */
+     *  else its own samples (not the area's in its middle), heights to the centimetre (CM), and their weights when any has one. */
     toJSON(area) {
         if (this.untouched(area)) return null;
         const own = [];
@@ -278,10 +299,17 @@ export class Band {
         const base = Math.round((low + high) / 2);
         // (Ground more than 320 m from the middle of its range, or not a number, keeps every bit, as before: centimetres are
         // 16 bits.)
-        if (!(Math.max(high - base, base - low) < 320))
-            return { n: this.n, heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))), materials: toBase64(this.materials) };
+        if (!(Math.max(high - base, base - low) < 320)) {
+            const o = { n: this.n, heights: toBase64(new Uint8Array(this.heights.buffer.slice(0))), materials: toBase64(this.materials) };
+            const blend = blendForSave(this.blend);
+            if (blend) o.blend = blend;
+            return o;
+        }
         const cm = Int16Array.from(own, k => Math.round((this.heights[k] - base) * CM));
-        return { n: this.n, base, cm: toBase64(new Uint8Array(cm.buffer)), own: toBase64(materials) };
+        const o = { n: this.n, base, cm: toBase64(new Uint8Array(cm.buffer)), own: toBase64(materials) };
+        const blend = blendForSave(Uint16Array.from(own, k => this.blend[k]));
+        if (blend) o.blend = blend;
+        return o;
     }
 
     /** The band saved as `o` round `area`; null when it doesn't fit the area (another size). */
@@ -293,11 +321,13 @@ export class Band {
                 materials = fromBase64(o.own),
                 own = b.nx * b.ny - area.nx * area.ny;
             if (bytes.length !== 2 * own || materials.length !== own) return null;
-            const cm = new Int16Array(bytes.buffer);
+            const cm = new Int16Array(bytes.buffer),
+                blend = blendFromSave(o.blend, own, area.palette.length);
             for (let j = 0, k = 0, x = 0; j < b.ny; j++)
                 for (let i = 0; i < b.nx; i++, k++)
                     if (!b.inArea(i, j, area)) {
                         b.heights[k] = o.base + cm[x] / CM;
+                        if (blend) b.blend[k] = blend[x];
                         b.materials[k] = materials[x++];
                     }
             return b;
@@ -308,6 +338,8 @@ export class Band {
         if (heights.length !== b.nx * b.ny || (materials && materials.length !== b.nx * b.ny)) return null;
         b.heights = heights;
         if (materials) b.materials = materials;
+        const blend = blendFromSave(o.blend, b.nx * b.ny, area.palette.length);
+        if (blend) b.blend = blend;
         b.legacy = true;
         return b;
     }

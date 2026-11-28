@@ -6,6 +6,7 @@
 // so holding the mouse keeps working at a steady rate.
 
 import { SPACING, TILE, MAX_RISE, CAVE_ROCK } from './area.js';
+import { StrokePaint } from './blend.js';
 
 export const TOOLS = {
     raise: { label: 'Raise', key: '1', hint: 'Build up the ground' },
@@ -72,6 +73,24 @@ export const TOOLS = {
 // cave dug at 2.2 m; none at 3.5 m).
 export const DIG_MIN = 3;
 
+/** Where a soft paint brush's weight fades (metres from its middle): from 1 at `inner` to 0 at `outer`, over at least two
+ *  samples (narrower, samples would be all or nothing: the grid's steps again), and up to the whole brush at softness 1. The
+ *  fade is centred on the hard brush's edge (`core`) where the brush has room. */
+export function paintRim(radius, core, softness) {
+    const width = Math.max(2 * SPACING, softness * radius),
+        outer = Math.min(radius, core + width / 2);
+    return { outer, inner: Math.max(0, outer - width) };
+}
+
+/** A soft brush's weight `d` metres from its middle (paintRim's `inner` and `outer`): smoothstep, half way at the middle of
+ *  the fade, so the edge is drawn there. */
+export function rimWeight(d, inner, outer) {
+    if (d <= inner) return 1;
+    if (d >= outer) return 0;
+    const t = (outer - d) / (outer - inner);
+    return t * t * (3 - 2 * t);
+}
+
 // Metres a second at full strength, for raise/lower.
 const RATE = 4;
 
@@ -82,9 +101,11 @@ function falloff(d, r) {
 
 /**
  * Applies `tool` at area point (x, y). `flattenTo` is the height captured
- * at the start of a flatten stroke. Returns the changed sample rectangle.
+ * at the start of a flatten stroke. Paint: `softness` (0..1) and the stroke's
+ * `painter` (blend.js's StrokePaint over `area`, needed when softness > 0).
+ * Returns the changed sample rectangle.
  */
-export function stamp(area, tool, x, y, radius, strength, dt, flattenTo, paintIndex) {
+export function stamp(area, tool, x, y, radius, strength, dt, flattenTo, paintIndex, softness = 0, painter = null) {
     if (tool === 'dig') return dig(area, x, y, Math.max(radius, DIG_MIN), flattenTo, paintIndex);
     const n = area.nx,
         h = area.heights;
@@ -96,13 +117,22 @@ export function stamp(area, tool, x, y, radius, strength, dt, flattenTo, paintIn
     const amount = strength * Math.min(dt, 0.1);
 
     if (tool === 'paint') {
-        // Hard-edged inside the brush (the view blends neighbouring textures);
-        // a lower strength paints a smaller core of the brush.
+        // A lower strength paints a smaller core of the brush. Hard (softness 0): one texture a sample, the smoothing draws the
+        // edge. Soft: its weight fades over the rim (soft paint's falloff), so the edge lies where the brush put it.
         const core = radius * (0.35 + 0.65 * strength);
+        const { outer, inner } = paintRim(radius, core, softness);
         const m = area.materials;
+        painter ??= new StrokePaint(area);
         for (let j = j0; j <= j1; j++) {
             for (let i = i0; i <= i1; i++) {
-                if (Math.hypot(i * SPACING - x, j * SPACING - y) <= core) m[j * n + i] = paintIndex;
+                const d = Math.hypot(i * SPACING - x, j * SPACING - y),
+                    k = j * n + i;
+                if (softness <= 0) {
+                    if (d <= core) {
+                        m[k] = paintIndex;
+                        area.blend[k] = 0;
+                    }
+                } else if (d < outer) painter.put(k, paintIndex, rimWeight(d, inner, outer), true);
             }
         }
     } else if (tool === 'smooth') {
@@ -198,7 +228,10 @@ function dig(area, x, y, radius, floor, paintIndex) {
             const k = j * n + i;
             if (h[k] > floor) {
                 h[k] = floor;
-                if (paintIndex !== undefined) area.materials[k] = paintIndex;
+                if (paintIndex !== undefined) {
+                    area.materials[k] = paintIndex;
+                    area.blend[k] = 0;
+                }
             }
             if (far) far[(j - b.j0) * w + (i - b.i0)] = 0;
         }
@@ -350,7 +383,10 @@ export function cutRoom(area, r, floor, paintIndex) {
         for (let i = Math.max(0, i0); i <= Math.min(n - 1, i1); i++) {
             const k = j * n + i;
             h[k] = floor;
-            if (paintIndex !== undefined) area.materials[k] = paintIndex;
+            if (paintIndex !== undefined) {
+                area.materials[k] = paintIndex;
+                area.blend[k] = 0;
+            }
         }
     }
     return { i0: Math.max(0, i0 - 1), i1: Math.min(n - 1, i1 + 1), j0: Math.max(0, j0 - 1), j1: Math.min(rows - 1, j1 + 1) };

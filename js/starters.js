@@ -8,6 +8,7 @@
 import { DEFAULT_TEXTURE, MAX_RISE, SPACING } from './area.js';
 import { copyPreset, PRESETS } from './atmosphere.js';
 import { generateHeightMap } from './noise.js';
+import { blendValue } from './blend.js';
 
 const smoothstep = (a, b, x) => {
     const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -117,15 +118,53 @@ function pick(library, wanted) {
     return DEFAULT_TEXTURE;
 }
 
-/** Paints every sample with the texture `role(k, steep)` names (a key of `textures`, each a `pick` list); `steep` is the
- *  sample's rise over MAX_RISE (1 and over: too steep to walk). */
+/**
+ * Paints every sample with the texture `role(at, steep)` names (a key of `textures`, each a `pick` list): `at(grid)` reads a
+ * grid of the area's samples there, `steep` is the rise over MAX_RISE there (1 and over: too steep to walk). Where the rule
+ * picks another texture for a neighbour, the rule is read again between the two to find where it changes, and each side's
+ * sample takes the other texture by weight (blend.js), so the edge lies there (snow ends where the slope passes 60 degrees,
+ * not on the 0.625 m grid's steps).
+ */
 function paint(area, library, textures, role) {
     const chosen = {};
     for (const [key, wanted] of Object.entries(textures)) chosen[key] = pick(library, wanted);
     area.palette = [];
     const index = {};
     for (const [key, id] of Object.entries(chosen)) index[key] = area.materialIndex(id);
-    for (let k = 0; k < area.heights.length; k++) area.materials[k] = index[role(k, rise(area, k) / MAX_RISE)];
+    const { nx, ny } = area,
+        n = nx * ny,
+        steep = new Float32Array(n);
+    for (let k = 0; k < n; k++) steep[k] = rise(area, k) / MAX_RISE;
+    // Sample k's rule, or the rule a share t of the way to sample q (the grids and the slope read straight between the two).
+    const ruleAt = (k, q = k, t = 0) => role(grid => grid[k] + (grid[q] - grid[k]) * t, steep[k] + (steep[q] - steep[k]) * t);
+    for (let k = 0; k < n; k++) area.materials[k] = index[ruleAt(k)];
+    area.blend.fill(0);
+    for (let j = 0; j < ny; j++)
+        for (let i = 0; i < nx; i++) {
+            const k = j * nx + i,
+                own = area.materials[k];
+            let near = 1,
+                other = own;
+            for (const q of [i > 0 && k - 1, i < nx - 1 && k + 1, j > 0 && k - nx, j < ny - 1 && k + nx]) {
+                if (q === false || area.materials[q] === own) continue;
+                // (where the rule first changes on the way to q, in samples from k; 12 halvings: under a millimetre)
+                let lo = 0,
+                    hi = 1;
+                for (let h = 0; h < 12; h++) {
+                    const mid = (lo + hi) / 2;
+                    if (index[ruleAt(k, q, mid)] === own) lo = mid;
+                    else hi = mid;
+                }
+                const d = (lo + hi) / 2;
+                if (d < near) {
+                    near = d;
+                    other = index[ruleAt(k, q, hi)];
+                }
+            }
+            // (straight from half at the edge to none a sample away: drawn between samples, the half-way line is the edge)
+            const w = Math.round(255 * (0.5 - near / 2));
+            if (other !== own && w > 0) area.blend[k] = blendValue(other, w);
+        }
 }
 
 /** A deep winding canyon: a sandy floor between stepped red walls, the plateau above. The floor is `base`; it runs west to
@@ -156,6 +195,7 @@ function canyon(area, base, rand, library) {
         h[k] = floor + depth * up + 5 * rim[k] * smoothstep(0, wall, out);
     }
     roughen(area, noise(area, rand() * 1e5, 6, 3), 1.2);
+    const floorLine = Float32Array.from(h, (_, k) => base + 2 * (1 - (k % nx) / (nx - 1)));
     paint(
         area,
         library,
@@ -166,10 +206,10 @@ function canyon(area, base, rand, library) {
             ledge: ['earthCracked', 'dirtBrown', ['Earth', 'crack', 'parched', 'dry'], 'dirt'],
             top: ['grassDry', ['Grass', 'dry'], 'earthCracked', 'dirt'],
         },
-        (k, steep) => {
+        (at, steep) => {
             if (steep > 0.8) return 'wall';
-            const above = h[k] - base - 2 * (1 - (k % nx) / (nx - 1));
-            if (above < 0.5) return floorMix[k] > 0.62 ? 'gravel' : 'sand';
+            const above = at(h) - at(floorLine);
+            if (above < 0.5) return at(floorMix) > 0.62 ? 'gravel' : 'sand';
             return above > 14 ? 'top' : 'ledge';
         },
     );
@@ -218,12 +258,12 @@ function snowyPass(area, base, rand, library) {
             drift: ['snowDrift', 'snowFresh', 'snowPacked', ['Snow', 'drift', 'patch', 'snow']],
             rock: ['rockFrosted', 'winterRock', ['Snow', 'winter', 'rock'], ['Rock', 'grey', 'rock'], 'rockGrey'],
         },
-        (k, steep) => {
+        (at, steep) => {
             // Snow lies on the cliffs' gentler parts, as it would up to about 60 degrees; the steepest are bare rock.
             if (steep > 1.7) return 'rock';
             if (steep > 0.75) return 'drift';
-            if (d[k] < 8) return 'path';
-            return drift[k] > 0.6 ? 'drift' : 'snow';
+            if (at(d) < 8) return 'path';
+            return at(drift) > 0.6 ? 'drift' : 'snow';
         },
     );
 }
@@ -261,8 +301,8 @@ function dunes(area, base, rand, library) {
             trough: ['sandSoft', 'sandFine', 'sandDune', ['Sand', 'soft', 'sand']],
             face: ['sandFine', 'sandDune', 'sandSoft', ['Sand', 'fine', 'beach', 'sand']],
         },
-        (k, steep) => {
-            if (crest[k] < 0.18) return 'trough';
+        (at, steep) => {
+            if (at(crest) < 0.18) return 'trough';
             return steep > 0.45 ? 'face' : 'dune';
         },
     );
@@ -324,13 +364,14 @@ function lakeValley(area, base, rand, library) {
             wood: ['grassForest', 'dirtForest', 'grassMoss', ['Earth', 'forest'], ['Grass', 'moss', 'dark']],
             rock: ['rockMossy', 'rock', 'rockGrey', ['Rock', 'moss', 'rock']],
         },
-        (k, steep) => {
+        (at, steep) => {
             if (steep > 0.8) return 'rock';
-            if (h[k] < level) return 'bed';
-            if (h[k] < level + 0.6) return 'shore';
-            const up = h[k] - base;
+            const z = at(h);
+            if (z < level) return 'bed';
+            if (z < level + 0.6) return 'shore';
+            const up = z - base;
             if (up > 7 * tall) return 'wood';
-            return meadow[k] > 0.55 && up < 3 * tall ? 'meadow' : 'grass';
+            return at(meadow) > 0.55 && up < 3 * tall ? 'meadow' : 'grass';
         },
     );
 }

@@ -13,6 +13,7 @@ import { models, transformer, selectObject, placeDown, placeDrag } from './place
 import { scatterMix, scatterStamp } from './scatter.js';
 import { ambienceBrush, ambienceReady } from './ambiencetool.js';
 import { mixPlan, mixStamp } from './mix.js';
+import { StrokePaint } from './blend.js';
 import { waterDown, waterDrag, waterChanged } from './water.js';
 import { entranceDown } from './entrancetool.js';
 import { live } from './live.js';
@@ -23,7 +24,7 @@ import { saveSoon } from './save.js';
 /** What app.js gives this file (initStrokes): `area()`, `tool()`, `readOnly()`, `view`, the Things tool (`thingsTool`),
  *  `selectTool(id)`, the Paint tool's `paintTexture()`, `mixOn()`, `currentMix()`, `picking()`, `setPicking(on)` and
  *  `pickTexture(p, add)`, the texture
- *  `library`, the brush's `sizeIn` and `strengthIn` sliders, and the Light tool's `lightPair()`. */
+ *  `library`, the brush's `sizeIn`, `strengthIn` and `softnessIn` sliders, and the Light tool's `lightPair()`. */
 let ctx = null;
 
 // ?debug: show what the pointer is doing (to diagnose input on other machines).
@@ -401,7 +402,13 @@ export function initStrokes(c) {
                     mix,
                     mix.textures.map(t => ctx.area().materialIndex(t.id)),
                 );
-            else stroke.paintIndex = ctx.area().materialIndex(ctx.paintTexture());
+            else {
+                stroke.paintIndex = ctx.area().materialIndex(ctx.paintTexture());
+                stroke.softness = +ctx.softnessIn.value;
+            }
+            // (each sample takes the most the stroke gives it, so a soft rim passed over again doesn't build up)
+            stroke.painter = new StrokePaint(ctx.area());
+            stroke.bandPainter = ctx.area().band ? new StrokePaint(ctx.area().band) : null;
             ctx.view.syncPalette();
         }
         if (ctx.tool() === 'ramp') {
@@ -608,8 +615,20 @@ export function initStrokes(c) {
                 stroke.tool === 'chasm'
                     ? chasmStamp(ctx.area(), p.x, p.y, radius, stroke.fill)
                     : stroke.mix
-                      ? mixStamp(ctx.area(), p.x, p.y, radius, +ctx.strengthIn.value, stroke.mix)
-                      : stamp(ctx.area(), stroke.tool, p.x, p.y, radius, +ctx.strengthIn.value, dt, stroke.flattenTo, stroke.paintIndex),
+                      ? mixStamp(ctx.area(), p.x, p.y, radius, +ctx.strengthIn.value, stroke.mix, 0, stroke.painter)
+                      : stamp(
+                            ctx.area(),
+                            stroke.tool,
+                            p.x,
+                            p.y,
+                            radius,
+                            +ctx.strengthIn.value,
+                            dt,
+                            stroke.flattenTo,
+                            stroke.paintIndex,
+                            stroke.softness,
+                            stroke.painter,
+                        ),
                 stroke.tool !== 'paint',
             );
             bandStamp(stroke, p, radius, dt);
@@ -633,7 +652,19 @@ function bandStamp(stroke, p, radius, dt) {
     const o = band.offset,
         strength = +ctx.strengthIn.value;
     const changed = stroke.mix
-        ? mixStamp(band, p.x + o, p.y + o, radius, strength, stroke.mix, o)
-        : stamp(band, stroke.tool, p.x + o, p.y + o, radius, strength, dt, stroke.flattenTo, stroke.paintIndex);
+        ? mixStamp(band, p.x + o, p.y + o, radius, strength, stroke.mix, o, stroke.bandPainter)
+        : stamp(
+              band,
+              stroke.tool,
+              p.x + o,
+              p.y + o,
+              radius,
+              strength,
+              dt,
+              stroke.flattenTo,
+              stroke.paintIndex,
+              stroke.softness,
+              stroke.bandPainter,
+          );
     if (changed) ctx.view.markBand();
 }

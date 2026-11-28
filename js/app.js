@@ -122,6 +122,8 @@ function showStrengthName() {
     const cover = mixOn() && tool === 'paint';
     $('strengthLabel').textContent = cover ? 'Cover' : 'Strength';
     $('strengthLabel').title = cover ? 'How much of the ground under the brush the mix covers, in patches' : '';
+    // (a mix's soft edge is its panel's: the patches fade in by weight)
+    $('softnessGroup').hidden = tool !== 'paint' || mixOn();
 }
 
 function selectTool(id) {
@@ -192,12 +194,14 @@ const thingsTool = new ThingsTool({
 selectTool('raise');
 
 const sizeIn = $('brushSize'),
-    strengthIn = $('brushStrength');
+    strengthIn = $('brushStrength'),
+    softnessIn = $('brushSoftness');
 const showSliders = () => {
     $('sizeOut').textContent = `${(+sizeIn.value).toFixed(1)} m`;
     $('strengthOut').textContent = `${Math.round(strengthIn.value * 100)}%`;
+    $('softnessOut').textContent = `${Math.round(softnessIn.value * 100)}%`;
 };
-sizeIn.oninput = strengthIn.oninput = showSliders;
+sizeIn.oninput = strengthIn.oninput = softnessIn.oninput = showSliders;
 showSliders();
 
 $('btnWalk').onclick = () => {
@@ -538,6 +542,7 @@ initStrokes({
     library,
     sizeIn,
     strengthIn,
+    softnessIn,
     lightPair,
 });
 initLightTool({ ...editor, night: skyShowsNight, saveSoon: () => saveSoon(), say });
