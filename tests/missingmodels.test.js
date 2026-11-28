@@ -11,7 +11,7 @@ import { engine } from './browser.js';
 const { ModelLibrary, STAND_IN_FLAT, standInSize } = await import('../js/models.js');
 const { missingText, missingIn } = await import('../js/missingmodels.js');
 const { liveState } = await import('../js/routes.js');
-const { Stock, objectsOf } = await import('../try/stock.js');
+const { Stock, objectsOf, served } = await import('../try/stock.js');
 
 test('a model the engine has none of is a box: drawn, placed and moved, said once, casting no shadow', async () => {
     engine.reset();
@@ -122,5 +122,10 @@ test("the page's stock: a request gets its model's files first, a check every pl
     await stock.give(fake, ['plc_rock01.mdl', 'rock.tga']);
     await stock.give(fake, ['plc_rock01.mdl', 'rock.tga']);
     assert.deepEqual(put, ['user/override/plc_rock01.mdl']);
+    // A TGA is served as <name>.tga.bin (Pages compresses that) and goes into the override under its own name.
+    engine.routes.set('GET /try/stock/res/rock.tga.bin', () => [{}]);
+    await stock.give(fake, ['rock.tga']);
+    assert.deepEqual(put, ['user/override/plc_rock01.mdl', 'user/override/rock.tga']);
     assert.equal(await Stock.open(new URL('/elsewhere/', location.href), undefined, () => {}), null);
+    assert.deepEqual(['a.tga', 'B.TGA', 'a.mdl', 'a.dds'].map(served), ['a.tga.bin', 'B.TGA.bin', 'a.mdl', 'a.dds']);
 });

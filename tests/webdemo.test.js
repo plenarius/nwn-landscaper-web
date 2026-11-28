@@ -6,6 +6,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { inflateRawSync } from 'node:zlib';
 import './browser.js';
 
 const { emptyPalette, environment, standIns } = await import('../try/standins.js');
@@ -68,7 +69,7 @@ function unzip(bytes) {
         const name = new TextDecoder().decode(bytes.subarray(at + 46, at + 46 + nameLen));
         const start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
         const body = bytes.subarray(start, start + size);
-        const data = body;
+        const data = method === 8 ? new Uint8Array(inflateRawSync(body)) : body;
         assert.equal(crc32(data), crc, name);
         out.push({ name, data, method });
         at += 46 + nameLen;
@@ -76,10 +77,10 @@ function unzip(bytes) {
     return out;
 }
 
-test('an export zip holds each file as it was, stored, with its CRC', async () => {
+test('an export zip holds each file as it was, deflated when that is smaller, with its CRC', async () => {
     const hak = new Uint8Array(50_000).map((_, i) => i % 13);
     const mod = new TextEncoder().encode('a module');
-    const blob = zip([
+    const blob = await zip([
         ['modules/hill.mod', mod],
         ['hak/hill.hak', hak],
     ]);
@@ -89,11 +90,12 @@ test('an export zip holds each file as it was, stored, with its CRC', async () =
         entries.map(e => [e.name, e.method]),
         [
             ['modules/hill.mod', 0],
-            ['hak/hill.hak', 0],
+            ['hak/hill.hak', 8],
         ],
     );
     assert.deepEqual(entries[0].data, mod);
     assert.deepEqual(entries[1].data, hak);
+    assert.ok(blob.size < hak.length / 10, `the hak deflated (${blob.size} bytes)`);
     assert.equal(crc32(new TextEncoder().encode('123456789')), 0xcbf43926, 'the standard CRC-32 check value');
 });
 

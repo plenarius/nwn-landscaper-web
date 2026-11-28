@@ -10,6 +10,10 @@
 
 import { Kept } from './kept.js';
 
+/** The name stock/res serves file `f` under: a TGA as `<name>.tga.bin`, which GitHub Pages sends compressed (the engine's
+ *  scripts/try-page.sh names them so). */
+export const served = f => (f.toLowerCase().endsWith('.tga') ? `${f}.bin` : f);
+
 /** The answers that are files of stock/, made by the engine with the game: path -> file. */
 const LISTS = { '/api/placeables': 'placeables.json', '/api/placeable-groups': 'placeable-groups.json' };
 
@@ -53,7 +57,7 @@ export class Stock {
                 .map(async f => {
                     this.put.add(f);
                     try {
-                        const res = await this.kept.get(new URL(`res/${encodeURIComponent(f)}`, this.base));
+                        const res = await this.kept.get(new URL(`res/${encodeURIComponent(served(f))}`, this.base));
                         if (!res.ok) throw new Error(`${res.status}`);
                         engine.put(`user/override/${f}`, new Uint8Array(await res.arrayBuffer()));
                     } catch (err) {

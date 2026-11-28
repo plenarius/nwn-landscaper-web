@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// A zip of files made in the page (an export to download). The files are stored as they are: the zip is made and saved on the
-// visitor's own machine, so compressing it would only cost time (about 1 s for an 8 by 8 area's haks).
+// A zip of files made in the page (an export to download), each deflated with the browser's own CompressionStream, or stored
+// when that isn't smaller: a 16 by 16 area's haks are over 600 MB as they are.
 
 const CRC = new Uint32Array(256).map((_, n) => {
     let c = n;
@@ -17,23 +17,33 @@ export function crc32(bytes) {
     return (c ^ 0xffffffff) >>> 0;
 }
 
+/** `bytes` deflated (raw, as a zip entry holds it). */
+async function deflate(bytes) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
 /** A zip (a Blob) of `files`, [name, bytes] each; a name may have folders (`hak/area.hak`). */
-export function zip(files) {
+export async function zip(files) {
     const enc = new TextEncoder();
     const parts = [];
     const central = [];
     let at = 0;
-    for (const [name, data] of files) {
-        const crc = crc32(data);
+    for (const [name, raw] of files) {
+        const crc = crc32(raw);
+        const packed = await deflate(raw);
+        const deflated = packed.length < raw.length;
+        const data = deflated ? packed : raw;
         const n = enc.encode(name);
         // The fields the local header and the central directory share, from "version needed" to the name's length.
         const common = new DataView(new ArrayBuffer(26));
         common.setUint16(0, 20, true);
         common.setUint16(2, 0x0800, true); // (names in UTF-8)
+        common.setUint16(4, deflated ? 8 : 0, true);
         common.setUint16(8, 0x21, true); // 1980-01-01: a download of the same area is the same zip
         common.setUint32(10, crc, true);
         common.setUint32(14, data.length, true);
-        common.setUint32(18, data.length, true);
+        common.setUint32(18, raw.length, true);
         common.setUint16(22, n.length, true);
         const shared = new Uint8Array(common.buffer);
         const local = new Uint8Array(30);
