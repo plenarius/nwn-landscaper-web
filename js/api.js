@@ -74,8 +74,13 @@ export async function api(url, opts = {}) {
     const headers = new Headers(opts.headers);
     headers.set('X-Landscaper', '1');
     try {
-        // biome-ignore lint/plugin: the one fetch() the page has; everything else calls api()
-        const res = await fetch(url, { ...opts, headers, credentials: 'same-origin' });
+        // (In the browser page, straight to its engine: through the Service Worker, Chrome cuts a request off after 5 minutes,
+        // and a 16 by 16 area's export takes longer.)
+        const res =
+            web.request && engineRoute
+                ? await web.request(opts.method ?? 'GET', where.pathname + where.search, headers, opts.body)
+                : // biome-ignore lint/plugin: the one fetch() the page has; everything else calls api()
+                  await fetch(url, { ...opts, headers, credentials: 'same-origin' });
         // Only a JSON answer is the engine's: a file server that answers every path with the page (a common single-page
         // setting) also answers 200, and isn't an engine coming back. (The engine's files, a package or a picture, leave
         // engine.up as it is.)

@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2026 plenarius
 // SPDX-License-Identifier: MIT
 
-// The game's stock placeables, when the page has them in stock/ (the engine's `landscaper demo-stock`, which its
+// The game's stock placeables and skies, when the page has them in stock/ (the engine's `landscaper demo-stock`, which its
 // scripts/try-page.sh puts there): each model's files go into the engine's `override` when a request first needs them, so
-// stock trees and rocks draw, block paths and export as on the desktop. The tables and shaders the engine reads with them go
-// in at the start, and the Place panel's lists are answered from the files the engine made with the game. Every file of stock/ is
-// kept in Cache Storage under the bundle's SHA-256 (site.json's `stockSha256`, kept.js), so a repeat visit fetches none.
+// stock trees and rocks draw, block paths and export as on the desktop, and the game's skies show in the Sky & fog panel. The
+// tables and shaders the engine reads with them go in at the start, and the Place panel's lists are answered from the files the
+// engine made with the game. Every file of stock/ is kept in Cache Storage under the bundle's SHA-256 (site.json's
+// `stockSha256`, kept.js), so a repeat visit fetches none.
 
 import { Kept } from './kept.js';
 
@@ -38,6 +39,11 @@ export class Stock {
         return Object.keys(this.index.models).length;
     }
 
+    /** Whether `file` is one of the files put in at the start. */
+    has(file) {
+        return (this.index.start ?? []).includes(file);
+    }
+
     /** Puts `files` (names in stock/res) in the engine's override, those not there yet. One that can't be fetched is left out:
      *  the engine then treats its model as one it doesn't have. */
     async give(engine, files) {
@@ -63,12 +69,15 @@ export class Stock {
         return this.give(engine, this.index.start ?? []);
     }
 
-    /** The files request `m` (as sw.js sends it) needs: a model's, a texture's, or the models an area's check or export reads. */
+    /** The files request `m` (as sw.js sends it) needs: a model's, a texture's, a game sky's for its picture, or the models an
+     *  area's check or export reads. */
     filesFor(m) {
         const url = new URL(m.path, 'http://page');
         const name = decodeURIComponent(url.pathname.split('/').at(-1)).toLowerCase();
         const ofModels = models => [...new Set(models)].flatMap(model => this.index.models[model] ?? []);
         if (m.method === 'GET' && url.pathname.startsWith('/api/model/')) return ofModels([name]);
+        // (A game sky's picture: its row's models. An installed sky's files are in the engine's sky library.)
+        if (m.method === 'GET' && url.pathname.startsWith('/api/sky-picture/')) return ofModels(this.index.skies?.[name] ?? []);
         if (m.method === 'GET' && url.pathname.startsWith('/api/texture/')) {
             const file = this.index.textures[name];
             return file ? [file] : [];

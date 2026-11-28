@@ -61,7 +61,16 @@ export class Engine {
     /** Runs the engine once with `args`: its exit code. `io` (name to bytes) are the files of `/io`, read back after. */
     async run(args, io = new Map()) {
         const files = new Map([...io].map(([n, b]) => [n, new File(b)]));
-        const env = ['HOME=/work', 'NWN_ROOT=/game', 'NWN_HOME=/work/user', 'LANDSCAPER_JOBS=1', 'LANDSCAPER_GAME=none'];
+        // (LS_MINIMAP: an export's minimaps from the terrain, not drawn from above, which reads the area's hak back whole: a
+        // 16 by 16 area's 600 MB ran the engine out of memory.)
+        const env = [
+            'HOME=/work',
+            'NWN_ROOT=/game',
+            'NWN_HOME=/work/user',
+            'LANDSCAPER_JOBS=1',
+            'LANDSCAPER_GAME=none',
+            'LS_MINIMAP=terrain',
+        ];
         const fds = [
             new OpenFile(new File(new Uint8Array())),
             ConsoleStdout.lineBuffered(this.log),
