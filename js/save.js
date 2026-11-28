@@ -12,6 +12,7 @@ import { $, store, say } from './dom.js';
 import { checkSoon } from './live.js';
 import { web } from './web.js';
 import { copyKeys, copyOf, dropCopyOf, keepCopy } from './copies.js';
+import { keepCanvas, saveCanvas } from './canvassave.js';
 
 export { loadCopies } from './copies.js';
 
@@ -155,7 +156,9 @@ function inTurn(f) {
  *  tab), the save also goes now. */
 function leaving(e) {
     if (e.type === 'visibilitychange' && document.visibilityState !== 'hidden') return;
-    for (const a of new Set([pending, sending, ...queued.keys()])) if (a) keepInBrowser(a, JSON.stringify(a.toJSON()));
+    for (const a of new Set([pending, sending, ...queued.keys()]))
+        if (a?.canvas) keepCanvas(a, ctx.me());
+        else if (a) keepInBrowser(a, JSON.stringify(a.toJSON()));
     if (e.type === 'visibilitychange') flushSave();
 }
 
@@ -217,6 +220,7 @@ function saveArea(a) {
 // name exists) is thrown: the area is not kept in this browser either, so it can't replace the other one later. On an
 // autosave it means another area of that name was made since this one was opened (see replaced).
 async function writeArea(a, also = '') {
+    if (a.canvas) return writeCanvas(a);
     sending = a;
     const json = JSON.stringify(a.toJSON());
     const copy = browserCopy(a.name);
@@ -242,6 +246,29 @@ async function writeArea(a, also = '') {
             );
         else say(`Couldn't save ${a.name} anywhere (${err.message}): export it, or your latest changes may be lost.`);
         $('statusMsg').dataset.saveFailed = '1';
+    } finally {
+        sending = null;
+    }
+}
+
+/** Saves canvas `a`'s changed blocks (canvassave.js); a failed save keeps them in this browser, and says so. */
+async function writeCanvas(a) {
+    sending = a;
+    try {
+        const r = await saveCanvas(a, ctx.me());
+        if (r.ok) {
+            if ($('statusMsg').dataset.saveFailed) {
+                say('Saved.');
+                delete $('statusMsg').dataset.saveFailed;
+            }
+            return;
+        }
+        $('statusMsg').dataset.saveFailed = '1';
+        say(
+            r.moved
+                ? `Canvas ${a.name} was saved from another tab or computer since you opened it (${Object.keys(r.moved).join(', ')}): your changes are kept in this browser. Open it again to carry on from that one.`
+                : `Couldn't save canvas ${a.name} (${r.error}): kept in this browser for now.`,
+        );
     } finally {
         sending = null;
     }

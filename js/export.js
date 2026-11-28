@@ -22,6 +22,7 @@ let ctx = null;
  *  objects (palette, water, chasm, lights, entrances, atmosphere, objects, things, settings, originals, ambience). */
 export function areaRequest() {
     const a = ctx.area();
+    if (a.canvas) throw new Error('A canvas is exported and checked by its pieces, once it is cut into areas.');
     const extra = new TextEncoder().encode(
         JSON.stringify({
             palette: a.palette,

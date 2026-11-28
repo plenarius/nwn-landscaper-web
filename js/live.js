@@ -40,7 +40,8 @@ export function checkSoon() {
     if (ctx.readOnly()) return;
     live.edits++;
     clearTimeout(live.timer);
-    if (!live.on || !ctx.area() || !engine.up) return;
+    // (a canvas is checked by its pieces, which come with cutting)
+    if (!live.on || !ctx.area() || ctx.area().canvas || !engine.up) return;
     showLive('busy', 'Live …', 'Waiting for you to stop editing.');
     live.timer = setTimeout(liveCheck, LIVE_DELAY);
 }

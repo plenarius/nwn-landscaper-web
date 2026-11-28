@@ -50,6 +50,8 @@
             <div class="menu-list" hidden>
                 <button type="button" class="menu-item" id="btnNew" title="New area (N)"><span class="icon" data-icon="newArea"></span><span>New area</span><kbd>N</kbd></button>
                 <button type="button" class="menu-item" id="btnOpen" title="Open another area (O)"><span class="icon" data-icon="open"></span><span>Open…</span><kbd>O</kbd></button>
+                <button type="button" class="menu-item" id="btnNewCanvas" title="A landscape larger than one area, to cut into areas later"><span>New canvas…</span></button>
+                <button type="button" class="menu-item" id="btnOpenCanvas" title="Open one of your canvases"><span>Open canvas…</span></button>
                 <button type="button" class="menu-item" id="btnVersion" hidden title="Keep this version of the area in the team's history (autosave doesn't)"><span>Save version</span></button>
                 <button type="button" class="menu-item" id="btnDelete" title="Delete the area open: it leaves your areas, and its last copy is kept to bring back"><span>Delete area…</span></button>
                 <hr class="menu-sep" id="sepAreaFile" hidden>
@@ -76,6 +78,7 @@
         <button type="button" class="top-btn icon-only" id="btnUndo" title="Undo (Ctrl+Z)"><span class="icon" data-icon="undo"></span><span class="lbl">Undo</span></button>
         <button type="button" class="top-btn icon-only" id="btnRedo" title="Redo (Ctrl+Y)"><span class="icon" data-icon="redo"></span><span class="lbl">Redo</span></button>
         <span class="group-sep"></span>
+        <button type="button" class="top-btn" id="btnDetail" hidden aria-pressed="true" title="A canvas is drawn at full detail round what the camera looks at, the rest at a quarter: off draws all of it at a quarter, for broad shaping"><span class="lbl">Full detail near</span></button>
         <button type="button" class="top-btn" id="btnCheck" title="Check how NWN will path this area (nothing is exported)"><span class="icon" data-icon="check"></span><span class="lbl">Check paths</span></button>
         <button type="button" class="top-btn live" id="btnLive" title="Check paths after each edit (click to turn off or on)"><span class="dot"></span><span id="liveText">Live</span></button>
         <button type="button" class="top-btn active" id="btnWalk" title="Show where NWN won't let creatures walk (W)"><span class="icon" data-icon="walk"></span><span class="lbl">Walkable</span></button>
@@ -454,6 +457,29 @@
             <div id="openWho" class="open-who" hidden></div>
             <div id="openList" class="open-list"></div>
             <div class="dialog-buttons"><button type="button" id="btnImport">Import an NWN area…</button><button type="submit" value="cancel">Cancel</button></div>
+        </form>
+    </dialog>
+
+    <dialog id="canvasDialog" aria-labelledby="canvasTitle">
+        <form method="dialog">
+            <h2 id="canvasTitle">New canvas</h2>
+            <p class="note">A landscape larger than one area, up to 128 by 128 tiles, sculpted and painted as one. Cutting it into areas comes later.</p>
+            <div id="canvasNew">
+                <label>Name <small>1–7 letters, digits or _ (an area cut from it adds two digits)</small>
+                    <input type="text" id="canvasName" maxlength="7" autocomplete="off" pattern="[a-z0-9_]{1,7}" placeholder="a new name"></label>
+                <label>Size <small>NWN tiles of 10 m</small></label>
+                <div class="size-free"><label>Across <input id="canvasW" type="number" min="3" max="128" step="1" value="64"></label>
+                    <label>Up <input id="canvasH" type="number" min="3" max="128" step="1" value="64"></label><small>tiles, up to 128 each way</small></div>
+                <label>Start from</label>
+                <div class="start-choices">
+                    <label><input type="radio" name="canvasStart" value="hills" checked> Gentle hills</label>
+                    <label><input type="radio" name="canvasStart" value="rough"> Rough hills</label>
+                    <label><input type="radio" name="canvasStart" value="flat"> Flat</label>
+                </div>
+            </div>
+            <div id="canvasList" class="open-list" hidden></div>
+            <p class="note" id="canvasMsg"></p>
+            <div class="dialog-buttons"><button type="submit" value="cancel" formnovalidate>Cancel</button><button type="button" class="primary" id="canvasGo">Create</button></div>
         </form>
     </dialog>
 
