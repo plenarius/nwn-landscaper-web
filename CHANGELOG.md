@@ -5,6 +5,57 @@ tagged with the same `vX.Y.Z` as the engine's, [nwn-landscaper](https://github.c
 of that release; before 1.0, a minor version may change the HTTP API between them. The engine has its own changelog. Changes
 not released yet wait in `changelog.d/`, a file each, until the release puts them in its section.
 
+## 0.7.4
+
+- **Update to X.Y.Z in the app.** In the desktop app, the version menu offers a newer release when the app finds one (a dot
+  shows beside the version), with what is new, and asks before the app installs it and starts again. An app installed from the
+  `.deb` offers the release's page instead, to download the new `.deb`.
+- **Scenery past the edge: the mix brush, Scatter and Place work on the band.** The mix paints the band round the area with the
+  area's own patches, so they run on across the edge. Scatter and Place stand trees, rocks and bushes on the band, which the game
+  draws past the edge (models near it, cards farther out), casting shade and never in the way; Scatter keeps off the band's steep
+  ground and water, and Shift-drag erases there too. Placeables, things, entrances and particles stay inside the area, and the
+  editor says why when you try. The export's report counts the objects on the band as scenery, not as outside the area.
+- **Carry the scenery outward,** in the Scatter panel, fills the band with scenery like what stands near the area's edge: the
+  same models in about the same density and mix, off steep ground and water, thinning a little towards the band's rim. One undo
+  takes it back, and pressing it again tops the band up rather than doubling it.
+- **The band's first fill eases out from the edge.** It carried each edge sample straight out, so a hilly edge ran out as long
+  ridges and steps. Now the strip by the edge matches it and further out the bumps spread into slopes. A band still as the old
+  first fill left it is filled again when the area opens; a band you shaped is kept.
+- **Help → Handbook and the browser page's links go to <https://landscaper.layonara.com/>,** where the handbook moved.
+- **The browser page starts without downloading its engine again.** The page keeps `landscaper.wasm` and the stock models it
+  fetched in the browser's Cache Storage, named by their SHA-256 in `try/site.json`, and reads them from there on later
+  visits; a release with a new engine or stock bundle fetches the new files and deletes the old ones. The engine is kept only
+  when its SHA-256 matches. Firefox is no longer asked for persistent storage, which made it show a prompt.
+- **The browser page has the Preset skies pack and the game's skies.** When the page carries them (the engine's
+  `scripts/try-page.sh`), its engine installs the pack on the first visit, so each preset shows its sky, the Sky row lists the
+  seven as installed, and an area with one exports with `ls_skies.hak`.
+- **The Sky & fog panel no longer shows a broken picture** for a sky it can't picture, such as one that isn't installed: it
+  showed one again whenever the panel was redrawn. It shows nothing there now.
+- **The note for a preset whose sky isn't installed** says how to install Preset skies: `landscaper skies get preset-skies`.
+- **The Sky & fog looks show their colours:** each look's swatch had no width, so its button showed only its name.
+- **The browser page exports a 16 by 16 area,** such as the swamp showcase. Its export ran out of memory at the end, so the page
+  draws the area's in-game minimaps from its terrain, not from above with its objects; and an export over 5 minutes was cut
+  off by the browser, so the editor now sends its requests to the page's engine directly, not through the Service Worker.
+- **An interior's walls stand upright in the view,** on the room's edge, as the game draws them with the engine of the same
+  release. A door pushed a little into a wall is drawn on the wall's line, and any other thing there on the floor at its foot,
+  where the game puts them.
+- **Natural ground no longer has dark dots every metre or so.** Since 0.7.3 grass, dirt, mud, sand and rock drew a small dark
+  triangle in the middle of each of the cells that hide their repeat, on every texture and on the lake beds. The view now
+  blends those cells without the sum of their weights dropping out.
+- **Walkable is in the top bar,** beside the path check's status, instead of at the foot of the tool column, where a laptop's
+  screen had to scroll to reach it. W still toggles it. Where the bar is short of room, Walkable, Markers, Check paths and
+  Export show their icons only, in that order, with the name in the tooltip; in the Things tool the Show button says
+  **Show: all**.
+- **The path check's markers start hidden.** The status button still counts the spots; **Markers** (M) shows them on the map,
+  and the browser remembers that choice. The Check paths report and the status's tooltip say so.
+- **The browser page's title stays in the top bar.** With the bar full, its "Download to desktop" badge broke onto a second
+  line and pushed the title out of the bar.
+- **Show > Scenery (Place and Scatter).** Untick it to hide the trees, rocks and bushes in the view, to sculpt or paint the
+  ground under a forest. Place, Scatter and Things still show them, and the area and its export keep them. The browser
+  remembers it.
+- **An interior's walls show their own paint down to the floor** in the view, as the game draws them with the engine of the
+  same release: the floor's paint no longer climbs the lower part of a wall.
+
 ## 0.7.3
 
 - **Grass in the Sky & fog panel.** A tick turns on the game's own animated grass for the area, with its density and height;
